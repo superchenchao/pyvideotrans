@@ -66,7 +66,10 @@ def _set_env():
     os.environ["HF_HUB_DISABLE_XET"] = "1"
 
     if sys.platform == 'win32' and IS_FROZEN:
-        os.environ['PATH'] = f'{ROOT_DIR}/_internal/torch/lib;' + os.environ.get("PATH", "")
+        torch_lib = Path(f'{ROOT_DIR}/_internal/torch/lib')
+        if not torch_lib.exists():
+            torch_lib = Path(f'{ROOT_DIR}/torch/lib')
+        os.environ['PATH'] = f'{torch_lib.as_posix()};' + os.environ.get("PATH", "")
     os.environ['PATH'] = ROOT_DIR + os.pathsep + f'{ROOT_DIR}/ffmpeg' + os.pathsep + f'{ROOT_DIR}/ffmpeg/sox' + os.pathsep + os.environ.get(
         "PATH", "")
 
@@ -79,11 +82,13 @@ def _set_logs():
                                         encoding='utf-8')
     _file_handler.setLevel(logging.DEBUG)
     _file_handler.setFormatter(formatter)
-    _console_handler = logging.StreamHandler(sys.stdout)
-    _console_handler.setLevel(logging.WARNING)
-    _console_handler.setFormatter(formatter)
     logger.addHandler(_file_handler)
-    logger.addHandler(_console_handler)
+    console_stream = sys.stdout or sys.stderr
+    if console_stream is not None:
+        _console_handler = logging.StreamHandler(console_stream)
+        _console_handler.setLevel(logging.WARNING)
+        _console_handler.setFormatter(formatter)
+        logger.addHandler(_console_handler)
 
     logging.getLogger("transformers").setLevel(logging.DEBUG)
     logging.getLogger("filelock").setLevel(logging.DEBUG)

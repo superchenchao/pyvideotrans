@@ -11,6 +11,19 @@ def _write_log(file=None, msg=None, type='logs'):
         logger.exception(f'写入新进程日志时出错{e}', exc_info=True)
 
 
+def _allow_pyannote_checkpoints():
+    import torch
+    from torch.torch_version import TorchVersion
+    from pyannote.audio.core.task import Problem, Resolution, Specifications
+
+    torch.serialization.add_safe_globals([
+        TorchVersion,
+        Specifications,
+        Problem,
+        Resolution,
+    ])
+
+
 # 1. 分离背景声和人声 https://k2-fsa.github.io/sherpa/onnx/source-separation/models.html#uvr
 # 仅使用cpu，不使用gpu
 def vocal_bgm(*, input_file, vocal_file, instr_file,  logs_file=None, is_cuda=False,uvr_models="UVR-MDX-NET-Inst_HQ_4"):
@@ -331,19 +344,17 @@ def cam_speakers(*, input_file, subtitles_file:str,speak_file:str, num_speakers=
 # 4. 说话人分离，pyannote https://huggingface.co/pyannote/speaker-diarization-3.0
 def pyannote_speakers(*, input_file, subtitles_file:str,speak_file:str, num_speakers=-1,  is_cuda=False, logs_file=None,
                       device_index=0):
-    import torch, pyannote.audio, torchaudio
-    torch.serialization.add_safe_globals([
-        torch.torch_version.TorchVersion,
-        pyannote.audio.core.task.Specifications,
-        pyannote.audio.core.task.Problem,
-        pyannote.audio.core.task.Resolution
-    ])
+    import torch, torchaudio
+    _allow_pyannote_checkpoints()
     from pyannote.audio import Pipeline
 
 
     def _get_diariz():
         # pyannote-audio==3.4.0
-        pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+        pipeline = Pipeline.from_pretrained(
+            "pyannote/speaker-diarization-3.1",
+            use_auth_token=settings.get('hf_token'),
+        )
 
         if is_cuda:
             pipeline.to(torch.device(f"cuda:{device_index}"))
@@ -443,18 +454,16 @@ def pyannote_speakers(*, input_file, subtitles_file:str,speak_file:str, num_spea
 # 4. 说话人分离 reverb  https://huggingface.co/Revai/reverb-diarization-v1
 def reverb_speakers(*, input_file, subtitles_file:str,speak_file:str, num_speakers=-1,  is_cuda=False, logs_file=None,
                     device_index=0):
-    import torch, pyannote.audio, torchaudio
-    torch.serialization.add_safe_globals([
-        torch.torch_version.TorchVersion,
-        pyannote.audio.core.task.Specifications,
-        pyannote.audio.core.task.Problem,
-        pyannote.audio.core.task.Resolution
-    ])
+    import torch, torchaudio
+    _allow_pyannote_checkpoints()
     from pyannote.audio import Pipeline
 
     def _get_diariz():
         # pyannote-audio==3.4.0
-        pipeline = Pipeline.from_pretrained('Revai/reverb-diarization-v1')
+        pipeline = Pipeline.from_pretrained(
+            'Revai/reverb-diarization-v1',
+            use_auth_token=settings.get('hf_token'),
+        )
 
         if is_cuda:
             pipeline.to(torch.device(f"cuda:{device_index}"))

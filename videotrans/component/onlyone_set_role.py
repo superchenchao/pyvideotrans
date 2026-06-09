@@ -60,6 +60,8 @@ class SpeakerAssignmentDialog(QDialog):
             logger.exception(f'获取说话人id失败:{e}', exc_info=True)
 
         self.all_voices = all_voices or []
+        self._auto_assigned_speakers = False
+        self.voice_tags = self._load_voice_tags()
 
         self.setWindowTitle(tr("zidonghebingmiaohou"))
         self.setWindowIcon(QIcon(f"{ROOT_DIR}/videotrans/styles/icon.ico"))
@@ -302,6 +304,7 @@ class SpeakerAssignmentDialog(QDialog):
             
             # 7. 添加底部按钮
             self._setup_bottom_buttons()
+            self._auto_assign_speaker_roles()
             
             # 8. 显示表格
             self.loading_widget.setVisible(False)
@@ -346,8 +349,11 @@ class SpeakerAssignmentDialog(QDialog):
             
             # 第3列：Role（只读，显示用）
             role_item = QTableWidgetItem(tr('Default Role'))
+            role = self._get_effective_role(data)
+            role_item.setText(self._role_label(role) if role else tr('Default Role'))
             role_item.setFlags(Qt.ItemIsEnabled)
-            role_item.setForeground(QColor("#ff4d4d"))
+            if not role:
+                role_item.setForeground(QColor("#ff4d4d"))
             self.table.setItem(row, 3, role_item)
             
             # 第4列：Time（只读）
@@ -382,7 +388,7 @@ class SpeakerAssignmentDialog(QDialog):
         
         # 底部按钮
         self.subtitle_combo = QComboBox()
-        self.subtitle_combo.addItems(self.all_voices)
+        self._fill_role_combo(self.subtitle_combo)
         self.bottom_button_container_layout.addWidget(self.subtitle_combo)
 
         assign_button = QPushButton(tr("Assign roles to selected subtitles"))
@@ -439,52 +445,162 @@ class SpeakerAssignmentDialog(QDialog):
 
         bottom_row = QHBoxLayout()
         self.speaker_combo = QComboBox()
-        self.speaker_combo.addItems(self.all_voices)
+        self._fill_role_combo(self.speaker_combo)
         
         lbl = QLabel(tr('Dubbing role'))
         lbl.setStyleSheet("color: #dddddd;")
         bottom_row.addWidget(lbl)
         bottom_row.addWidget(self.speaker_combo)
 
-        assign_button = QPushButton(tr("Assign roles"))
+        assign_button = QPushButton("为说话人指定音色")
         assign_button.setCursor(Qt.PointingHandCursor)
         assign_button.clicked.connect(self.assign_speaker_roles)
-        assign_button.setMinimumSize(QSize(120, 26))
+        assign_button.setMinimumSize(QSize(140, 26))
         bottom_row.addWidget(assign_button)
+
+        self.speaker_listen_button = QPushButton("试听")
+        self.speaker_listen_button.setCursor(Qt.PointingHandCursor)
+        self.speaker_listen_button.clicked.connect(self.listen_speaker_dubbing)
+        self.speaker_listen_button.setMinimumSize(QSize(50, 26))
+        bottom_row.addWidget(self.speaker_listen_button)
         bottom_row.addStretch()
 
         layout.addLayout(bottom_row)
+
+        change_speaker_row = QHBoxLayout()
+        change_speaker_label = QLabel("说话人")
+        change_speaker_label.setStyleSheet("color: #dddddd;")
+        change_speaker_row.addWidget(change_speaker_label)
+
+        self.change_speaker_combo = QComboBox()
+        for spk_id in self.speakers:
+            self.change_speaker_combo.addItem(str(spk_id), spk_id)
+        change_speaker_row.addWidget(self.change_speaker_combo)
+
+        change_speaker_button = QPushButton("修改选中字幕说话人")
+        change_speaker_button.setCursor(Qt.PointingHandCursor)
+        change_speaker_button.clicked.connect(self.assign_selected_speaker)
+        change_speaker_button.setMinimumSize(QSize(150, 26))
+        change_speaker_row.addWidget(change_speaker_button)
+        change_speaker_row.addStretch()
+
+        layout.addLayout(change_speaker_row)
         return group
+
+    def _load_voice_tags(self):
+        if self.tts_type != 0:
+            return {}
+        tag_path = Path(f'{ROOT_DIR}/videotrans/voicejson/edge_voice_tags.json')
+        try:
+            return json.loads(tag_path.read_text(encoding='utf-8'))
+        except Exception:
+            return {}
+
+    def _role_label(self, role: str) -> str:
+        role = str(role or '').strip()
+        if not role or role in {'No', '-'}:
+            return role
+        return self.voice_tags.get(role, {}).get('label', role)
+
+    def _fill_role_combo(self, combo: QComboBox):
+        for role in self.all_voices:
+            combo.addItem(self._role_label(role), role)
+
+    def _combo_role_value(self, combo: QComboBox) -> str:
+        data = combo.currentData()
+        if data is not None:
+            return str(data)
+        return combo.currentText()
+
+    def _is_assignable_voice(self, voice: str) -> bool:
+        voice = str(voice or '').strip()
+        return bool(voice) and voice.lower() not in {'no', '-', 'clone'}
+
+    def _auto_assign_speaker_roles(self):
+        """Automatically map detected speakers to available dubbing roles."""
+        if self._auto_assigned_speakers or not self.speakers:
+            return
+
+        voices = [voice for voice in self.all_voices if self._is_assignable_voice(voice)]
+        if not voices:
+            return
+
+        for index, spk_id in enumerate(self.speakers):
+            self.speakers[spk_id] = voices[index % len(voices)]
+
+        for check, spk_id in getattr(self, 'speaker_checks', {}).items():
+            role = self.speakers.get(spk_id, '') or ''
+            self.speaker_labels[check].setText(self._role_label(role) if role else '')
+
+        self._auto_assigned_speakers = True
+        self._update_role_column()
+
+    def _get_effective_role(self, data):
+        role = data.get('role', '')
+        if not role and data.get('spk'):
+            role = self.speakers.get(data['spk'], '')
+        return role or ''
 
     def assign_speaker_roles(self):
         """分配角色给说话人"""
-        selected_role = self.speaker_combo.currentText()
+        selected_role = self._combo_role_value(self.speaker_combo)
         role_value = None if selected_role == "No" else selected_role
 
         for check, spk_id in self.speaker_checks.items():
             if check.isChecked():
                 self.speakers[spk_id] = role_value
-                self.speaker_labels[check].setText(selected_role if role_value else "")
+                self.speaker_labels[check].setText(self._role_label(selected_role) if role_value else "")
                 check.setChecked(False)
         
         # 更新表格中的 Role 列
+        self._update_role_column()
+
+    def assign_selected_speaker(self):
+        """修改选中字幕的说话人"""
+        if not hasattr(self, 'change_speaker_combo'):
+            return
+
+        new_spk = self.change_speaker_combo.currentData()
+        if new_spk is None:
+            new_spk = self.change_speaker_combo.currentText()
+        new_spk = str(new_spk)
+        if not new_spk:
+            return
+
+        for row in range(self.table.rowCount()):
+            chk_item = self.table.item(row, 0)
+            if not chk_item or chk_item.checkState() != Qt.Checked:
+                continue
+
+            self.display_data[row]['spk'] = new_spk
+            self.display_data[row]['role'] = ''
+            if row < len(self.speaker_list_sub):
+                self.speaker_list_sub[row] = new_spk
+
+            spk_item = self.table.item(row, 2)
+            if spk_item:
+                spk_item.setText(new_spk)
+            chk_item.setCheckState(Qt.Unchecked)
+
         self._update_role_column()
 
     def _update_role_column(self):
         """更新 Role 列显示"""
         for row, data in enumerate(self.display_data):
             # 优先显示行内角色，否则显示说话人对应的全局角色
-            role = data.get('role', '')
-            if not role and data['spk']:
-                role = self.speakers.get(data['spk'], '')
+            role = self._get_effective_role(data)
             
             item = self.table.item(row, 3)
             if item:
-                item.setText(role if role else tr('Default Role'))
+                item.setText(self._role_label(role) if role else tr('Default Role'))
+                if role:
+                    item.setForeground(QColor("#eeeeee"))
+                else:
+                    item.setForeground(QColor("#ff4d4d"))
 
     def assign_subtitle_roles(self):
         """分配角色给选中的行"""
-        selected_role = self.subtitle_combo.currentText()
+        selected_role = self._combo_role_value(self.subtitle_combo)
         role_value = None if selected_role == "No" else selected_role
 
         for row in range(self.table.rowCount()):
@@ -515,9 +631,9 @@ class SpeakerAssignmentDialog(QDialog):
         
         self.table.setUpdatesEnabled(True)  # 恢复更新
 
-    def listen_dubbing(self):
-        """试听配音"""
-        selected_role = self.subtitle_combo.currentText()
+    def _listen_combo_role(self, combo: QComboBox, button: QPushButton, reset_text: str):
+        """试听指定下拉框当前选中的配音角色"""
+        selected_role = self._combo_role_value(combo)
         role_value = None if selected_role == "No" else selected_role
         if not role_value:
             return
@@ -529,8 +645,8 @@ class SpeakerAssignmentDialog(QDialog):
         from videotrans.util.ListenVoice import ListenVoice
         
         def feed(d):
-            self.listen_button.setText(tr("Trial dubbing"))
-            self.listen_button.setDisabled(False)
+            button.setText(reset_text)
+            button.setDisabled(False)
             if d != "ok":
                 tools.show_error(d)
 
@@ -543,8 +659,16 @@ class SpeakerAssignmentDialog(QDialog):
             tts_type=self.tts_type)
         wk.uito.connect(feed)
         wk.start()
-        self.listen_button.setText('Listening...')
-        self.listen_button.setDisabled(True)
+        button.setText('试听中...')
+        button.setDisabled(True)
+
+    def listen_dubbing(self):
+        """试听底部字幕配音角色"""
+        self._listen_combo_role(self.subtitle_combo, self.listen_button, tr("Trial dubbing"))
+
+    def listen_speaker_dubbing(self):
+        """试听说话人配音角色"""
+        self._listen_combo_role(self.speaker_combo, self.speaker_listen_button, "试听")
 
     def _active(self):
         if self.parent:
@@ -608,6 +732,11 @@ class SpeakerAssignmentDialog(QDialog):
 
         try:
             Path(self.target_sub).write_text("\n\n".join(srt_str_list), encoding="utf-8")
+            if self.cache_folder and self.speaker_list_sub:
+                Path(f'{self.cache_folder}/speaker.json').write_text(
+                    json.dumps(self.speaker_list_sub, ensure_ascii=False),
+                    encoding="utf-8"
+                )
         except Exception as e:
             logger.error(f"Save subtitle failed: {e}")
             QMessageBox.critical(self, "Error", f"Save failed: {e}")

@@ -26,7 +26,13 @@ class Google(BaseTrans):
         headers = {
             'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
         }
-        response = requests.get(url, headers=headers,  verify=False)
+        session = requests.Session()
+        session.trust_env = False
+        proxy = self.proxy_str.strip() if self.proxy_str else ""
+        if proxy and not proxy.lower().startswith(("http", "sock")):
+            proxy = f"http://{proxy}"
+        proxies = {"http": proxy, "https": proxy} if proxy else None
+        response = session.get(url, headers=headers, verify=False, proxies=proxies)
         response.raise_for_status()
         logger.debug(f'[Google]返回code:{response.status_code=}')
 

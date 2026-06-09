@@ -1,0 +1,2900 @@
+{
+  "Willem(Male/ZA)": {
+    "voice_id": "af-ZA-WillemNeural",
+    "name": "Willem",
+    "gender": "男声",
+    "region": "南非",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Willem（男声 / 南非 / 成年）"
+  },
+  "Adri(Female/ZA)": {
+    "voice_id": "af-ZA-AdriNeural",
+    "name": "Adri",
+    "gender": "女声",
+    "region": "南非",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Adri（女声 / 南非 / 成年）"
+  },
+  "Ilir(Male/AL)": {
+    "voice_id": "sq-AL-IlirNeural",
+    "name": "Ilir",
+    "gender": "男声",
+    "region": "阿尔巴尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ilir（男声 / 阿尔巴尼亚 / 成年）"
+  },
+  "Anila(Female/AL)": {
+    "voice_id": "sq-AL-AnilaNeural",
+    "name": "Anila",
+    "gender": "女声",
+    "region": "阿尔巴尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Anila（女声 / 阿尔巴尼亚 / 成年）"
+  },
+  "Mekdes(Female/ET)": {
+    "voice_id": "am-ET-MekdesNeural",
+    "name": "Mekdes",
+    "gender": "女声",
+    "region": "埃塞俄比亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mekdes（女声 / 埃塞俄比亚 / 成年）"
+  },
+  "Ameha(Male/ET)": {
+    "voice_id": "am-ET-AmehaNeural",
+    "name": "Ameha",
+    "gender": "男声",
+    "region": "埃塞俄比亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ameha（男声 / 埃塞俄比亚 / 成年）"
+  },
+  "Zariyah(Female/SA)": {
+    "voice_id": "ar-SA-ZariyahNeural",
+    "name": "Zariyah",
+    "gender": "女声",
+    "region": "沙特",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Zariyah（女声 / 沙特 / 成年）"
+  },
+  "Taim(Male/JO)": {
+    "voice_id": "ar-JO-TaimNeural",
+    "name": "Taim",
+    "gender": "男声",
+    "region": "约旦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Taim（男声 / 约旦 / 成年）"
+  },
+  "Shakir(Male/EG)": {
+    "voice_id": "ar-EG-ShakirNeural",
+    "name": "Shakir",
+    "gender": "男声",
+    "region": "埃及",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Shakir（男声 / 埃及 / 成年）"
+  },
+  "Sana(Female/JO)": {
+    "voice_id": "ar-JO-SanaNeural",
+    "name": "Sana",
+    "gender": "女声",
+    "region": "约旦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sana（女声 / 约旦 / 成年）"
+  },
+  "Salma(Female/EG)": {
+    "voice_id": "ar-EG-SalmaNeural",
+    "name": "Salma",
+    "gender": "女声",
+    "region": "埃及",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Salma（女声 / 埃及 / 成年）"
+  },
+  "Saleh(Male/YE)": {
+    "voice_id": "ar-YE-SalehNeural",
+    "name": "Saleh",
+    "gender": "男声",
+    "region": "也门",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Saleh（男声 / 也门 / 成年）"
+  },
+  "Reem(Female/TN)": {
+    "voice_id": "ar-TN-ReemNeural",
+    "name": "Reem",
+    "gender": "女声",
+    "region": "突尼斯",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Reem（女声 / 突尼斯 / 成年）"
+  },
+  "Rana(Female/IQ)": {
+    "voice_id": "ar-IQ-RanaNeural",
+    "name": "Rana",
+    "gender": "女声",
+    "region": "伊拉克",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rana（女声 / 伊拉克 / 成年）"
+  },
+  "Rami(Male/LB)": {
+    "voice_id": "ar-LB-RamiNeural",
+    "name": "Rami",
+    "gender": "男声",
+    "region": "黎巴嫩",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rami（男声 / 黎巴嫩 / 成年）"
+  },
+  "Omar(Male/LY)": {
+    "voice_id": "ar-LY-OmarNeural",
+    "name": "Omar",
+    "gender": "男声",
+    "region": "利比亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Omar（男声 / 利比亚 / 成年）"
+  },
+  "Noura(Female/KW)": {
+    "voice_id": "ar-KW-NouraNeural",
+    "name": "Noura",
+    "gender": "女声",
+    "region": "科威特",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Noura（女声 / 科威特 / 成年）"
+  },
+  "Mouna(Female/MA)": {
+    "voice_id": "ar-MA-MounaNeural",
+    "name": "Mouna",
+    "gender": "女声",
+    "region": "摩洛哥",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mouna（女声 / 摩洛哥 / 成年）"
+  },
+  "Moaz(Male/QA)": {
+    "voice_id": "ar-QA-MoazNeural",
+    "name": "Moaz",
+    "gender": "男声",
+    "region": "卡塔尔",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Moaz（男声 / 卡塔尔 / 成年）"
+  },
+  "Maryam(Female/YE)": {
+    "voice_id": "ar-YE-MaryamNeural",
+    "name": "Maryam",
+    "gender": "女声",
+    "region": "也门",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Maryam（女声 / 也门 / 成年）"
+  },
+  "Layla(Female/LB)": {
+    "voice_id": "ar-LB-LaylaNeural",
+    "name": "Layla",
+    "gender": "女声",
+    "region": "黎巴嫩",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Layla（女声 / 黎巴嫩 / 成年）"
+  },
+  "Laith(Male/SY)": {
+    "voice_id": "ar-SY-LaithNeural",
+    "name": "Laith",
+    "gender": "男声",
+    "region": "叙利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Laith（男声 / 叙利亚 / 成年）"
+  },
+  "Laila(Female/BH)": {
+    "voice_id": "ar-BH-LailaNeural",
+    "name": "Laila",
+    "gender": "女声",
+    "region": "巴林",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Laila（女声 / 巴林 / 成年）"
+  },
+  "Jamal(Male/MA)": {
+    "voice_id": "ar-MA-JamalNeural",
+    "name": "Jamal",
+    "gender": "男声",
+    "region": "摩洛哥",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jamal（男声 / 摩洛哥 / 成年）"
+  },
+  "Ismael(Male/DZ)": {
+    "voice_id": "ar-DZ-IsmaelNeural",
+    "name": "Ismael",
+    "gender": "男声",
+    "region": "阿尔及利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ismael（男声 / 阿尔及利亚 / 成年）"
+  },
+  "Iman(Female/LY)": {
+    "voice_id": "ar-LY-ImanNeural",
+    "name": "Iman",
+    "gender": "女声",
+    "region": "利比亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Iman（女声 / 利比亚 / 成年）"
+  },
+  "Hedi(Male/TN)": {
+    "voice_id": "ar-TN-HediNeural",
+    "name": "Hedi",
+    "gender": "男声",
+    "region": "突尼斯",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Hedi（男声 / 突尼斯 / 成年）"
+  },
+  "Hamed(Male/SA)": {
+    "voice_id": "ar-SA-HamedNeural",
+    "name": "Hamed",
+    "gender": "男声",
+    "region": "沙特",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Hamed（男声 / 沙特 / 成年）"
+  },
+  "Hamdan(Male/AE)": {
+    "voice_id": "ar-AE-HamdanNeural",
+    "name": "Hamdan",
+    "gender": "男声",
+    "region": "阿联酋",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Hamdan（男声 / 阿联酋 / 成年）"
+  },
+  "Fatima(Female/AE)": {
+    "voice_id": "ar-AE-FatimaNeural",
+    "name": "Fatima",
+    "gender": "女声",
+    "region": "阿联酋",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Fatima（女声 / 阿联酋 / 成年）"
+  },
+  "Fahed(Male/KW)": {
+    "voice_id": "ar-KW-FahedNeural",
+    "name": "Fahed",
+    "gender": "男声",
+    "region": "科威特",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Fahed（男声 / 科威特 / 成年）"
+  },
+  "Bassel(Male/IQ)": {
+    "voice_id": "ar-IQ-BasselNeural",
+    "name": "Bassel",
+    "gender": "男声",
+    "region": "伊拉克",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Bassel（男声 / 伊拉克 / 成年）"
+  },
+  "Aysha(Female/OM)": {
+    "voice_id": "ar-OM-AyshaNeural",
+    "name": "Aysha",
+    "gender": "女声",
+    "region": "阿曼",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Aysha（女声 / 阿曼 / 成年）"
+  },
+  "Amina(Female/DZ)": {
+    "voice_id": "ar-DZ-AminaNeural",
+    "name": "Amina",
+    "gender": "女声",
+    "region": "阿尔及利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Amina（女声 / 阿尔及利亚 / 成年）"
+  },
+  "Amany(Female/SY)": {
+    "voice_id": "ar-SY-AmanyNeural",
+    "name": "Amany",
+    "gender": "女声",
+    "region": "叙利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Amany（女声 / 叙利亚 / 成年）"
+  },
+  "Amal(Female/QA)": {
+    "voice_id": "ar-QA-AmalNeural",
+    "name": "Amal",
+    "gender": "女声",
+    "region": "卡塔尔",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Amal（女声 / 卡塔尔 / 成年）"
+  },
+  "Ali(Male/BH)": {
+    "voice_id": "ar-BH-AliNeural",
+    "name": "Ali",
+    "gender": "男声",
+    "region": "巴林",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ali（男声 / 巴林 / 成年）"
+  },
+  "Abdullah(Male/OM)": {
+    "voice_id": "ar-OM-AbdullahNeural",
+    "name": "Abdullah",
+    "gender": "男声",
+    "region": "阿曼",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Abdullah（男声 / 阿曼 / 成年）"
+  },
+  "Banu(Female/AZ)": {
+    "voice_id": "az-AZ-BanuNeural",
+    "name": "Banu",
+    "gender": "女声",
+    "region": "阿塞拜疆",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Banu（女声 / 阿塞拜疆 / 成年）"
+  },
+  "Babek(Male/AZ)": {
+    "voice_id": "az-AZ-BabekNeural",
+    "name": "Babek",
+    "gender": "男声",
+    "region": "阿塞拜疆",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Babek（男声 / 阿塞拜疆 / 成年）"
+  },
+  "Tanishaa(Female/IN)": {
+    "voice_id": "bn-IN-TanishaaNeural",
+    "name": "Tanishaa",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Tanishaa（女声 / 印度 / 成年）"
+  },
+  "Pradeep(Male/BD)": {
+    "voice_id": "bn-BD-PradeepNeural",
+    "name": "Pradeep",
+    "gender": "男声",
+    "region": "孟加拉国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Pradeep（男声 / 孟加拉国 / 成年）"
+  },
+  "Nabanita(Female/BD)": {
+    "voice_id": "bn-BD-NabanitaNeural",
+    "name": "Nabanita",
+    "gender": "女声",
+    "region": "孟加拉国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nabanita（女声 / 孟加拉国 / 成年）"
+  },
+  "Bashkar(Male/IN)": {
+    "voice_id": "bn-IN-BashkarNeural",
+    "name": "Bashkar",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Bashkar（男声 / 印度 / 成年）"
+  },
+  "Vesna(Female/BA)": {
+    "voice_id": "bs-BA-VesnaNeural",
+    "name": "Vesna",
+    "gender": "女声",
+    "region": "波黑",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Vesna（女声 / 波黑 / 成年）"
+  },
+  "Goran(Male/BA)": {
+    "voice_id": "bs-BA-GoranNeural",
+    "name": "Goran",
+    "gender": "男声",
+    "region": "波黑",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Goran（男声 / 波黑 / 成年）"
+  },
+  "Kalina(Female/BG)": {
+    "voice_id": "bg-BG-KalinaNeural",
+    "name": "Kalina",
+    "gender": "女声",
+    "region": "保加利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Kalina（女声 / 保加利亚 / 成年）"
+  },
+  "Borislav(Male/BG)": {
+    "voice_id": "bg-BG-BorislavNeural",
+    "name": "Borislav",
+    "gender": "男声",
+    "region": "保加利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Borislav（男声 / 保加利亚 / 成年）"
+  },
+  "Thiha(Male/MM)": {
+    "voice_id": "my-MM-ThihaNeural",
+    "name": "Thiha",
+    "gender": "男声",
+    "region": "缅甸",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Thiha（男声 / 缅甸 / 成年）"
+  },
+  "Nilar(Female/MM)": {
+    "voice_id": "my-MM-NilarNeural",
+    "name": "Nilar",
+    "gender": "女声",
+    "region": "缅甸",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nilar（女声 / 缅甸 / 成年）"
+  },
+  "Joana(Female/ES)": {
+    "voice_id": "ca-ES-JoanaNeural",
+    "name": "Joana",
+    "gender": "女声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Joana（女声 / 西班牙 / 成年）"
+  },
+  "Enric(Male/ES)": {
+    "voice_id": "ca-ES-EnricNeural",
+    "name": "Enric",
+    "gender": "男声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Enric（男声 / 西班牙 / 成年）"
+  },
+  "Yunyang(Male/CN)": {
+    "voice_id": "zh-CN-YunyangNeural",
+    "name": "Yunyang",
+    "gender": "男声",
+    "region": "中国大陆",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Yunyang（男声 / 中国大陆 / 成年）"
+  },
+  "Yunxia(Male/CN)": {
+    "voice_id": "zh-CN-YunxiaNeural",
+    "name": "Yunxia",
+    "gender": "男声",
+    "region": "中国大陆",
+    "age": "儿童倾向",
+    "confidence": "medium",
+    "label": "Yunxia（男声 / 中国大陆 / 儿童倾向）"
+  },
+  "Yunxi(Male/CN)": {
+    "voice_id": "zh-CN-YunxiNeural",
+    "name": "Yunxi",
+    "gender": "男声",
+    "region": "中国大陆",
+    "age": "青年倾向",
+    "confidence": "low",
+    "label": "Yunxi（男声 / 中国大陆 / 青年倾向）"
+  },
+  "Yunjian(Male/CN)": {
+    "voice_id": "zh-CN-YunjianNeural",
+    "name": "Yunjian",
+    "gender": "男声",
+    "region": "中国大陆",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Yunjian（男声 / 中国大陆 / 成年）"
+  },
+  "YunJhe(Male/TW)": {
+    "voice_id": "zh-TW-YunJheNeural",
+    "name": "YunJhe",
+    "gender": "男声",
+    "region": "台湾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "YunJhe（男声 / 台湾 / 成年）"
+  },
+  "Xiaoyi(Female/CN)": {
+    "voice_id": "zh-CN-XiaoyiNeural",
+    "name": "Xiaoyi",
+    "gender": "女声",
+    "region": "中国大陆",
+    "age": "青年倾向",
+    "confidence": "low",
+    "label": "Xiaoyi（女声 / 中国大陆 / 青年倾向）"
+  },
+  "Xiaoxiao(Female/CN)": {
+    "voice_id": "zh-CN-XiaoxiaoNeural",
+    "name": "Xiaoxiao",
+    "gender": "女声",
+    "region": "中国大陆",
+    "age": "青年倾向",
+    "confidence": "low",
+    "label": "Xiaoxiao（女声 / 中国大陆 / 青年倾向）"
+  },
+  "Xiaoni(Female/CN)": {
+    "voice_id": "zh-CN-shaanxi-XiaoniNeural",
+    "name": "Xiaoni",
+    "gender": "女声",
+    "region": "中国大陆",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Xiaoni（女声 / 中国大陆 / 成年）"
+  },
+  "Xiaobei(Female/CN)": {
+    "voice_id": "zh-CN-liaoning-XiaobeiNeural",
+    "name": "Xiaobei",
+    "gender": "女声",
+    "region": "中国大陆",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Xiaobei（女声 / 中国大陆 / 成年）"
+  },
+  "WanLung(Male/HK)": {
+    "voice_id": "zh-HK-WanLungNeural",
+    "name": "WanLung",
+    "gender": "男声",
+    "region": "香港",
+    "age": "成年",
+    "confidence": "low",
+    "label": "WanLung（男声 / 香港 / 成年）"
+  },
+  "HsiaoYu(Female/TW)": {
+    "voice_id": "zh-TW-HsiaoYuNeural",
+    "name": "HsiaoYu",
+    "gender": "女声",
+    "region": "台湾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "HsiaoYu（女声 / 台湾 / 成年）"
+  },
+  "HsiaoChen(Female/TW)": {
+    "voice_id": "zh-TW-HsiaoChenNeural",
+    "name": "HsiaoChen",
+    "gender": "女声",
+    "region": "台湾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "HsiaoChen（女声 / 台湾 / 成年）"
+  },
+  "HiuMaan(Female/HK)": {
+    "voice_id": "zh-HK-HiuMaanNeural",
+    "name": "HiuMaan",
+    "gender": "女声",
+    "region": "香港",
+    "age": "成年",
+    "confidence": "low",
+    "label": "HiuMaan（女声 / 香港 / 成年）"
+  },
+  "HiuGaai(Female/HK)": {
+    "voice_id": "zh-HK-HiuGaaiNeural",
+    "name": "HiuGaai",
+    "gender": "女声",
+    "region": "香港",
+    "age": "成年",
+    "confidence": "low",
+    "label": "HiuGaai（女声 / 香港 / 成年）"
+  },
+  "Srecko(Male/HR)": {
+    "voice_id": "hr-HR-SreckoNeural",
+    "name": "Srecko",
+    "gender": "男声",
+    "region": "克罗地亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Srecko（男声 / 克罗地亚 / 成年）"
+  },
+  "Gabrijela(Female/HR)": {
+    "voice_id": "hr-HR-GabrijelaNeural",
+    "name": "Gabrijela",
+    "gender": "女声",
+    "region": "克罗地亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gabrijela（女声 / 克罗地亚 / 成年）"
+  },
+  "Vlasta(Female/CZ)": {
+    "voice_id": "cs-CZ-VlastaNeural",
+    "name": "Vlasta",
+    "gender": "女声",
+    "region": "捷克",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Vlasta（女声 / 捷克 / 成年）"
+  },
+  "Antonin(Male/CZ)": {
+    "voice_id": "cs-CZ-AntoninNeural",
+    "name": "Antonin",
+    "gender": "男声",
+    "region": "捷克",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Antonin（男声 / 捷克 / 成年）"
+  },
+  "Jeppe(Male/DK)": {
+    "voice_id": "da-DK-JeppeNeural",
+    "name": "Jeppe",
+    "gender": "男声",
+    "region": "丹麦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jeppe（男声 / 丹麦 / 成年）"
+  },
+  "Christel(Female/DK)": {
+    "voice_id": "da-DK-ChristelNeural",
+    "name": "Christel",
+    "gender": "女声",
+    "region": "丹麦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Christel（女声 / 丹麦 / 成年）"
+  },
+  "Maarten(Male/NL)": {
+    "voice_id": "nl-NL-MaartenNeural",
+    "name": "Maarten",
+    "gender": "男声",
+    "region": "荷兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Maarten（男声 / 荷兰 / 成年）"
+  },
+  "Fenna(Female/NL)": {
+    "voice_id": "nl-NL-FennaNeural",
+    "name": "Fenna",
+    "gender": "女声",
+    "region": "荷兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Fenna（女声 / 荷兰 / 成年）"
+  },
+  "Dena(Female/BE)": {
+    "voice_id": "nl-BE-DenaNeural",
+    "name": "Dena",
+    "gender": "女声",
+    "region": "比利时",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Dena（女声 / 比利时 / 成年）"
+  },
+  "Colette(Female/NL)": {
+    "voice_id": "nl-NL-ColetteNeural",
+    "name": "Colette",
+    "gender": "女声",
+    "region": "荷兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Colette（女声 / 荷兰 / 成年）"
+  },
+  "Arnaud(Male/BE)": {
+    "voice_id": "nl-BE-ArnaudNeural",
+    "name": "Arnaud",
+    "gender": "男声",
+    "region": "比利时",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Arnaud（男声 / 比利时 / 成年）"
+  },
+  "Yan(Female/HK)": {
+    "voice_id": "en-HK-YanNeural",
+    "name": "Yan",
+    "gender": "女声",
+    "region": "香港",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Yan（女声 / 香港 / 成年）"
+  },
+  "WilliamMultilingual(Male/AU)": {
+    "voice_id": "en-AU-WilliamMultilingualNeural",
+    "name": "WilliamMultilingual",
+    "gender": "男声",
+    "region": "澳大利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "WilliamMultilingual（男声 / 澳大利亚 / 成年）"
+  },
+  "Wayne(Male/SG)": {
+    "voice_id": "en-SG-WayneNeural",
+    "name": "Wayne",
+    "gender": "男声",
+    "region": "新加坡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Wayne（男声 / 新加坡 / 成年）"
+  },
+  "Thomas(Male/GB)": {
+    "voice_id": "en-GB-ThomasNeural",
+    "name": "Thomas",
+    "gender": "男声",
+    "region": "英国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Thomas（男声 / 英国 / 成年）"
+  },
+  "Steffan(Male/US)": {
+    "voice_id": "en-US-SteffanNeural",
+    "name": "Steffan",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Steffan（男声 / 美国 / 成年）"
+  },
+  "Sonia(Female/GB)": {
+    "voice_id": "en-GB-SoniaNeural",
+    "name": "Sonia",
+    "gender": "女声",
+    "region": "英国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sonia（女声 / 英国 / 成年）"
+  },
+  "Sam(Male/HK)": {
+    "voice_id": "en-HK-SamNeural",
+    "name": "Sam",
+    "gender": "男声",
+    "region": "香港",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sam（男声 / 香港 / 成年）"
+  },
+  "Ryan(Male/GB)": {
+    "voice_id": "en-GB-RyanNeural",
+    "name": "Ryan",
+    "gender": "男声",
+    "region": "英国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ryan（男声 / 英国 / 成年）"
+  },
+  "Rosa(Female/PH)": {
+    "voice_id": "en-PH-RosaNeural",
+    "name": "Rosa",
+    "gender": "女声",
+    "region": "菲律宾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rosa（女声 / 菲律宾 / 成年）"
+  },
+  "Roger(Male/US)": {
+    "voice_id": "en-US-RogerNeural",
+    "name": "Roger",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Roger（男声 / 美国 / 成年）"
+  },
+  "Prabhat(Male/IN)": {
+    "voice_id": "en-IN-PrabhatNeural",
+    "name": "Prabhat",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Prabhat（男声 / 印度 / 成年）"
+  },
+  "NeerjaExpressive(Female/IN)": {
+    "voice_id": "en-IN-NeerjaExpressiveNeural",
+    "name": "NeerjaExpressive",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "NeerjaExpressive（女声 / 印度 / 成年）"
+  },
+  "Neerja(Female/IN)": {
+    "voice_id": "en-IN-NeerjaNeural",
+    "name": "Neerja",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Neerja（女声 / 印度 / 成年）"
+  },
+  "Natasha(Female/AU)": {
+    "voice_id": "en-AU-NatashaNeural",
+    "name": "Natasha",
+    "gender": "女声",
+    "region": "澳大利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Natasha（女声 / 澳大利亚 / 成年）"
+  },
+  "Molly(Female/NZ)": {
+    "voice_id": "en-NZ-MollyNeural",
+    "name": "Molly",
+    "gender": "女声",
+    "region": "新西兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Molly（女声 / 新西兰 / 成年）"
+  },
+  "Mitchell(Male/NZ)": {
+    "voice_id": "en-NZ-MitchellNeural",
+    "name": "Mitchell",
+    "gender": "男声",
+    "region": "新西兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mitchell（男声 / 新西兰 / 成年）"
+  },
+  "Michelle(Female/US)": {
+    "voice_id": "en-US-MichelleNeural",
+    "name": "Michelle",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Michelle（女声 / 美国 / 成年）"
+  },
+  "Maisie(Female/GB)": {
+    "voice_id": "en-GB-MaisieNeural",
+    "name": "Maisie",
+    "gender": "女声",
+    "region": "英国",
+    "age": "儿童倾向",
+    "confidence": "medium",
+    "label": "Maisie（女声 / 英国 / 儿童倾向）"
+  },
+  "Luna(Female/SG)": {
+    "voice_id": "en-SG-LunaNeural",
+    "name": "Luna",
+    "gender": "女声",
+    "region": "新加坡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Luna（女声 / 新加坡 / 成年）"
+  },
+  "Luke(Male/ZA)": {
+    "voice_id": "en-ZA-LukeNeural",
+    "name": "Luke",
+    "gender": "男声",
+    "region": "南非",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Luke（男声 / 南非 / 成年）"
+  },
+  "Libby(Female/GB)": {
+    "voice_id": "en-GB-LibbyNeural",
+    "name": "Libby",
+    "gender": "女声",
+    "region": "英国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Libby（女声 / 英国 / 成年）"
+  },
+  "Liam(Male/CA)": {
+    "voice_id": "en-CA-LiamNeural",
+    "name": "Liam",
+    "gender": "男声",
+    "region": "加拿大",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Liam（男声 / 加拿大 / 成年）"
+  },
+  "Leah(Female/ZA)": {
+    "voice_id": "en-ZA-LeahNeural",
+    "name": "Leah",
+    "gender": "女声",
+    "region": "南非",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Leah（女声 / 南非 / 成年）"
+  },
+  "Jenny(Female/US)": {
+    "voice_id": "en-US-JennyNeural",
+    "name": "Jenny",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jenny（女声 / 美国 / 成年）"
+  },
+  "James(Male/PH)": {
+    "voice_id": "en-PH-JamesNeural",
+    "name": "James",
+    "gender": "男声",
+    "region": "菲律宾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "James（男声 / 菲律宾 / 成年）"
+  },
+  "Imani(Female/TZ)": {
+    "voice_id": "en-TZ-ImaniNeural",
+    "name": "Imani",
+    "gender": "女声",
+    "region": "坦桑尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Imani（女声 / 坦桑尼亚 / 成年）"
+  },
+  "Guy(Male/US)": {
+    "voice_id": "en-US-GuyNeural",
+    "name": "Guy",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Guy（男声 / 美国 / 成年）"
+  },
+  "Ezinne(Female/NG)": {
+    "voice_id": "en-NG-EzinneNeural",
+    "name": "Ezinne",
+    "gender": "女声",
+    "region": "尼日利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ezinne（女声 / 尼日利亚 / 成年）"
+  },
+  "Eric(Male/US)": {
+    "voice_id": "en-US-EricNeural",
+    "name": "Eric",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Eric（男声 / 美国 / 成年）"
+  },
+  "EmmaMultilingual(Female/US)": {
+    "voice_id": "en-US-EmmaMultilingualNeural",
+    "name": "EmmaMultilingual",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "EmmaMultilingual（女声 / 美国 / 成年）"
+  },
+  "Emma(Female/US)": {
+    "voice_id": "en-US-EmmaNeural",
+    "name": "Emma",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Emma（女声 / 美国 / 成年）"
+  },
+  "Emily(Female/IE)": {
+    "voice_id": "en-IE-EmilyNeural",
+    "name": "Emily",
+    "gender": "女声",
+    "region": "爱尔兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Emily（女声 / 爱尔兰 / 成年）"
+  },
+  "Elimu(Male/TZ)": {
+    "voice_id": "en-TZ-ElimuNeural",
+    "name": "Elimu",
+    "gender": "男声",
+    "region": "坦桑尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Elimu（男声 / 坦桑尼亚 / 成年）"
+  },
+  "Connor(Male/IE)": {
+    "voice_id": "en-IE-ConnorNeural",
+    "name": "Connor",
+    "gender": "男声",
+    "region": "爱尔兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Connor（男声 / 爱尔兰 / 成年）"
+  },
+  "Clara(Female/CA)": {
+    "voice_id": "en-CA-ClaraNeural",
+    "name": "Clara",
+    "gender": "女声",
+    "region": "加拿大",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Clara（女声 / 加拿大 / 成年）"
+  },
+  "Christopher(Male/US)": {
+    "voice_id": "en-US-ChristopherNeural",
+    "name": "Christopher",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Christopher（男声 / 美国 / 成年）"
+  },
+  "Chilemba(Male/KE)": {
+    "voice_id": "en-KE-ChilembaNeural",
+    "name": "Chilemba",
+    "gender": "男声",
+    "region": "肯尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Chilemba（男声 / 肯尼亚 / 成年）"
+  },
+  "BrianMultilingual(Male/US)": {
+    "voice_id": "en-US-BrianMultilingualNeural",
+    "name": "BrianMultilingual",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "BrianMultilingual（男声 / 美国 / 成年）"
+  },
+  "Brian(Male/US)": {
+    "voice_id": "en-US-BrianNeural",
+    "name": "Brian",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Brian（男声 / 美国 / 成年）"
+  },
+  "AvaMultilingual(Female/US)": {
+    "voice_id": "en-US-AvaMultilingualNeural",
+    "name": "AvaMultilingual",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "AvaMultilingual（女声 / 美国 / 成年）"
+  },
+  "Ava(Female/US)": {
+    "voice_id": "en-US-AvaNeural",
+    "name": "Ava",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ava（女声 / 美国 / 成年）"
+  },
+  "Asilia(Female/KE)": {
+    "voice_id": "en-KE-AsiliaNeural",
+    "name": "Asilia",
+    "gender": "女声",
+    "region": "肯尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Asilia（女声 / 肯尼亚 / 成年）"
+  },
+  "Aria(Female/US)": {
+    "voice_id": "en-US-AriaNeural",
+    "name": "Aria",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Aria（女声 / 美国 / 成年）"
+  },
+  "AndrewMultilingual(Male/US)": {
+    "voice_id": "en-US-AndrewMultilingualNeural",
+    "name": "AndrewMultilingual",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "AndrewMultilingual（男声 / 美国 / 成年）"
+  },
+  "Andrew(Male/US)": {
+    "voice_id": "en-US-AndrewNeural",
+    "name": "Andrew",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Andrew（男声 / 美国 / 成年）"
+  },
+  "Ana(Female/US)": {
+    "voice_id": "en-US-AnaNeural",
+    "name": "Ana",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ana（女声 / 美国 / 成年）"
+  },
+  "Abeo(Male/NG)": {
+    "voice_id": "en-NG-AbeoNeural",
+    "name": "Abeo",
+    "gender": "男声",
+    "region": "尼日利亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Abeo（男声 / 尼日利亚 / 成年）"
+  },
+  "Kert(Male/EE)": {
+    "voice_id": "et-EE-KertNeural",
+    "name": "Kert",
+    "gender": "男声",
+    "region": "爱沙尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Kert（男声 / 爱沙尼亚 / 成年）"
+  },
+  "Anu(Female/EE)": {
+    "voice_id": "et-EE-AnuNeural",
+    "name": "Anu",
+    "gender": "女声",
+    "region": "爱沙尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Anu（女声 / 爱沙尼亚 / 成年）"
+  },
+  "Blessica(Female/PH)": {
+    "voice_id": "fil-PH-BlessicaNeural",
+    "name": "Blessica",
+    "gender": "女声",
+    "region": "菲律宾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Blessica（女声 / 菲律宾 / 成年）"
+  },
+  "Angelo(Male/PH)": {
+    "voice_id": "fil-PH-AngeloNeural",
+    "name": "Angelo",
+    "gender": "男声",
+    "region": "菲律宾",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Angelo（男声 / 菲律宾 / 成年）"
+  },
+  "Noora(Female/FI)": {
+    "voice_id": "fi-FI-NooraNeural",
+    "name": "Noora",
+    "gender": "女声",
+    "region": "芬兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Noora（女声 / 芬兰 / 成年）"
+  },
+  "Harri(Male/FI)": {
+    "voice_id": "fi-FI-HarriNeural",
+    "name": "Harri",
+    "gender": "男声",
+    "region": "芬兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Harri（男声 / 芬兰 / 成年）"
+  },
+  "VivienneMultilingual(Female/FR)": {
+    "voice_id": "fr-FR-VivienneMultilingualNeural",
+    "name": "VivienneMultilingual",
+    "gender": "女声",
+    "region": "法国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "VivienneMultilingual（女声 / 法国 / 成年）"
+  },
+  "Thierry(Male/CA)": {
+    "voice_id": "fr-CA-ThierryNeural",
+    "name": "Thierry",
+    "gender": "男声",
+    "region": "加拿大",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Thierry（男声 / 加拿大 / 成年）"
+  },
+  "Sylvie(Female/CA)": {
+    "voice_id": "fr-CA-SylvieNeural",
+    "name": "Sylvie",
+    "gender": "女声",
+    "region": "加拿大",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sylvie（女声 / 加拿大 / 成年）"
+  },
+  "RemyMultilingual(Male/FR)": {
+    "voice_id": "fr-FR-RemyMultilingualNeural",
+    "name": "RemyMultilingual",
+    "gender": "男声",
+    "region": "法国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "RemyMultilingual（男声 / 法国 / 成年）"
+  },
+  "Jean(Male/CA)": {
+    "voice_id": "fr-CA-JeanNeural",
+    "name": "Jean",
+    "gender": "男声",
+    "region": "加拿大",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jean（男声 / 加拿大 / 成年）"
+  },
+  "Henri(Male/FR)": {
+    "voice_id": "fr-FR-HenriNeural",
+    "name": "Henri",
+    "gender": "男声",
+    "region": "法国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Henri（男声 / 法国 / 成年）"
+  },
+  "Gerard(Male/BE)": {
+    "voice_id": "fr-BE-GerardNeural",
+    "name": "Gerard",
+    "gender": "男声",
+    "region": "比利时",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gerard（男声 / 比利时 / 成年）"
+  },
+  "Fabrice(Male/CH)": {
+    "voice_id": "fr-CH-FabriceNeural",
+    "name": "Fabrice",
+    "gender": "男声",
+    "region": "瑞士",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Fabrice（男声 / 瑞士 / 成年）"
+  },
+  "Eloise(Female/FR)": {
+    "voice_id": "fr-FR-EloiseNeural",
+    "name": "Eloise",
+    "gender": "女声",
+    "region": "法国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Eloise（女声 / 法国 / 成年）"
+  },
+  "Denise(Female/FR)": {
+    "voice_id": "fr-FR-DeniseNeural",
+    "name": "Denise",
+    "gender": "女声",
+    "region": "法国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Denise（女声 / 法国 / 成年）"
+  },
+  "Charline(Female/BE)": {
+    "voice_id": "fr-BE-CharlineNeural",
+    "name": "Charline",
+    "gender": "女声",
+    "region": "比利时",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Charline（女声 / 比利时 / 成年）"
+  },
+  "Ariane(Female/CH)": {
+    "voice_id": "fr-CH-ArianeNeural",
+    "name": "Ariane",
+    "gender": "女声",
+    "region": "瑞士",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ariane（女声 / 瑞士 / 成年）"
+  },
+  "Antoine(Male/CA)": {
+    "voice_id": "fr-CA-AntoineNeural",
+    "name": "Antoine",
+    "gender": "男声",
+    "region": "加拿大",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Antoine（男声 / 加拿大 / 成年）"
+  },
+  "Sabela(Female/ES)": {
+    "voice_id": "gl-ES-SabelaNeural",
+    "name": "Sabela",
+    "gender": "女声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sabela（女声 / 西班牙 / 成年）"
+  },
+  "Roi(Male/ES)": {
+    "voice_id": "gl-ES-RoiNeural",
+    "name": "Roi",
+    "gender": "男声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Roi（男声 / 西班牙 / 成年）"
+  },
+  "Giorgi(Male/GE)": {
+    "voice_id": "ka-GE-GiorgiNeural",
+    "name": "Giorgi",
+    "gender": "男声",
+    "region": "格鲁吉亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Giorgi（男声 / 格鲁吉亚 / 成年）"
+  },
+  "Eka(Female/GE)": {
+    "voice_id": "ka-GE-EkaNeural",
+    "name": "Eka",
+    "gender": "女声",
+    "region": "格鲁吉亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Eka（女声 / 格鲁吉亚 / 成年）"
+  },
+  "SeraphinaMultilingual(Female/DE)": {
+    "voice_id": "de-DE-SeraphinaMultilingualNeural",
+    "name": "SeraphinaMultilingual",
+    "gender": "女声",
+    "region": "德国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "SeraphinaMultilingual（女声 / 德国 / 成年）"
+  },
+  "Leni(Female/CH)": {
+    "voice_id": "de-CH-LeniNeural",
+    "name": "Leni",
+    "gender": "女声",
+    "region": "瑞士",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Leni（女声 / 瑞士 / 成年）"
+  },
+  "Killian(Male/DE)": {
+    "voice_id": "de-DE-KillianNeural",
+    "name": "Killian",
+    "gender": "男声",
+    "region": "德国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Killian（男声 / 德国 / 成年）"
+  },
+  "Katja(Female/DE)": {
+    "voice_id": "de-DE-KatjaNeural",
+    "name": "Katja",
+    "gender": "女声",
+    "region": "德国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Katja（女声 / 德国 / 成年）"
+  },
+  "Jonas(Male/AT)": {
+    "voice_id": "de-AT-JonasNeural",
+    "name": "Jonas",
+    "gender": "男声",
+    "region": "奥地利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jonas（男声 / 奥地利 / 成年）"
+  },
+  "Jan(Male/CH)": {
+    "voice_id": "de-CH-JanNeural",
+    "name": "Jan",
+    "gender": "男声",
+    "region": "瑞士",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jan（男声 / 瑞士 / 成年）"
+  },
+  "Ingrid(Female/AT)": {
+    "voice_id": "de-AT-IngridNeural",
+    "name": "Ingrid",
+    "gender": "女声",
+    "region": "奥地利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ingrid（女声 / 奥地利 / 成年）"
+  },
+  "FlorianMultilingual(Male/DE)": {
+    "voice_id": "de-DE-FlorianMultilingualNeural",
+    "name": "FlorianMultilingual",
+    "gender": "男声",
+    "region": "德国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "FlorianMultilingual（男声 / 德国 / 成年）"
+  },
+  "Conrad(Male/DE)": {
+    "voice_id": "de-DE-ConradNeural",
+    "name": "Conrad",
+    "gender": "男声",
+    "region": "德国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Conrad（男声 / 德国 / 成年）"
+  },
+  "Amala(Female/DE)": {
+    "voice_id": "de-DE-AmalaNeural",
+    "name": "Amala",
+    "gender": "女声",
+    "region": "德国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Amala（女声 / 德国 / 成年）"
+  },
+  "Nestoras(Male/GR)": {
+    "voice_id": "el-GR-NestorasNeural",
+    "name": "Nestoras",
+    "gender": "男声",
+    "region": "希腊",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nestoras（男声 / 希腊 / 成年）"
+  },
+  "Athina(Female/GR)": {
+    "voice_id": "el-GR-AthinaNeural",
+    "name": "Athina",
+    "gender": "女声",
+    "region": "希腊",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Athina（女声 / 希腊 / 成年）"
+  },
+  "Niranjan(Male/IN)": {
+    "voice_id": "gu-IN-NiranjanNeural",
+    "name": "Niranjan",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Niranjan（男声 / 印度 / 成年）"
+  },
+  "Dhwani(Female/IN)": {
+    "voice_id": "gu-IN-DhwaniNeural",
+    "name": "Dhwani",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Dhwani（女声 / 印度 / 成年）"
+  },
+  "Hila(Female/IL)": {
+    "voice_id": "he-IL-HilaNeural",
+    "name": "Hila",
+    "gender": "女声",
+    "region": "以色列",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Hila（女声 / 以色列 / 成年）"
+  },
+  "Avri(Male/IL)": {
+    "voice_id": "he-IL-AvriNeural",
+    "name": "Avri",
+    "gender": "男声",
+    "region": "以色列",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Avri（男声 / 以色列 / 成年）"
+  },
+  "Swara(Female/IN)": {
+    "voice_id": "hi-IN-SwaraNeural",
+    "name": "Swara",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Swara（女声 / 印度 / 成年）"
+  },
+  "Madhur(Male/IN)": {
+    "voice_id": "hi-IN-MadhurNeural",
+    "name": "Madhur",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Madhur（男声 / 印度 / 成年）"
+  },
+  "Tamas(Male/HU)": {
+    "voice_id": "hu-HU-TamasNeural",
+    "name": "Tamas",
+    "gender": "男声",
+    "region": "匈牙利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Tamas（男声 / 匈牙利 / 成年）"
+  },
+  "Noemi(Female/HU)": {
+    "voice_id": "hu-HU-NoemiNeural",
+    "name": "Noemi",
+    "gender": "女声",
+    "region": "匈牙利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Noemi（女声 / 匈牙利 / 成年）"
+  },
+  "Gunnar(Male/IS)": {
+    "voice_id": "is-IS-GunnarNeural",
+    "name": "Gunnar",
+    "gender": "男声",
+    "region": "冰岛",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gunnar（男声 / 冰岛 / 成年）"
+  },
+  "Gudrun(Female/IS)": {
+    "voice_id": "is-IS-GudrunNeural",
+    "name": "Gudrun",
+    "gender": "女声",
+    "region": "冰岛",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gudrun（女声 / 冰岛 / 成年）"
+  },
+  "Gadis(Female/ID)": {
+    "voice_id": "id-ID-GadisNeural",
+    "name": "Gadis",
+    "gender": "女声",
+    "region": "印度尼西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gadis（女声 / 印度尼西亚 / 成年）"
+  },
+  "Ardi(Male/ID)": {
+    "voice_id": "id-ID-ArdiNeural",
+    "name": "Ardi",
+    "gender": "男声",
+    "region": "印度尼西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ardi（男声 / 印度尼西亚 / 成年）"
+  },
+  "Taqqiq(Male/Latn)": {
+    "voice_id": "iu-Latn-CA-TaqqiqNeural",
+    "name": "Taqqiq",
+    "gender": "男声",
+    "region": "Latn",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Taqqiq（男声 / Latn / 成年）"
+  },
+  "Taqqiq(Male/Cans)": {
+    "voice_id": "iu-Cans-CA-TaqqiqNeural",
+    "name": "Taqqiq",
+    "gender": "男声",
+    "region": "Cans",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Taqqiq（男声 / Cans / 成年）"
+  },
+  "Siqiniq(Female/Latn)": {
+    "voice_id": "iu-Latn-CA-SiqiniqNeural",
+    "name": "Siqiniq",
+    "gender": "女声",
+    "region": "Latn",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Siqiniq（女声 / Latn / 成年）"
+  },
+  "Siqiniq(Female/Cans)": {
+    "voice_id": "iu-Cans-CA-SiqiniqNeural",
+    "name": "Siqiniq",
+    "gender": "女声",
+    "region": "Cans",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Siqiniq（女声 / Cans / 成年）"
+  },
+  "Orla(Female/IE)": {
+    "voice_id": "ga-IE-OrlaNeural",
+    "name": "Orla",
+    "gender": "女声",
+    "region": "爱尔兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Orla（女声 / 爱尔兰 / 成年）"
+  },
+  "Colm(Male/IE)": {
+    "voice_id": "ga-IE-ColmNeural",
+    "name": "Colm",
+    "gender": "男声",
+    "region": "爱尔兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Colm（男声 / 爱尔兰 / 成年）"
+  },
+  "Isabella(Female/IT)": {
+    "voice_id": "it-IT-IsabellaNeural",
+    "name": "Isabella",
+    "gender": "女声",
+    "region": "意大利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Isabella（女声 / 意大利 / 成年）"
+  },
+  "GiuseppeMultilingual(Male/IT)": {
+    "voice_id": "it-IT-GiuseppeMultilingualNeural",
+    "name": "GiuseppeMultilingual",
+    "gender": "男声",
+    "region": "意大利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "GiuseppeMultilingual（男声 / 意大利 / 成年）"
+  },
+  "Elsa(Female/IT)": {
+    "voice_id": "it-IT-ElsaNeural",
+    "name": "Elsa",
+    "gender": "女声",
+    "region": "意大利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Elsa（女声 / 意大利 / 成年）"
+  },
+  "Diego(Male/IT)": {
+    "voice_id": "it-IT-DiegoNeural",
+    "name": "Diego",
+    "gender": "男声",
+    "region": "意大利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Diego（男声 / 意大利 / 成年）"
+  },
+  "Nanami(Female/JP)": {
+    "voice_id": "ja-JP-NanamiNeural",
+    "name": "Nanami",
+    "gender": "女声",
+    "region": "日本",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nanami（女声 / 日本 / 成年）"
+  },
+  "Keita(Male/JP)": {
+    "voice_id": "ja-JP-KeitaNeural",
+    "name": "Keita",
+    "gender": "男声",
+    "region": "日本",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Keita（男声 / 日本 / 成年）"
+  },
+  "Siti(Female/ID)": {
+    "voice_id": "jv-ID-SitiNeural",
+    "name": "Siti",
+    "gender": "女声",
+    "region": "印度尼西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Siti（女声 / 印度尼西亚 / 成年）"
+  },
+  "Dimas(Male/ID)": {
+    "voice_id": "jv-ID-DimasNeural",
+    "name": "Dimas",
+    "gender": "男声",
+    "region": "印度尼西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Dimas（男声 / 印度尼西亚 / 成年）"
+  },
+  "Sapna(Female/IN)": {
+    "voice_id": "kn-IN-SapnaNeural",
+    "name": "Sapna",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sapna（女声 / 印度 / 成年）"
+  },
+  "Gagan(Male/IN)": {
+    "voice_id": "kn-IN-GaganNeural",
+    "name": "Gagan",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gagan（男声 / 印度 / 成年）"
+  },
+  "Daulet(Male/KZ)": {
+    "voice_id": "kk-KZ-DauletNeural",
+    "name": "Daulet",
+    "gender": "男声",
+    "region": "哈萨克斯坦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Daulet（男声 / 哈萨克斯坦 / 成年）"
+  },
+  "Aigul(Female/KZ)": {
+    "voice_id": "kk-KZ-AigulNeural",
+    "name": "Aigul",
+    "gender": "女声",
+    "region": "哈萨克斯坦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Aigul（女声 / 哈萨克斯坦 / 成年）"
+  },
+  "Sreymom(Female/KH)": {
+    "voice_id": "km-KH-SreymomNeural",
+    "name": "Sreymom",
+    "gender": "女声",
+    "region": "KH",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sreymom（女声 / KH / 成年）"
+  },
+  "Piseth(Male/KH)": {
+    "voice_id": "km-KH-PisethNeural",
+    "name": "Piseth",
+    "gender": "男声",
+    "region": "KH",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Piseth（男声 / KH / 成年）"
+  },
+  "SunHi(Female/KR)": {
+    "voice_id": "ko-KR-SunHiNeural",
+    "name": "SunHi",
+    "gender": "女声",
+    "region": "韩国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "SunHi（女声 / 韩国 / 成年）"
+  },
+  "InJoon(Male/KR)": {
+    "voice_id": "ko-KR-InJoonNeural",
+    "name": "InJoon",
+    "gender": "男声",
+    "region": "韩国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "InJoon（男声 / 韩国 / 成年）"
+  },
+  "HyunsuMultilingual(Male/KR)": {
+    "voice_id": "ko-KR-HyunsuMultilingualNeural",
+    "name": "HyunsuMultilingual",
+    "gender": "男声",
+    "region": "韩国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "HyunsuMultilingual（男声 / 韩国 / 成年）"
+  },
+  "Keomany(Female/LA)": {
+    "voice_id": "lo-LA-KeomanyNeural",
+    "name": "Keomany",
+    "gender": "女声",
+    "region": "LA",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Keomany（女声 / LA / 成年）"
+  },
+  "Chanthavong(Male/LA)": {
+    "voice_id": "lo-LA-ChanthavongNeural",
+    "name": "Chanthavong",
+    "gender": "男声",
+    "region": "LA",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Chanthavong（男声 / LA / 成年）"
+  },
+  "Nils(Male/LV)": {
+    "voice_id": "lv-LV-NilsNeural",
+    "name": "Nils",
+    "gender": "男声",
+    "region": "拉脱维亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nils（男声 / 拉脱维亚 / 成年）"
+  },
+  "Everita(Female/LV)": {
+    "voice_id": "lv-LV-EveritaNeural",
+    "name": "Everita",
+    "gender": "女声",
+    "region": "拉脱维亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Everita（女声 / 拉脱维亚 / 成年）"
+  },
+  "Ona(Female/LT)": {
+    "voice_id": "lt-LT-OnaNeural",
+    "name": "Ona",
+    "gender": "女声",
+    "region": "立陶宛",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ona（女声 / 立陶宛 / 成年）"
+  },
+  "Leonas(Male/LT)": {
+    "voice_id": "lt-LT-LeonasNeural",
+    "name": "Leonas",
+    "gender": "男声",
+    "region": "立陶宛",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Leonas（男声 / 立陶宛 / 成年）"
+  },
+  "Marija(Female/MK)": {
+    "voice_id": "mk-MK-MarijaNeural",
+    "name": "Marija",
+    "gender": "女声",
+    "region": "北马其顿",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Marija（女声 / 北马其顿 / 成年）"
+  },
+  "Aleksandar(Male/MK)": {
+    "voice_id": "mk-MK-AleksandarNeural",
+    "name": "Aleksandar",
+    "gender": "男声",
+    "region": "北马其顿",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Aleksandar（男声 / 北马其顿 / 成年）"
+  },
+  "Yasmin(Female/MY)": {
+    "voice_id": "ms-MY-YasminNeural",
+    "name": "Yasmin",
+    "gender": "女声",
+    "region": "马来西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Yasmin（女声 / 马来西亚 / 成年）"
+  },
+  "Osman(Male/MY)": {
+    "voice_id": "ms-MY-OsmanNeural",
+    "name": "Osman",
+    "gender": "男声",
+    "region": "马来西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Osman（男声 / 马来西亚 / 成年）"
+  },
+  "Sobhana(Female/IN)": {
+    "voice_id": "ml-IN-SobhanaNeural",
+    "name": "Sobhana",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sobhana（女声 / 印度 / 成年）"
+  },
+  "Midhun(Male/IN)": {
+    "voice_id": "ml-IN-MidhunNeural",
+    "name": "Midhun",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Midhun（男声 / 印度 / 成年）"
+  },
+  "Joseph(Male/MT)": {
+    "voice_id": "mt-MT-JosephNeural",
+    "name": "Joseph",
+    "gender": "男声",
+    "region": "马耳他",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Joseph（男声 / 马耳他 / 成年）"
+  },
+  "Grace(Female/MT)": {
+    "voice_id": "mt-MT-GraceNeural",
+    "name": "Grace",
+    "gender": "女声",
+    "region": "马耳他",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Grace（女声 / 马耳他 / 成年）"
+  },
+  "Manohar(Male/IN)": {
+    "voice_id": "mr-IN-ManoharNeural",
+    "name": "Manohar",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Manohar（男声 / 印度 / 成年）"
+  },
+  "Aarohi(Female/IN)": {
+    "voice_id": "mr-IN-AarohiNeural",
+    "name": "Aarohi",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Aarohi（女声 / 印度 / 成年）"
+  },
+  "Yesui(Female/MN)": {
+    "voice_id": "mn-MN-YesuiNeural",
+    "name": "Yesui",
+    "gender": "女声",
+    "region": "MN",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Yesui（女声 / MN / 成年）"
+  },
+  "Bataa(Male/MN)": {
+    "voice_id": "mn-MN-BataaNeural",
+    "name": "Bataa",
+    "gender": "男声",
+    "region": "MN",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Bataa（男声 / MN / 成年）"
+  },
+  "Sagar(Male/NP)": {
+    "voice_id": "ne-NP-SagarNeural",
+    "name": "Sagar",
+    "gender": "男声",
+    "region": "NP",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sagar（男声 / NP / 成年）"
+  },
+  "Hemkala(Female/NP)": {
+    "voice_id": "ne-NP-HemkalaNeural",
+    "name": "Hemkala",
+    "gender": "女声",
+    "region": "NP",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Hemkala（女声 / NP / 成年）"
+  },
+  "Pernille(Female/NO)": {
+    "voice_id": "nb-NO-PernilleNeural",
+    "name": "Pernille",
+    "gender": "女声",
+    "region": "挪威",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Pernille（女声 / 挪威 / 成年）"
+  },
+  "Finn(Male/NO)": {
+    "voice_id": "nb-NO-FinnNeural",
+    "name": "Finn",
+    "gender": "男声",
+    "region": "挪威",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Finn（男声 / 挪威 / 成年）"
+  },
+  "Latifa(Female/AF)": {
+    "voice_id": "ps-AF-LatifaNeural",
+    "name": "Latifa",
+    "gender": "女声",
+    "region": "AF",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Latifa（女声 / AF / 成年）"
+  },
+  "GulNawaz(Male/AF)": {
+    "voice_id": "ps-AF-GulNawazNeural",
+    "name": "GulNawaz",
+    "gender": "男声",
+    "region": "AF",
+    "age": "成年",
+    "confidence": "low",
+    "label": "GulNawaz（男声 / AF / 成年）"
+  },
+  "Farid(Male/IR)": {
+    "voice_id": "fa-IR-FaridNeural",
+    "name": "Farid",
+    "gender": "男声",
+    "region": "伊朗",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Farid（男声 / 伊朗 / 成年）"
+  },
+  "Dilara(Female/IR)": {
+    "voice_id": "fa-IR-DilaraNeural",
+    "name": "Dilara",
+    "gender": "女声",
+    "region": "伊朗",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Dilara（女声 / 伊朗 / 成年）"
+  },
+  "Zofia(Female/PL)": {
+    "voice_id": "pl-PL-ZofiaNeural",
+    "name": "Zofia",
+    "gender": "女声",
+    "region": "波兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Zofia（女声 / 波兰 / 成年）"
+  },
+  "Marek(Male/PL)": {
+    "voice_id": "pl-PL-MarekNeural",
+    "name": "Marek",
+    "gender": "男声",
+    "region": "波兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Marek（男声 / 波兰 / 成年）"
+  },
+  "ThalitaMultilingual(Female/BR)": {
+    "voice_id": "pt-BR-ThalitaMultilingualNeural",
+    "name": "ThalitaMultilingual",
+    "gender": "女声",
+    "region": "巴西",
+    "age": "成年",
+    "confidence": "low",
+    "label": "ThalitaMultilingual（女声 / 巴西 / 成年）"
+  },
+  "Raquel(Female/PT)": {
+    "voice_id": "pt-PT-RaquelNeural",
+    "name": "Raquel",
+    "gender": "女声",
+    "region": "葡萄牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Raquel（女声 / 葡萄牙 / 成年）"
+  },
+  "Francisca(Female/BR)": {
+    "voice_id": "pt-BR-FranciscaNeural",
+    "name": "Francisca",
+    "gender": "女声",
+    "region": "巴西",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Francisca（女声 / 巴西 / 成年）"
+  },
+  "Duarte(Male/PT)": {
+    "voice_id": "pt-PT-DuarteNeural",
+    "name": "Duarte",
+    "gender": "男声",
+    "region": "葡萄牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Duarte（男声 / 葡萄牙 / 成年）"
+  },
+  "Antonio(Male/BR)": {
+    "voice_id": "pt-BR-AntonioNeural",
+    "name": "Antonio",
+    "gender": "男声",
+    "region": "巴西",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Antonio（男声 / 巴西 / 成年）"
+  },
+  "Emil(Male/RO)": {
+    "voice_id": "ro-RO-EmilNeural",
+    "name": "Emil",
+    "gender": "男声",
+    "region": "罗马尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Emil（男声 / 罗马尼亚 / 成年）"
+  },
+  "Alina(Female/RO)": {
+    "voice_id": "ro-RO-AlinaNeural",
+    "name": "Alina",
+    "gender": "女声",
+    "region": "罗马尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Alina（女声 / 罗马尼亚 / 成年）"
+  },
+  "Svetlana(Female/RU)": {
+    "voice_id": "ru-RU-SvetlanaNeural",
+    "name": "Svetlana",
+    "gender": "女声",
+    "region": "俄罗斯",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Svetlana（女声 / 俄罗斯 / 成年）"
+  },
+  "Dmitry(Male/RU)": {
+    "voice_id": "ru-RU-DmitryNeural",
+    "name": "Dmitry",
+    "gender": "男声",
+    "region": "俄罗斯",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Dmitry（男声 / 俄罗斯 / 成年）"
+  },
+  "Sophie(Female/RS)": {
+    "voice_id": "sr-RS-SophieNeural",
+    "name": "Sophie",
+    "gender": "女声",
+    "region": "塞尔维亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sophie（女声 / 塞尔维亚 / 成年）"
+  },
+  "Nicholas(Male/RS)": {
+    "voice_id": "sr-RS-NicholasNeural",
+    "name": "Nicholas",
+    "gender": "男声",
+    "region": "塞尔维亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nicholas（男声 / 塞尔维亚 / 成年）"
+  },
+  "Thilini(Female/LK)": {
+    "voice_id": "si-LK-ThiliniNeural",
+    "name": "Thilini",
+    "gender": "女声",
+    "region": "斯里兰卡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Thilini（女声 / 斯里兰卡 / 成年）"
+  },
+  "Sameera(Male/LK)": {
+    "voice_id": "si-LK-SameeraNeural",
+    "name": "Sameera",
+    "gender": "男声",
+    "region": "斯里兰卡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sameera（男声 / 斯里兰卡 / 成年）"
+  },
+  "Viktoria(Female/SK)": {
+    "voice_id": "sk-SK-ViktoriaNeural",
+    "name": "Viktoria",
+    "gender": "女声",
+    "region": "斯洛伐克",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Viktoria（女声 / 斯洛伐克 / 成年）"
+  },
+  "Lukas(Male/SK)": {
+    "voice_id": "sk-SK-LukasNeural",
+    "name": "Lukas",
+    "gender": "男声",
+    "region": "斯洛伐克",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Lukas（男声 / 斯洛伐克 / 成年）"
+  },
+  "Rok(Male/SI)": {
+    "voice_id": "sl-SI-RokNeural",
+    "name": "Rok",
+    "gender": "男声",
+    "region": "斯洛文尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rok（男声 / 斯洛文尼亚 / 成年）"
+  },
+  "Petra(Female/SI)": {
+    "voice_id": "sl-SI-PetraNeural",
+    "name": "Petra",
+    "gender": "女声",
+    "region": "斯洛文尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Petra（女声 / 斯洛文尼亚 / 成年）"
+  },
+  "Ubax(Female/SO)": {
+    "voice_id": "so-SO-UbaxNeural",
+    "name": "Ubax",
+    "gender": "女声",
+    "region": "SO",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ubax（女声 / SO / 成年）"
+  },
+  "Muuse(Male/SO)": {
+    "voice_id": "so-SO-MuuseNeural",
+    "name": "Muuse",
+    "gender": "男声",
+    "region": "SO",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Muuse（男声 / SO / 成年）"
+  },
+  "Yolanda(Female/NI)": {
+    "voice_id": "es-NI-YolandaNeural",
+    "name": "Yolanda",
+    "gender": "女声",
+    "region": "尼加拉瓜",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Yolanda（女声 / 尼加拉瓜 / 成年）"
+  },
+  "Ximena(Female/ES)": {
+    "voice_id": "es-ES-XimenaNeural",
+    "name": "Ximena",
+    "gender": "女声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ximena（女声 / 西班牙 / 成年）"
+  },
+  "Victor(Male/PR)": {
+    "voice_id": "es-PR-VictorNeural",
+    "name": "Victor",
+    "gender": "男声",
+    "region": "波多黎各",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Victor（男声 / 波多黎各 / 成年）"
+  },
+  "Valentina(Female/UY)": {
+    "voice_id": "es-UY-ValentinaNeural",
+    "name": "Valentina",
+    "gender": "女声",
+    "region": "乌拉圭",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Valentina（女声 / 乌拉圭 / 成年）"
+  },
+  "Tomas(Male/AR)": {
+    "voice_id": "es-AR-TomasNeural",
+    "name": "Tomas",
+    "gender": "男声",
+    "region": "阿根廷",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Tomas（男声 / 阿根廷 / 成年）"
+  },
+  "Teresa(Female/GQ)": {
+    "voice_id": "es-GQ-TeresaNeural",
+    "name": "Teresa",
+    "gender": "女声",
+    "region": "GQ",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Teresa（女声 / GQ / 成年）"
+  },
+  "Tania(Female/PY)": {
+    "voice_id": "es-PY-TaniaNeural",
+    "name": "Tania",
+    "gender": "女声",
+    "region": "巴拉圭",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Tania（女声 / 巴拉圭 / 成年）"
+  },
+  "Sofia(Female/BO)": {
+    "voice_id": "es-BO-SofiaNeural",
+    "name": "Sofia",
+    "gender": "女声",
+    "region": "玻利维亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sofia（女声 / 玻利维亚 / 成年）"
+  },
+  "Sebastian(Male/VE)": {
+    "voice_id": "es-VE-SebastianNeural",
+    "name": "Sebastian",
+    "gender": "男声",
+    "region": "委内瑞拉",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sebastian（男声 / 委内瑞拉 / 成年）"
+  },
+  "Salome(Female/CO)": {
+    "voice_id": "es-CO-SalomeNeural",
+    "name": "Salome",
+    "gender": "女声",
+    "region": "哥伦比亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Salome（女声 / 哥伦比亚 / 成年）"
+  },
+  "Rodrigo(Male/SV)": {
+    "voice_id": "es-SV-RodrigoNeural",
+    "name": "Rodrigo",
+    "gender": "男声",
+    "region": "萨尔瓦多",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rodrigo（男声 / 萨尔瓦多 / 成年）"
+  },
+  "Roberto(Male/PA)": {
+    "voice_id": "es-PA-RobertoNeural",
+    "name": "Roberto",
+    "gender": "男声",
+    "region": "巴拿马",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Roberto（男声 / 巴拿马 / 成年）"
+  },
+  "Ramona(Female/DO)": {
+    "voice_id": "es-DO-RamonaNeural",
+    "name": "Ramona",
+    "gender": "女声",
+    "region": "多米尼加",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ramona（女声 / 多米尼加 / 成年）"
+  },
+  "Paola(Female/VE)": {
+    "voice_id": "es-VE-PaolaNeural",
+    "name": "Paola",
+    "gender": "女声",
+    "region": "委内瑞拉",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Paola（女声 / 委内瑞拉 / 成年）"
+  },
+  "Paloma(Female/US)": {
+    "voice_id": "es-US-PalomaNeural",
+    "name": "Paloma",
+    "gender": "女声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Paloma（女声 / 美国 / 成年）"
+  },
+  "Mateo(Male/UY)": {
+    "voice_id": "es-UY-MateoNeural",
+    "name": "Mateo",
+    "gender": "男声",
+    "region": "乌拉圭",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mateo（男声 / 乌拉圭 / 成年）"
+  },
+  "Marta(Female/GT)": {
+    "voice_id": "es-GT-MartaNeural",
+    "name": "Marta",
+    "gender": "女声",
+    "region": "危地马拉",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Marta（女声 / 危地马拉 / 成年）"
+  },
+  "Mario(Male/PY)": {
+    "voice_id": "es-PY-MarioNeural",
+    "name": "Mario",
+    "gender": "男声",
+    "region": "巴拉圭",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mario（男声 / 巴拉圭 / 成年）"
+  },
+  "Maria(Female/CR)": {
+    "voice_id": "es-CR-MariaNeural",
+    "name": "Maria",
+    "gender": "女声",
+    "region": "哥斯达黎加",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Maria（女声 / 哥斯达黎加 / 成年）"
+  },
+  "Margarita(Female/PA)": {
+    "voice_id": "es-PA-MargaritaNeural",
+    "name": "Margarita",
+    "gender": "女声",
+    "region": "巴拿马",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Margarita（女声 / 巴拿马 / 成年）"
+  },
+  "Marcelo(Male/BO)": {
+    "voice_id": "es-BO-MarceloNeural",
+    "name": "Marcelo",
+    "gender": "男声",
+    "region": "玻利维亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Marcelo（男声 / 玻利维亚 / 成年）"
+  },
+  "Manuel(Male/CU)": {
+    "voice_id": "es-CU-ManuelNeural",
+    "name": "Manuel",
+    "gender": "男声",
+    "region": "古巴",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Manuel（男声 / 古巴 / 成年）"
+  },
+  "Luis(Male/EC)": {
+    "voice_id": "es-EC-LuisNeural",
+    "name": "Luis",
+    "gender": "男声",
+    "region": "厄瓜多尔",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Luis（男声 / 厄瓜多尔 / 成年）"
+  },
+  "Lorenzo(Male/CL)": {
+    "voice_id": "es-CL-LorenzoNeural",
+    "name": "Lorenzo",
+    "gender": "男声",
+    "region": "智利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Lorenzo（男声 / 智利 / 成年）"
+  },
+  "Lorena(Female/SV)": {
+    "voice_id": "es-SV-LorenaNeural",
+    "name": "Lorena",
+    "gender": "女声",
+    "region": "萨尔瓦多",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Lorena（女声 / 萨尔瓦多 / 成年）"
+  },
+  "Karla(Female/HN)": {
+    "voice_id": "es-HN-KarlaNeural",
+    "name": "Karla",
+    "gender": "女声",
+    "region": "洪都拉斯",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Karla（女声 / 洪都拉斯 / 成年）"
+  },
+  "Karina(Female/PR)": {
+    "voice_id": "es-PR-KarinaNeural",
+    "name": "Karina",
+    "gender": "女声",
+    "region": "波多黎各",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Karina（女声 / 波多黎各 / 成年）"
+  },
+  "Juan(Male/CR)": {
+    "voice_id": "es-CR-JuanNeural",
+    "name": "Juan",
+    "gender": "男声",
+    "region": "哥斯达黎加",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Juan（男声 / 哥斯达黎加 / 成年）"
+  },
+  "Jorge(Male/MX)": {
+    "voice_id": "es-MX-JorgeNeural",
+    "name": "Jorge",
+    "gender": "男声",
+    "region": "墨西哥",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jorge（男声 / 墨西哥 / 成年）"
+  },
+  "Javier(Male/GQ)": {
+    "voice_id": "es-GQ-JavierNeural",
+    "name": "Javier",
+    "gender": "男声",
+    "region": "GQ",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Javier（男声 / GQ / 成年）"
+  },
+  "Gonzalo(Male/CO)": {
+    "voice_id": "es-CO-GonzaloNeural",
+    "name": "Gonzalo",
+    "gender": "男声",
+    "region": "哥伦比亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gonzalo（男声 / 哥伦比亚 / 成年）"
+  },
+  "Federico(Male/NI)": {
+    "voice_id": "es-NI-FedericoNeural",
+    "name": "Federico",
+    "gender": "男声",
+    "region": "尼加拉瓜",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Federico（男声 / 尼加拉瓜 / 成年）"
+  },
+  "Emilio(Male/DO)": {
+    "voice_id": "es-DO-EmilioNeural",
+    "name": "Emilio",
+    "gender": "男声",
+    "region": "多米尼加",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Emilio（男声 / 多米尼加 / 成年）"
+  },
+  "Elvira(Female/ES)": {
+    "voice_id": "es-ES-ElviraNeural",
+    "name": "Elvira",
+    "gender": "女声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Elvira（女声 / 西班牙 / 成年）"
+  },
+  "Elena(Female/AR)": {
+    "voice_id": "es-AR-ElenaNeural",
+    "name": "Elena",
+    "gender": "女声",
+    "region": "阿根廷",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Elena（女声 / 阿根廷 / 成年）"
+  },
+  "Dalia(Female/MX)": {
+    "voice_id": "es-MX-DaliaNeural",
+    "name": "Dalia",
+    "gender": "女声",
+    "region": "墨西哥",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Dalia（女声 / 墨西哥 / 成年）"
+  },
+  "Catalina(Female/CL)": {
+    "voice_id": "es-CL-CatalinaNeural",
+    "name": "Catalina",
+    "gender": "女声",
+    "region": "智利",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Catalina（女声 / 智利 / 成年）"
+  },
+  "Carlos(Male/HN)": {
+    "voice_id": "es-HN-CarlosNeural",
+    "name": "Carlos",
+    "gender": "男声",
+    "region": "洪都拉斯",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Carlos（男声 / 洪都拉斯 / 成年）"
+  },
+  "Camila(Female/PE)": {
+    "voice_id": "es-PE-CamilaNeural",
+    "name": "Camila",
+    "gender": "女声",
+    "region": "秘鲁",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Camila（女声 / 秘鲁 / 成年）"
+  },
+  "Belkys(Female/CU)": {
+    "voice_id": "es-CU-BelkysNeural",
+    "name": "Belkys",
+    "gender": "女声",
+    "region": "古巴",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Belkys（女声 / 古巴 / 成年）"
+  },
+  "Andres(Male/GT)": {
+    "voice_id": "es-GT-AndresNeural",
+    "name": "Andres",
+    "gender": "男声",
+    "region": "危地马拉",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Andres（男声 / 危地马拉 / 成年）"
+  },
+  "Andrea(Female/EC)": {
+    "voice_id": "es-EC-AndreaNeural",
+    "name": "Andrea",
+    "gender": "女声",
+    "region": "厄瓜多尔",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Andrea（女声 / 厄瓜多尔 / 成年）"
+  },
+  "Alvaro(Male/ES)": {
+    "voice_id": "es-ES-AlvaroNeural",
+    "name": "Alvaro",
+    "gender": "男声",
+    "region": "西班牙",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Alvaro（男声 / 西班牙 / 成年）"
+  },
+  "Alonso(Male/US)": {
+    "voice_id": "es-US-AlonsoNeural",
+    "name": "Alonso",
+    "gender": "男声",
+    "region": "美国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Alonso（男声 / 美国 / 成年）"
+  },
+  "Alex(Male/PE)": {
+    "voice_id": "es-PE-AlexNeural",
+    "name": "Alex",
+    "gender": "男声",
+    "region": "秘鲁",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Alex（男声 / 秘鲁 / 成年）"
+  },
+  "Tuti(Female/ID)": {
+    "voice_id": "su-ID-TutiNeural",
+    "name": "Tuti",
+    "gender": "女声",
+    "region": "印度尼西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Tuti（女声 / 印度尼西亚 / 成年）"
+  },
+  "Jajang(Male/ID)": {
+    "voice_id": "su-ID-JajangNeural",
+    "name": "Jajang",
+    "gender": "男声",
+    "region": "印度尼西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Jajang（男声 / 印度尼西亚 / 成年）"
+  },
+  "Zuri(Female/KE)": {
+    "voice_id": "sw-KE-ZuriNeural",
+    "name": "Zuri",
+    "gender": "女声",
+    "region": "肯尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Zuri（女声 / 肯尼亚 / 成年）"
+  },
+  "Rehema(Female/TZ)": {
+    "voice_id": "sw-TZ-RehemaNeural",
+    "name": "Rehema",
+    "gender": "女声",
+    "region": "坦桑尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rehema（女声 / 坦桑尼亚 / 成年）"
+  },
+  "Rafiki(Male/KE)": {
+    "voice_id": "sw-KE-RafikiNeural",
+    "name": "Rafiki",
+    "gender": "男声",
+    "region": "肯尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Rafiki（男声 / 肯尼亚 / 成年）"
+  },
+  "Daudi(Male/TZ)": {
+    "voice_id": "sw-TZ-DaudiNeural",
+    "name": "Daudi",
+    "gender": "男声",
+    "region": "坦桑尼亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Daudi（男声 / 坦桑尼亚 / 成年）"
+  },
+  "Sofie(Female/SE)": {
+    "voice_id": "sv-SE-SofieNeural",
+    "name": "Sofie",
+    "gender": "女声",
+    "region": "瑞典",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sofie（女声 / 瑞典 / 成年）"
+  },
+  "Mattias(Male/SE)": {
+    "voice_id": "sv-SE-MattiasNeural",
+    "name": "Mattias",
+    "gender": "男声",
+    "region": "瑞典",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mattias（男声 / 瑞典 / 成年）"
+  },
+  "Venba(Female/SG)": {
+    "voice_id": "ta-SG-VenbaNeural",
+    "name": "Venba",
+    "gender": "女声",
+    "region": "新加坡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Venba（女声 / 新加坡 / 成年）"
+  },
+  "Valluvar(Male/IN)": {
+    "voice_id": "ta-IN-ValluvarNeural",
+    "name": "Valluvar",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Valluvar（男声 / 印度 / 成年）"
+  },
+  "Surya(Male/MY)": {
+    "voice_id": "ta-MY-SuryaNeural",
+    "name": "Surya",
+    "gender": "男声",
+    "region": "马来西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Surya（男声 / 马来西亚 / 成年）"
+  },
+  "Saranya(Female/LK)": {
+    "voice_id": "ta-LK-SaranyaNeural",
+    "name": "Saranya",
+    "gender": "女声",
+    "region": "斯里兰卡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Saranya（女声 / 斯里兰卡 / 成年）"
+  },
+  "Pallavi(Female/IN)": {
+    "voice_id": "ta-IN-PallaviNeural",
+    "name": "Pallavi",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Pallavi（女声 / 印度 / 成年）"
+  },
+  "Kumar(Male/LK)": {
+    "voice_id": "ta-LK-KumarNeural",
+    "name": "Kumar",
+    "gender": "男声",
+    "region": "斯里兰卡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Kumar（男声 / 斯里兰卡 / 成年）"
+  },
+  "Kani(Female/MY)": {
+    "voice_id": "ta-MY-KaniNeural",
+    "name": "Kani",
+    "gender": "女声",
+    "region": "马来西亚",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Kani（女声 / 马来西亚 / 成年）"
+  },
+  "Anbu(Male/SG)": {
+    "voice_id": "ta-SG-AnbuNeural",
+    "name": "Anbu",
+    "gender": "男声",
+    "region": "新加坡",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Anbu（男声 / 新加坡 / 成年）"
+  },
+  "Shruti(Female/IN)": {
+    "voice_id": "te-IN-ShrutiNeural",
+    "name": "Shruti",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Shruti（女声 / 印度 / 成年）"
+  },
+  "Mohan(Male/IN)": {
+    "voice_id": "te-IN-MohanNeural",
+    "name": "Mohan",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Mohan（男声 / 印度 / 成年）"
+  },
+  "Premwadee(Female/TH)": {
+    "voice_id": "th-TH-PremwadeeNeural",
+    "name": "Premwadee",
+    "gender": "女声",
+    "region": "泰国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Premwadee（女声 / 泰国 / 成年）"
+  },
+  "Niwat(Male/TH)": {
+    "voice_id": "th-TH-NiwatNeural",
+    "name": "Niwat",
+    "gender": "男声",
+    "region": "泰国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Niwat（男声 / 泰国 / 成年）"
+  },
+  "Emel(Female/TR)": {
+    "voice_id": "tr-TR-EmelNeural",
+    "name": "Emel",
+    "gender": "女声",
+    "region": "土耳其",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Emel（女声 / 土耳其 / 成年）"
+  },
+  "Ahmet(Male/TR)": {
+    "voice_id": "tr-TR-AhmetNeural",
+    "name": "Ahmet",
+    "gender": "男声",
+    "region": "土耳其",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ahmet（男声 / 土耳其 / 成年）"
+  },
+  "Polina(Female/UA)": {
+    "voice_id": "uk-UA-PolinaNeural",
+    "name": "Polina",
+    "gender": "女声",
+    "region": "乌克兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Polina（女声 / 乌克兰 / 成年）"
+  },
+  "Ostap(Male/UA)": {
+    "voice_id": "uk-UA-OstapNeural",
+    "name": "Ostap",
+    "gender": "男声",
+    "region": "乌克兰",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Ostap（男声 / 乌克兰 / 成年）"
+  },
+  "Uzma(Female/PK)": {
+    "voice_id": "ur-PK-UzmaNeural",
+    "name": "Uzma",
+    "gender": "女声",
+    "region": "巴基斯坦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Uzma（女声 / 巴基斯坦 / 成年）"
+  },
+  "Salman(Male/IN)": {
+    "voice_id": "ur-IN-SalmanNeural",
+    "name": "Salman",
+    "gender": "男声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Salman（男声 / 印度 / 成年）"
+  },
+  "Gul(Female/IN)": {
+    "voice_id": "ur-IN-GulNeural",
+    "name": "Gul",
+    "gender": "女声",
+    "region": "印度",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Gul（女声 / 印度 / 成年）"
+  },
+  "Asad(Male/PK)": {
+    "voice_id": "ur-PK-AsadNeural",
+    "name": "Asad",
+    "gender": "男声",
+    "region": "巴基斯坦",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Asad（男声 / 巴基斯坦 / 成年）"
+  },
+  "Sardor(Male/UZ)": {
+    "voice_id": "uz-UZ-SardorNeural",
+    "name": "Sardor",
+    "gender": "男声",
+    "region": "UZ",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Sardor（男声 / UZ / 成年）"
+  },
+  "Madina(Female/UZ)": {
+    "voice_id": "uz-UZ-MadinaNeural",
+    "name": "Madina",
+    "gender": "女声",
+    "region": "UZ",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Madina（女声 / UZ / 成年）"
+  },
+  "NamMinh(Male/VN)": {
+    "voice_id": "vi-VN-NamMinhNeural",
+    "name": "NamMinh",
+    "gender": "男声",
+    "region": "越南",
+    "age": "成年",
+    "confidence": "low",
+    "label": "NamMinh（男声 / 越南 / 成年）"
+  },
+  "HoaiMy(Female/VN)": {
+    "voice_id": "vi-VN-HoaiMyNeural",
+    "name": "HoaiMy",
+    "gender": "女声",
+    "region": "越南",
+    "age": "成年",
+    "confidence": "low",
+    "label": "HoaiMy（女声 / 越南 / 成年）"
+  },
+  "Nia(Female/GB)": {
+    "voice_id": "cy-GB-NiaNeural",
+    "name": "Nia",
+    "gender": "女声",
+    "region": "英国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Nia（女声 / 英国 / 成年）"
+  },
+  "Aled(Male/GB)": {
+    "voice_id": "cy-GB-AledNeural",
+    "name": "Aled",
+    "gender": "男声",
+    "region": "英国",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Aled（男声 / 英国 / 成年）"
+  },
+  "Themba(Male/ZA)": {
+    "voice_id": "zu-ZA-ThembaNeural",
+    "name": "Themba",
+    "gender": "男声",
+    "region": "南非",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Themba（男声 / 南非 / 成年）"
+  },
+  "Thando(Female/ZA)": {
+    "voice_id": "zu-ZA-ThandoNeural",
+    "name": "Thando",
+    "gender": "女声",
+    "region": "南非",
+    "age": "成年",
+    "confidence": "low",
+    "label": "Thando（女声 / 南非 / 成年）"
+  }
+}
