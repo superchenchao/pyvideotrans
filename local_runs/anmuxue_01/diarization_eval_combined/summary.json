@@ -1,0 +1,88 @@
+{
+  "summary": {
+    "existing:01-fen-mp4": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 5,
+      "transitions": 26,
+      "distribution": {
+        "spk0": 20,
+        "spk1": 33,
+        "spk2": 11,
+        "spk3": 14,
+        "spk4": 23
+      }
+    },
+    "existing:diarization_eval": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 28,
+      "transitions": 35,
+      "distribution": {
+        "spk0": 5,
+        "spk1": 2,
+        "spk10": 11,
+        "spk11": 2,
+        "spk12": 3,
+        "spk13": 2,
+        "spk14": 2,
+        "spk15": 1,
+        "spk16": 2,
+        "spk17": 3,
+        "spk18": 4,
+        "spk19": 1,
+        "spk2": 4,
+        "spk20": 1,
+        "spk21": 1,
+        "spk22": 1,
+        "spk23": 2,
+        "spk24": 1,
+        "spk25": 2,
+        "spk26": 5,
+        "spk28": 3,
+        "spk29": 4,
+        "spk3": 11,
+        "spk5": 11,
+        "spk6": 8,
+        "spk7": 4,
+        "spk8": 4,
+        "spk9": 1
+      }
+    },
+    "existing:diarization_eval_ali_cam": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 5,
+      "transitions": 34,
+      "distribution": {
+        "spk0": 19,
+        "spk1": 36,
+        "spk2": 15,
+        "spk3": 30,
+        "spk4": 1
+      }
+    },
+    "existing:diarization_eval_pyannote": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 7,
+      "transitions": 26,
+      "distribution": {
+        "spk0": 18,
+        "spk1": 23,
+        "spk2": 12,
+        "spk3": 12,
+        "spk4": 14,
+        "spk5": 5,
+        "spk6": 17
+      }
+    }
+  },
+  "timings": {
+    "existing:01-fen-mp4": null,
+    "existing:diarization_eval": null,
+    "existing:diarization_eval_ali_cam": null,
+    "existing:diarization_eval_pyannote": null
+  },
+  "failures": {}
+}

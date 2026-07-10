@@ -7,6 +7,8 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from sklearn.metrics import adjusted_rand_score, normalized_mutual_info_score
+
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 import sys
@@ -138,9 +140,31 @@ def load_existing(path):
     return [norm_spk(it) for it in labels]
 
 
+def load_ground_truth(path, total):
+    labels = [""] * total
+    seen_lines = set()
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
+        for row in csv.DictReader(f):
+            line = int(row["line"])
+            if line < 1 or line > total:
+                raise ValueError(f"Ground-truth line out of range: {line}")
+            if line in seen_lines:
+                raise ValueError(f"Duplicate ground-truth line: {line}")
+            seen_lines.add(line)
+            excluded = row.get("exclude_from_single_speaker_eval", "").strip().lower()
+            labels[line - 1] = "" if excluded in {"1", "true", "yes"} else norm_spk(row.get("speaker_id"))
+    if len(seen_lines) != total:
+        missing = sorted(set(range(1, total + 1)) - seen_lines)
+        raise ValueError(f"Ground truth has {len(seen_lines)}/{total} lines; missing: {missing}")
+    return labels
+
+
 def summarize(labels, total):
-    counts = Counter(labels)
-    transitions = sum(1 for i in range(1, len(labels)) if labels[i] != labels[i - 1])
+    clean_labels = [label for label in labels if label]
+    counts = Counter(clean_labels)
+    transitions = sum(
+        1 for i in range(1, len(clean_labels)) if clean_labels[i] != clean_labels[i - 1]
+    )
     return {
         "lines": len(labels),
         "expected_lines": total,
@@ -150,12 +174,16 @@ def summarize(labels, total):
     }
 
 
-def disagreement(a, b):
-    n = min(len(a), len(b))
-    if n == 0:
+def clustering_similarity(a, b):
+    pairs = [(left, right) for left, right in zip(a, b) if left and right]
+    if not pairs:
         return None
-    diff = sum(1 for i in range(n) if a[i] != b[i])
-    return diff, n, diff / n
+    left_labels, right_labels = zip(*pairs)
+    return {
+        "compared": len(pairs),
+        "ari": adjusted_rand_score(left_labels, right_labels),
+        "nmi": normalized_mutual_info_score(left_labels, right_labels),
+    }
 
 
 def write_report(output_dir, subs, results, timings, failures):
@@ -167,7 +195,7 @@ def write_report(output_dir, subs, results, timings, failures):
     names = list(results)
     for i, left in enumerate(names):
         for right in names[i + 1:]:
-            comparisons[f"{left} vs {right}"] = disagreement(results[left], results[right])
+            comparisons[f"{left} vs {right}"] = clustering_similarity(results[left], results[right])
 
     csv_path = output_dir / "line_speaker_compare.csv"
     with csv_path.open("w", encoding="utf-8-sig", newline="") as f:
@@ -202,13 +230,22 @@ def write_report(output_dir, subs, results, timings, failures):
         )
 
     if comparisons:
-        lines.extend(["", "## Pairwise Disagreement", "", "| Pair | Different / Compared | Ratio |", "|---|---:|---:|"])
+        lines.extend([
+            "",
+            "## Pairwise Label-Invariant Similarity",
+            "",
+            "ARI and NMI ignore arbitrary speaker ID names. Higher is more similar; they do not prove accuracy without ground truth.",
+            "",
+            "| Pair | Compared | ARI | NMI |",
+            "|---|---:|---:|---:|",
+        ])
         for pair, item in comparisons.items():
             if item is None:
-                lines.append(f"| {pair} | - | - |")
+                lines.append(f"| {pair} | - | - | - |")
             else:
-                diff, n, ratio = item
-                lines.append(f"| {pair} | {diff}/{n} | {ratio:.2%} |")
+                lines.append(
+                    f"| {pair} | {item['compared']} | {item['ari']:.3f} | {item['nmi']:.3f} |"
+                )
 
     if failures:
         lines.extend(["", "## Failures", ""])
@@ -230,6 +267,7 @@ def main():
     parser.add_argument("--output-dir", default="local_runs/diarization_eval")
     parser.add_argument("--models", default="built", help="Comma-separated: built,ali_CAM,pyannote,reverb")
     parser.add_argument("--existing-speaker-json", action="append", default=[])
+    parser.add_argument("--ground-truth-csv")
     parser.add_argument("--num-speakers", type=int, default=-1, help="-1 auto, otherwise pass exact speaker count to backend")
     parser.add_argument("--cuda", action="store_true")
     args = parser.parse_args()
@@ -247,6 +285,11 @@ def main():
     results = {}
     timings = {}
     failures = {}
+
+    if args.ground_truth_csv:
+        path = Path(args.ground_truth_csv).resolve()
+        results["ground_truth"] = load_ground_truth(path, len(subs))
+        timings["ground_truth"] = None
 
     for existing in args.existing_speaker_json:
         path = Path(existing).resolve()

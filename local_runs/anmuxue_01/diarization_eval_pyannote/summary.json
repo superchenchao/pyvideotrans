@@ -1,0 +1,37 @@
+{
+  "summary": {
+    "existing:01-fen-mp4": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 5,
+      "transitions": 26,
+      "distribution": {
+        "spk0": 20,
+        "spk1": 33,
+        "spk2": 11,
+        "spk3": 14,
+        "spk4": 23
+      }
+    },
+    "pyannote": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 7,
+      "transitions": 26,
+      "distribution": {
+        "spk0": 18,
+        "spk1": 23,
+        "spk2": 12,
+        "spk3": 12,
+        "spk4": 14,
+        "spk5": 5,
+        "spk6": 17
+      }
+    }
+  },
+  "timings": {
+    "existing:01-fen-mp4": null,
+    "pyannote": 354.4498815536499
+  },
+  "failures": {}
+}

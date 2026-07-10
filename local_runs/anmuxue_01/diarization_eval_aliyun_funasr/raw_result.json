@@ -1,0 +1,3436 @@
+{
+  "file_url": "http://dashscope-file-mgr.oss-cn-beijing.aliyuncs.com/dashscope-instant/0fd62849b1937240f5651092ded947f6/2026-07-10/19001740-db60-9b47-934e-918f0d68c524/audio_16k.wav?Expires=1783850020&OSSAccessKeyId=LTAI5t64cnuuVx7xndFH9ULk&Signature=XP2EjzAiCKHUOe0YgypB7FgP9aw%3D",
+  "properties": {
+    "audio_format": "pcm_s16le",
+    "channels": [
+      0
+    ],
+    "original_sampling_rate": 16000,
+    "original_duration_in_milliseconds": 214111
+  },
+  "transcripts": [
+    {
+      "channel_id": 0,
+      "content_duration_in_milliseconds": 130880,
+      "text": "吃完这碗安心长寿面，妈妈就一定能回心转意。十年了，公司不管，家庭不顾，难道你的丈夫和女儿还比不上一个全了腿的白月光吗？爸爸，快去给妈妈送过去，我去给妈妈准备礼物。好。老婆，注意身体啊！你需要多休息。滚出去！雪凡哥哥不想开门。陈暮雪，你能不能不要这么幼稚？难道你还想照顾他一辈子？谁呀？你别生气，都怪我不好，影响了你们的夫妻感情。要不，我还是搬出去吧。来。雪凡哥哥，你走什么走？要走也是他走！秦阳。给我滚出去！我滚！这是我的婚房！自从新婚夜开始，他就一直鸠占鹊巢，不知道的还以为他才是你的老公！够了，秦阳！你没有资格说他。你你说什么？我嫁你为妻，给你生女儿，这都只是意外。当初若不是因为你，雪白也不会变成这样。你最没有资格指责他。慕雪，你别这样。秦阳他毕竟是你老公，老公又怎么样？不过是字面上罢了。石木雪。你可知道“廉耻”二字？你这么做，对得起我跟悠悠吗？住口！亲娘，当年若不是你向我父母告状，我早把那个拖鞋品解决掉了！那可是你十月怀胎的女儿啊！女儿，她就不该来这世上！原来妈妈并不爱我，原来我是多余的。没关系。只要我将礼物送给妈妈，妈妈就一定会看到悠悠的好。嗯，木雪，你别这样说。毕竟他是你的亲生骨肉。闭嘴！你少在这里假惺惺的，都是因为你，你、你一直在破坏我的感情！闭嘴！青阳，当年若不是他从生化实验室里把我救出来，也不会瘸了腿。我照顾他是理所应当，我不允许你污蔑他，更不允许你伤害他。妈妈。你不要跟爸爸吵架！滚开！吃不许！悠悠！爸爸妈妈没吵架。妈妈，你别生爸爸的气好不好？悠悠带爸爸向妈妈道歉，这是悠悠送给妈妈的生日礼物，希望妈妈天天开心。媳妇，没事吧？妈妈，可以先看悠悠的礼物吗？走开！悠悠！悠悠送给妈妈的生日礼物，怎么可以？怎么可以？悠悠！悠悠！",
+      "sentences": [
+        {
+          "begin_time": 4500,
+          "end_time": 8140,
+          "text": "吃完这碗安心长寿面，妈妈就一定能回心转意。",
+          "sentence_id": 1,
+          "speaker_id": 0,
+          "words": [
+            {
+              "begin_time": 4500,
+              "end_time": 4860,
+              "text": "吃完",
+              "punctuation": "",
+              "confidence": 0.778
+            },
+            {
+              "begin_time": 4860,
+              "end_time": 4980,
+              "text": "这",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 4980,
+              "end_time": 5180,
+              "text": "碗",
+              "punctuation": "",
+              "confidence": 0.967
+            },
+            {
+              "begin_time": 5180,
+              "end_time": 5580,
+              "text": "安心",
+              "punctuation": "",
+              "confidence": 0.972
+            },
+            {
+              "begin_time": 5580,
+              "end_time": 5940,
+              "text": "长寿",
+              "punctuation": "",
+              "confidence": 0.913
+            },
+            {
+              "begin_time": 5940,
+              "end_time": 6140,
+              "text": "面",
+              "punctuation": "，",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 6380,
+              "end_time": 6620,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 6620,
+              "end_time": 6780,
+              "text": "就",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 6780,
+              "end_time": 7220,
+              "text": "一定能",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 7220,
+              "end_time": 7380,
+              "text": "回",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 7380,
+              "end_time": 7580,
+              "text": "心",
+              "punctuation": "",
+              "confidence": 0.977
+            },
+            {
+              "begin_time": 7580,
+              "end_time": 7820,
+              "text": "转",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 7820,
+              "end_time": 8140,
+              "text": "意",
+              "punctuation": "。",
+              "confidence": 0.978
+            }
+          ]
+        },
+        {
+          "begin_time": 12370,
+          "end_time": 20250,
+          "text": "十年了，公司不管，家庭不顾，难道你的丈夫和女儿还比不上一个全了腿的白月光吗？",
+          "sentence_id": 2,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 12370,
+              "end_time": 12850,
+              "text": "十年",
+              "punctuation": "",
+              "confidence": 0.947
+            },
+            {
+              "begin_time": 12850,
+              "end_time": 13130,
+              "text": "了",
+              "punctuation": "，",
+              "confidence": 0.975
+            },
+            {
+              "begin_time": 13570,
+              "end_time": 14050,
+              "text": "公司",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 14050,
+              "end_time": 14410,
+              "text": "不管",
+              "punctuation": "，",
+              "confidence": 0.591
+            },
+            {
+              "begin_time": 14570,
+              "end_time": 15010,
+              "text": "家庭",
+              "punctuation": "",
+              "confidence": 0.946
+            },
+            {
+              "begin_time": 15010,
+              "end_time": 15610,
+              "text": "不顾",
+              "punctuation": "，",
+              "confidence": 0.149
+            },
+            {
+              "begin_time": 16250,
+              "end_time": 16530,
+              "text": "难道",
+              "punctuation": "",
+              "confidence": 0.984
+            },
+            {
+              "begin_time": 16530,
+              "end_time": 16810,
+              "text": "你的",
+              "punctuation": "",
+              "confidence": 0.985
+            },
+            {
+              "begin_time": 16810,
+              "end_time": 17090,
+              "text": "丈夫",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 17090,
+              "end_time": 17250,
+              "text": "和",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 17250,
+              "end_time": 18010,
+              "text": "女儿",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 18090,
+              "end_time": 18290,
+              "text": "还",
+              "punctuation": "",
+              "confidence": 0.991
+            },
+            {
+              "begin_time": 18290,
+              "end_time": 18410,
+              "text": "比",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 18410,
+              "end_time": 18690,
+              "text": "不上",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 18690,
+              "end_time": 18930,
+              "text": "一个",
+              "punctuation": "",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 18930,
+              "end_time": 19050,
+              "text": "全",
+              "punctuation": "",
+              "confidence": 0.665
+            },
+            {
+              "begin_time": 19050,
+              "end_time": 19210,
+              "text": "了",
+              "punctuation": "",
+              "confidence": 0.774
+            },
+            {
+              "begin_time": 19210,
+              "end_time": 19330,
+              "text": "腿",
+              "punctuation": "",
+              "confidence": 0.884
+            },
+            {
+              "begin_time": 19330,
+              "end_time": 19450,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.858
+            },
+            {
+              "begin_time": 19450,
+              "end_time": 19570,
+              "text": "白",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 19570,
+              "end_time": 19730,
+              "text": "月",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 19730,
+              "end_time": 19970,
+              "text": "光",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 19970,
+              "end_time": 20250,
+              "text": "吗",
+              "punctuation": "？",
+              "confidence": 0.92
+            }
+          ]
+        },
+        {
+          "begin_time": 20690,
+          "end_time": 24650,
+          "text": "爸爸，快去给妈妈送过去，我去给妈妈准备礼物。",
+          "sentence_id": 3,
+          "speaker_id": 0,
+          "words": [
+            {
+              "begin_time": 20690,
+              "end_time": 21130,
+              "text": "爸爸",
+              "punctuation": "，",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 21690,
+              "end_time": 21890,
+              "text": "快",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 21890,
+              "end_time": 22010,
+              "text": "去",
+              "punctuation": "",
+              "confidence": 0.942
+            },
+            {
+              "begin_time": 22010,
+              "end_time": 22130,
+              "text": "给",
+              "punctuation": "",
+              "confidence": 0.976
+            },
+            {
+              "begin_time": 22130,
+              "end_time": 22370,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.943
+            },
+            {
+              "begin_time": 22370,
+              "end_time": 22530,
+              "text": "送",
+              "punctuation": "",
+              "confidence": 0.975
+            },
+            {
+              "begin_time": 22530,
+              "end_time": 22930,
+              "text": "过去",
+              "punctuation": "，",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 23130,
+              "end_time": 23450,
+              "text": "我去",
+              "punctuation": "",
+              "confidence": 0.97
+            },
+            {
+              "begin_time": 23450,
+              "end_time": 23570,
+              "text": "给",
+              "punctuation": "",
+              "confidence": 0.977
+            },
+            {
+              "begin_time": 23570,
+              "end_time": 23850,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.963
+            },
+            {
+              "begin_time": 23850,
+              "end_time": 24130,
+              "text": "准备",
+              "punctuation": "",
+              "confidence": 0.918
+            },
+            {
+              "begin_time": 24130,
+              "end_time": 24650,
+              "text": "礼物",
+              "punctuation": "。",
+              "confidence": 0.957
+            }
+          ]
+        },
+        {
+          "begin_time": 25530,
+          "end_time": 25850,
+          "text": "好。",
+          "sentence_id": 4,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 25530,
+              "end_time": 25850,
+              "text": "好",
+              "punctuation": "。",
+              "confidence": 0.877
+            }
+          ]
+        },
+        {
+          "begin_time": 41320,
+          "end_time": 43280,
+          "text": "老婆，注意身体啊！",
+          "sentence_id": 5,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 41320,
+              "end_time": 41880,
+              "text": "老婆",
+              "punctuation": "，",
+              "confidence": 0.983
+            },
+            {
+              "begin_time": 42440,
+              "end_time": 42760,
+              "text": "注意",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 42760,
+              "end_time": 43080,
+              "text": "身体",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 43080,
+              "end_time": 43280,
+              "text": "啊",
+              "punctuation": "！",
+              "confidence": 0.941
+            }
+          ]
+        },
+        {
+          "begin_time": 43440,
+          "end_time": 44520,
+          "text": "你需要多休息。",
+          "sentence_id": 6,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 43440,
+              "end_time": 43840,
+              "text": "你需要",
+              "punctuation": "",
+              "confidence": 0.967
+            },
+            {
+              "begin_time": 43840,
+              "end_time": 44000,
+              "text": "多",
+              "punctuation": "",
+              "confidence": 0.977
+            },
+            {
+              "begin_time": 44000,
+              "end_time": 44520,
+              "text": "休息",
+              "punctuation": "。",
+              "confidence": 0.923
+            }
+          ]
+        },
+        {
+          "begin_time": 45120,
+          "end_time": 45800,
+          "text": "滚出去！",
+          "sentence_id": 7,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 45120,
+              "end_time": 45280,
+              "text": "滚",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 45280,
+              "end_time": 45800,
+              "text": "出去",
+              "punctuation": "！",
+              "confidence": 0.978
+            }
+          ]
+        },
+        {
+          "begin_time": 48080,
+          "end_time": 49280,
+          "text": "雪凡哥哥不想开门。",
+          "sentence_id": 8,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 48080,
+              "end_time": 48240,
+              "text": "雪",
+              "punctuation": "",
+              "confidence": 0.915
+            },
+            {
+              "begin_time": 48240,
+              "end_time": 48400,
+              "text": "凡",
+              "punctuation": "",
+              "confidence": 0.57
+            },
+            {
+              "begin_time": 48400,
+              "end_time": 48600,
+              "text": "哥哥",
+              "punctuation": "",
+              "confidence": 0.967
+            },
+            {
+              "begin_time": 48600,
+              "end_time": 48800,
+              "text": "不想",
+              "punctuation": "",
+              "confidence": 0.901
+            },
+            {
+              "begin_time": 48800,
+              "end_time": 49280,
+              "text": "开门",
+              "punctuation": "。",
+              "confidence": 0.398
+            }
+          ]
+        },
+        {
+          "begin_time": 49800,
+          "end_time": 52080,
+          "text": "陈暮雪，你能不能不要这么幼稚？",
+          "sentence_id": 9,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 49800,
+              "end_time": 50000,
+              "text": "陈",
+              "punctuation": "",
+              "confidence": 0.927
+            },
+            {
+              "begin_time": 50000,
+              "end_time": 50200,
+              "text": "暮",
+              "punctuation": "",
+              "confidence": 0.223
+            },
+            {
+              "begin_time": 50200,
+              "end_time": 50480,
+              "text": "雪",
+              "punctuation": "，",
+              "confidence": 0.966
+            },
+            {
+              "begin_time": 50720,
+              "end_time": 50880,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.991
+            },
+            {
+              "begin_time": 50880,
+              "end_time": 51240,
+              "text": "能不能",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 51240,
+              "end_time": 51480,
+              "text": "不要",
+              "punctuation": "",
+              "confidence": 0.983
+            },
+            {
+              "begin_time": 51480,
+              "end_time": 51680,
+              "text": "这么",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 51680,
+              "end_time": 52080,
+              "text": "幼稚",
+              "punctuation": "？",
+              "confidence": 0.992
+            }
+          ]
+        },
+        {
+          "begin_time": 52200,
+          "end_time": 53800,
+          "text": "难道你还想照顾他一辈子？",
+          "sentence_id": 10,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 52200,
+              "end_time": 52480,
+              "text": "难道",
+              "punctuation": "",
+              "confidence": 0.983
+            },
+            {
+              "begin_time": 52480,
+              "end_time": 52720,
+              "text": "你还",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 52720,
+              "end_time": 52920,
+              "text": "想",
+              "punctuation": "",
+              "confidence": 0.984
+            },
+            {
+              "begin_time": 52920,
+              "end_time": 53160,
+              "text": "照顾",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 53160,
+              "end_time": 53280,
+              "text": "他",
+              "punctuation": "",
+              "confidence": 0.592
+            },
+            {
+              "begin_time": 53280,
+              "end_time": 53800,
+              "text": "一辈子",
+              "punctuation": "？",
+              "confidence": 0.991
+            }
+          ]
+        },
+        {
+          "begin_time": 54040,
+          "end_time": 54520,
+          "text": "谁呀？",
+          "sentence_id": 11,
+          "speaker_id": 4,
+          "words": [
+            {
+              "begin_time": 54040,
+              "end_time": 54280,
+              "text": "谁",
+              "punctuation": "",
+              "confidence": 0.924
+            },
+            {
+              "begin_time": 54280,
+              "end_time": 54520,
+              "text": "呀",
+              "punctuation": "？",
+              "confidence": 0.62
+            }
+          ]
+        },
+        {
+          "begin_time": 54720,
+          "end_time": 58680,
+          "text": "你别生气，都怪我不好，影响了你们的夫妻感情。",
+          "sentence_id": 12,
+          "speaker_id": 4,
+          "words": [
+            {
+              "begin_time": 54720,
+              "end_time": 54880,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 54880,
+              "end_time": 55040,
+              "text": "别",
+              "punctuation": "",
+              "confidence": 0.977
+            },
+            {
+              "begin_time": 55040,
+              "end_time": 55520,
+              "text": "生气",
+              "punctuation": "，",
+              "confidence": 0.937
+            },
+            {
+              "begin_time": 55760,
+              "end_time": 56000,
+              "text": "都",
+              "punctuation": "",
+              "confidence": 0.974
+            },
+            {
+              "begin_time": 56000,
+              "end_time": 56200,
+              "text": "怪",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 56200,
+              "end_time": 56360,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 56360,
+              "end_time": 56720,
+              "text": "不好",
+              "punctuation": "，",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 57240,
+              "end_time": 57560,
+              "text": "影响",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 57560,
+              "end_time": 57680,
+              "text": "了",
+              "punctuation": "",
+              "confidence": 0.962
+            },
+            {
+              "begin_time": 57680,
+              "end_time": 57840,
+              "text": "你们",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 57840,
+              "end_time": 57960,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.974
+            },
+            {
+              "begin_time": 57960,
+              "end_time": 58240,
+              "text": "夫妻",
+              "punctuation": "",
+              "confidence": 0.901
+            },
+            {
+              "begin_time": 58240,
+              "end_time": 58680,
+              "text": "感情",
+              "punctuation": "。",
+              "confidence": 0.971
+            }
+          ]
+        },
+        {
+          "begin_time": 59040,
+          "end_time": 61080,
+          "text": "要不，我还是搬出去吧。",
+          "sentence_id": 13,
+          "speaker_id": 4,
+          "words": [
+            {
+              "begin_time": 59040,
+              "end_time": 59200,
+              "text": "要",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 59200,
+              "end_time": 59600,
+              "text": "不",
+              "punctuation": "，",
+              "confidence": 0.977
+            },
+            {
+              "begin_time": 60000,
+              "end_time": 60440,
+              "text": "我还是",
+              "punctuation": "",
+              "confidence": 0.966
+            },
+            {
+              "begin_time": 60440,
+              "end_time": 60640,
+              "text": "搬",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 60640,
+              "end_time": 60880,
+              "text": "出去",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 60880,
+              "end_time": 61080,
+              "text": "吧",
+              "punctuation": "。",
+              "confidence": 0.969
+            }
+          ]
+        },
+        {
+          "begin_time": 62150,
+          "end_time": 62390,
+          "text": "来。",
+          "sentence_id": 14,
+          "speaker_id": 4,
+          "words": [
+            {
+              "begin_time": 62150,
+              "end_time": 62390,
+              "text": "来",
+              "punctuation": "。",
+              "confidence": 0.142
+            }
+          ]
+        },
+        {
+          "begin_time": 65590,
+          "end_time": 67310,
+          "text": "雪凡哥哥，你走什么走？",
+          "sentence_id": 15,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 65590,
+              "end_time": 65750,
+              "text": "雪",
+              "punctuation": "",
+              "confidence": 0.477
+            },
+            {
+              "begin_time": 65750,
+              "end_time": 65870,
+              "text": "凡",
+              "punctuation": "",
+              "confidence": 0.0491
+            },
+            {
+              "begin_time": 65870,
+              "end_time": 66270,
+              "text": "哥哥",
+              "punctuation": "，",
+              "confidence": 0.984
+            },
+            {
+              "begin_time": 66590,
+              "end_time": 66750,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 66750,
+              "end_time": 66910,
+              "text": "走",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 66910,
+              "end_time": 67150,
+              "text": "什么",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 67150,
+              "end_time": 67310,
+              "text": "走",
+              "punctuation": "？",
+              "confidence": 0.991
+            }
+          ]
+        },
+        {
+          "begin_time": 67470,
+          "end_time": 68790,
+          "text": "要走也是他走！",
+          "sentence_id": 16,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 67470,
+              "end_time": 67670,
+              "text": "要",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 67670,
+              "end_time": 68070,
+              "text": "走",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 68070,
+              "end_time": 68270,
+              "text": "也是",
+              "punctuation": "",
+              "confidence": 0.975
+            },
+            {
+              "begin_time": 68270,
+              "end_time": 68470,
+              "text": "他",
+              "punctuation": "",
+              "confidence": 0.939
+            },
+            {
+              "begin_time": 68470,
+              "end_time": 68790,
+              "text": "走",
+              "punctuation": "！",
+              "confidence": 0.996
+            }
+          ]
+        },
+        {
+          "begin_time": 69230,
+          "end_time": 69710,
+          "text": "秦阳。",
+          "sentence_id": 17,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 69230,
+              "end_time": 69470,
+              "text": "秦",
+              "punctuation": "",
+              "confidence": 0.22
+            },
+            {
+              "begin_time": 69470,
+              "end_time": 69710,
+              "text": "阳",
+              "punctuation": "。",
+              "confidence": 0.508
+            }
+          ]
+        },
+        {
+          "begin_time": 69990,
+          "end_time": 70870,
+          "text": "给我滚出去！",
+          "sentence_id": 18,
+          "speaker_id": 1,
+          "words": [
+            {
+              "begin_time": 69990,
+              "end_time": 70230,
+              "text": "给我",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 70230,
+              "end_time": 70430,
+              "text": "滚",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 70430,
+              "end_time": 70870,
+              "text": "出去",
+              "punctuation": "！",
+              "confidence": 0.992
+            }
+          ]
+        },
+        {
+          "begin_time": 71630,
+          "end_time": 72310,
+          "text": "我滚！",
+          "sentence_id": 19,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 71630,
+              "end_time": 71950,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.975
+            },
+            {
+              "begin_time": 71950,
+              "end_time": 72310,
+              "text": "滚",
+              "punctuation": "！",
+              "confidence": 0.99
+            }
+          ]
+        },
+        {
+          "begin_time": 72910,
+          "end_time": 74190,
+          "text": "这是我的婚房！",
+          "sentence_id": 20,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 72910,
+              "end_time": 73270,
+              "text": "这是",
+              "punctuation": "",
+              "confidence": 0.983
+            },
+            {
+              "begin_time": 73270,
+              "end_time": 73550,
+              "text": "我的",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 73550,
+              "end_time": 73790,
+              "text": "婚",
+              "punctuation": "",
+              "confidence": 0.98
+            },
+            {
+              "begin_time": 73790,
+              "end_time": 74190,
+              "text": "房",
+              "punctuation": "！",
+              "confidence": 0.221
+            }
+          ]
+        },
+        {
+          "begin_time": 74710,
+          "end_time": 80470,
+          "text": "自从新婚夜开始，他就一直鸠占鹊巢，不知道的还以为他才是你的老公！",
+          "sentence_id": 21,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 74710,
+              "end_time": 75190,
+              "text": "自从",
+              "punctuation": "",
+              "confidence": 0.936
+            },
+            {
+              "begin_time": 75190,
+              "end_time": 75390,
+              "text": "新",
+              "punctuation": "",
+              "confidence": 0.991
+            },
+            {
+              "begin_time": 75390,
+              "end_time": 75550,
+              "text": "婚",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 75550,
+              "end_time": 75750,
+              "text": "夜",
+              "punctuation": "",
+              "confidence": 0.847
+            },
+            {
+              "begin_time": 75750,
+              "end_time": 76270,
+              "text": "开始",
+              "punctuation": "，",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 76470,
+              "end_time": 76790,
+              "text": "他就",
+              "punctuation": "",
+              "confidence": 0.938
+            },
+            {
+              "begin_time": 76790,
+              "end_time": 77070,
+              "text": "一直",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 77070,
+              "end_time": 77270,
+              "text": "鸠",
+              "punctuation": "",
+              "confidence": 0.107
+            },
+            {
+              "begin_time": 77270,
+              "end_time": 77430,
+              "text": "占",
+              "punctuation": "",
+              "confidence": 0.576
+            },
+            {
+              "begin_time": 77430,
+              "end_time": 77630,
+              "text": "鹊",
+              "punctuation": "",
+              "confidence": 0.0687
+            },
+            {
+              "begin_time": 77630,
+              "end_time": 77910,
+              "text": "巢",
+              "punctuation": "，",
+              "confidence": 0.304
+            },
+            {
+              "begin_time": 78230,
+              "end_time": 78710,
+              "text": "不知道",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 78710,
+              "end_time": 79230,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.523
+            },
+            {
+              "begin_time": 79230,
+              "end_time": 79590,
+              "text": "还以为",
+              "punctuation": "",
+              "confidence": 0.894
+            },
+            {
+              "begin_time": 79590,
+              "end_time": 79750,
+              "text": "他",
+              "punctuation": "",
+              "confidence": 0.847
+            },
+            {
+              "begin_time": 79750,
+              "end_time": 79990,
+              "text": "才是",
+              "punctuation": "",
+              "confidence": 0.984
+            },
+            {
+              "begin_time": 79990,
+              "end_time": 80150,
+              "text": "你的",
+              "punctuation": "",
+              "confidence": 0.976
+            },
+            {
+              "begin_time": 80150,
+              "end_time": 80470,
+              "text": "老公",
+              "punctuation": "！",
+              "confidence": 0.918
+            }
+          ]
+        },
+        {
+          "begin_time": 80590,
+          "end_time": 81310,
+          "text": "够了，秦阳！",
+          "sentence_id": 22,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 80590,
+              "end_time": 80750,
+              "text": "够",
+              "punctuation": "",
+              "confidence": 0.793
+            },
+            {
+              "begin_time": 80750,
+              "end_time": 80830,
+              "text": "了",
+              "punctuation": "，",
+              "confidence": 0.936
+            },
+            {
+              "begin_time": 80910,
+              "end_time": 81110,
+              "text": "秦",
+              "punctuation": "",
+              "confidence": 0.256
+            },
+            {
+              "begin_time": 81110,
+              "end_time": 81310,
+              "text": "阳",
+              "punctuation": "！",
+              "confidence": 0.673
+            }
+          ]
+        },
+        {
+          "begin_time": 82070,
+          "end_time": 83270,
+          "text": "你没有资格说他。",
+          "sentence_id": 23,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 82070,
+              "end_time": 82270,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.928
+            },
+            {
+              "begin_time": 82270,
+              "end_time": 82550,
+              "text": "没有",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 82550,
+              "end_time": 82870,
+              "text": "资格",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 82870,
+              "end_time": 83070,
+              "text": "说",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 83070,
+              "end_time": 83270,
+              "text": "他",
+              "punctuation": "。",
+              "confidence": 0.781
+            }
+          ]
+        },
+        {
+          "begin_time": 84230,
+          "end_time": 86030,
+          "text": "你你说什么？",
+          "sentence_id": 24,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 84230,
+              "end_time": 84830,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.933
+            },
+            {
+              "begin_time": 85310,
+              "end_time": 85630,
+              "text": "你说",
+              "punctuation": "",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 85630,
+              "end_time": 86030,
+              "text": "什么",
+              "punctuation": "？",
+              "confidence": 0.992
+            }
+          ]
+        },
+        {
+          "begin_time": 86710,
+          "end_time": 90510,
+          "text": "我嫁你为妻，给你生女儿，这都只是意外。",
+          "sentence_id": 25,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 86710,
+              "end_time": 86910,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 86910,
+              "end_time": 87110,
+              "text": "嫁",
+              "punctuation": "",
+              "confidence": 1.0
+            },
+            {
+              "begin_time": 87110,
+              "end_time": 87310,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 87310,
+              "end_time": 87550,
+              "text": "为",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 87550,
+              "end_time": 87790,
+              "text": "妻",
+              "punctuation": "，",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 87990,
+              "end_time": 88310,
+              "text": "给你",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 88310,
+              "end_time": 88590,
+              "text": "生",
+              "punctuation": "",
+              "confidence": 1.0
+            },
+            {
+              "begin_time": 88590,
+              "end_time": 88990,
+              "text": "女儿",
+              "punctuation": "，",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 89310,
+              "end_time": 89510,
+              "text": "这",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 89510,
+              "end_time": 89710,
+              "text": "都",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 89710,
+              "end_time": 90070,
+              "text": "只是",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 90070,
+              "end_time": 90510,
+              "text": "意外",
+              "punctuation": "。",
+              "confidence": 0.937
+            }
+          ]
+        },
+        {
+          "begin_time": 90790,
+          "end_time": 93350,
+          "text": "当初若不是因为你，雪白也不会变成这样。",
+          "sentence_id": 26,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 90790,
+              "end_time": 91110,
+              "text": "当初",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 91110,
+              "end_time": 91230,
+              "text": "若",
+              "punctuation": "",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 91230,
+              "end_time": 91470,
+              "text": "不是",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 91470,
+              "end_time": 91950,
+              "text": "因为你",
+              "punctuation": "，",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 92150,
+              "end_time": 92310,
+              "text": "雪",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 92310,
+              "end_time": 92430,
+              "text": "白",
+              "punctuation": "",
+              "confidence": 0.847
+            },
+            {
+              "begin_time": 92430,
+              "end_time": 92710,
+              "text": "也不会",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 92710,
+              "end_time": 92990,
+              "text": "变成",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 92990,
+              "end_time": 93350,
+              "text": "这样",
+              "punctuation": "。",
+              "confidence": 0.999
+            }
+          ]
+        },
+        {
+          "begin_time": 93790,
+          "end_time": 95950,
+          "text": "你最没有资格指责他。",
+          "sentence_id": 27,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 93790,
+              "end_time": 93990,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.504
+            },
+            {
+              "begin_time": 93990,
+              "end_time": 94230,
+              "text": "最",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 94230,
+              "end_time": 94550,
+              "text": "没有",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 94550,
+              "end_time": 95190,
+              "text": "资格",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 95190,
+              "end_time": 95710,
+              "text": "指责",
+              "punctuation": "",
+              "confidence": 0.583
+            },
+            {
+              "begin_time": 95710,
+              "end_time": 95950,
+              "text": "他",
+              "punctuation": "。",
+              "confidence": 0.694
+            }
+          ]
+        },
+        {
+          "begin_time": 96910,
+          "end_time": 98750,
+          "text": "慕雪，你别这样。",
+          "sentence_id": 28,
+          "speaker_id": 4,
+          "words": [
+            {
+              "begin_time": 96910,
+              "end_time": 97150,
+              "text": "慕",
+              "punctuation": "",
+              "confidence": 0.108
+            },
+            {
+              "begin_time": 97150,
+              "end_time": 97510,
+              "text": "雪",
+              "punctuation": "，",
+              "confidence": 0.953
+            },
+            {
+              "begin_time": 97990,
+              "end_time": 98150,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 98150,
+              "end_time": 98350,
+              "text": "别",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 98350,
+              "end_time": 98750,
+              "text": "这样",
+              "punctuation": "。",
+              "confidence": 0.998
+            }
+          ]
+        },
+        {
+          "begin_time": 99310,
+          "end_time": 102030,
+          "text": "秦阳他毕竟是你老公，老公又怎么样？",
+          "sentence_id": 29,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 99310,
+              "end_time": 99550,
+              "text": "秦",
+              "punctuation": "",
+              "confidence": 0.0502
+            },
+            {
+              "begin_time": 99550,
+              "end_time": 99670,
+              "text": "阳",
+              "punctuation": "",
+              "confidence": 0.651
+            },
+            {
+              "begin_time": 99670,
+              "end_time": 99750,
+              "text": "他",
+              "punctuation": "",
+              "confidence": 0.35
+            },
+            {
+              "begin_time": 99750,
+              "end_time": 100110,
+              "text": "毕竟是",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 100110,
+              "end_time": 100230,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 100230,
+              "end_time": 100670,
+              "text": "老公",
+              "punctuation": "，",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 101070,
+              "end_time": 101390,
+              "text": "老公",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 101390,
+              "end_time": 101510,
+              "text": "又",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 101510,
+              "end_time": 102030,
+              "text": "怎么样",
+              "punctuation": "？",
+              "confidence": 0.998
+            }
+          ]
+        },
+        {
+          "begin_time": 102430,
+          "end_time": 104590,
+          "text": "不过是字面上罢了。",
+          "sentence_id": 30,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 102430,
+              "end_time": 103670,
+              "text": "不过是",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 103670,
+              "end_time": 103830,
+              "text": "字",
+              "punctuation": "",
+              "confidence": 0.666
+            },
+            {
+              "begin_time": 103830,
+              "end_time": 104190,
+              "text": "面上",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 104190,
+              "end_time": 104590,
+              "text": "罢了",
+              "punctuation": "。",
+              "confidence": 0.988
+            }
+          ]
+        },
+        {
+          "begin_time": 110670,
+          "end_time": 111390,
+          "text": "石木雪。",
+          "sentence_id": 31,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 110670,
+              "end_time": 110870,
+              "text": "石",
+              "punctuation": "",
+              "confidence": 0.45
+            },
+            {
+              "begin_time": 110870,
+              "end_time": 111030,
+              "text": "木",
+              "punctuation": "",
+              "confidence": 0.282
+            },
+            {
+              "begin_time": 111030,
+              "end_time": 111390,
+              "text": "雪",
+              "punctuation": "。",
+              "confidence": 0.972
+            }
+          ]
+        },
+        {
+          "begin_time": 111630,
+          "end_time": 113110,
+          "text": "你可知道“廉耻”二字？",
+          "sentence_id": 32,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 111630,
+              "end_time": 111830,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 111830,
+              "end_time": 112030,
+              "text": "可",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 112030,
+              "end_time": 112190,
+              "text": "知道",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 112190,
+              "end_time": 112310,
+              "text": "“",
+              "punctuation": "",
+              "confidence": 0.000106
+            },
+            {
+              "begin_time": 112310,
+              "end_time": 112430,
+              "text": "廉",
+              "punctuation": "",
+              "confidence": 0.914
+            },
+            {
+              "begin_time": 112430,
+              "end_time": 112550,
+              "text": "耻",
+              "punctuation": "",
+              "confidence": 0.954
+            },
+            {
+              "begin_time": 112550,
+              "end_time": 112710,
+              "text": "”",
+              "punctuation": "",
+              "confidence": 0.000267
+            },
+            {
+              "begin_time": 112710,
+              "end_time": 113110,
+              "text": "二字",
+              "punctuation": "？",
+              "confidence": 0.00714
+            }
+          ]
+        },
+        {
+          "begin_time": 113310,
+          "end_time": 115070,
+          "text": "你这么做，对得起我跟悠悠吗？",
+          "sentence_id": 33,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 113310,
+              "end_time": 113510,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 113510,
+              "end_time": 113830,
+              "text": "这么做",
+              "punctuation": "，",
+              "confidence": 0.991
+            },
+            {
+              "begin_time": 113950,
+              "end_time": 114070,
+              "text": "对",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 114070,
+              "end_time": 114350,
+              "text": "得起",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 114350,
+              "end_time": 114470,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 114470,
+              "end_time": 114630,
+              "text": "跟",
+              "punctuation": "",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 114630,
+              "end_time": 114910,
+              "text": "悠悠",
+              "punctuation": "",
+              "confidence": 0.976
+            },
+            {
+              "begin_time": 114910,
+              "end_time": 115070,
+              "text": "吗",
+              "punctuation": "？",
+              "confidence": 0.982
+            }
+          ]
+        },
+        {
+          "begin_time": 115230,
+          "end_time": 115750,
+          "text": "住口！",
+          "sentence_id": 34,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 115230,
+              "end_time": 115430,
+              "text": "住",
+              "punctuation": "",
+              "confidence": 0.934
+            },
+            {
+              "begin_time": 115430,
+              "end_time": 115750,
+              "text": "口",
+              "punctuation": "！",
+              "confidence": 0.996
+            }
+          ]
+        },
+        {
+          "begin_time": 116190,
+          "end_time": 120510,
+          "text": "亲娘，当年若不是你向我父母告状，我早把那个拖鞋品解决掉了！",
+          "sentence_id": 35,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 116190,
+              "end_time": 116510,
+              "text": "亲",
+              "punctuation": "",
+              "confidence": 0.361
+            },
+            {
+              "begin_time": 116510,
+              "end_time": 116750,
+              "text": "娘",
+              "punctuation": "，",
+              "confidence": 0.982
+            },
+            {
+              "begin_time": 117190,
+              "end_time": 117470,
+              "text": "当年",
+              "punctuation": "",
+              "confidence": 0.951
+            },
+            {
+              "begin_time": 117470,
+              "end_time": 117630,
+              "text": "若",
+              "punctuation": "",
+              "confidence": 0.877
+            },
+            {
+              "begin_time": 117630,
+              "end_time": 117790,
+              "text": "不是",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 117790,
+              "end_time": 117910,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.991
+            },
+            {
+              "begin_time": 117910,
+              "end_time": 118070,
+              "text": "向",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 118070,
+              "end_time": 118190,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 118190,
+              "end_time": 118430,
+              "text": "父母",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 118430,
+              "end_time": 118630,
+              "text": "告",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 118630,
+              "end_time": 118870,
+              "text": "状",
+              "punctuation": "，",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 119030,
+              "end_time": 119230,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 119230,
+              "end_time": 119390,
+              "text": "早",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 119390,
+              "end_time": 119510,
+              "text": "把",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 119510,
+              "end_time": 119630,
+              "text": "那个",
+              "punctuation": "",
+              "confidence": 0.864
+            },
+            {
+              "begin_time": 119630,
+              "end_time": 119750,
+              "text": "拖",
+              "punctuation": "",
+              "confidence": 0.233
+            },
+            {
+              "begin_time": 119750,
+              "end_time": 119830,
+              "text": "鞋",
+              "punctuation": "",
+              "confidence": 0.00147
+            },
+            {
+              "begin_time": 119830,
+              "end_time": 119950,
+              "text": "品",
+              "punctuation": "",
+              "confidence": 0.392
+            },
+            {
+              "begin_time": 119950,
+              "end_time": 120190,
+              "text": "解决",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 120190,
+              "end_time": 120510,
+              "text": "掉了",
+              "punctuation": "！",
+              "confidence": 0.995
+            }
+          ]
+        },
+        {
+          "begin_time": 120950,
+          "end_time": 122790,
+          "text": "那可是你十月怀胎的女儿啊！",
+          "sentence_id": 36,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 120950,
+              "end_time": 121110,
+              "text": "那",
+              "punctuation": "",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 121110,
+              "end_time": 121390,
+              "text": "可是",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 121390,
+              "end_time": 121550,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 121550,
+              "end_time": 121870,
+              "text": "十月",
+              "punctuation": "",
+              "confidence": 0.888
+            },
+            {
+              "begin_time": 121870,
+              "end_time": 122030,
+              "text": "怀",
+              "punctuation": "",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 122030,
+              "end_time": 122190,
+              "text": "胎",
+              "punctuation": "",
+              "confidence": 0.95
+            },
+            {
+              "begin_time": 122190,
+              "end_time": 122670,
+              "text": "的女儿",
+              "punctuation": "",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 122670,
+              "end_time": 122790,
+              "text": "啊",
+              "punctuation": "！",
+              "confidence": 0.981
+            }
+          ]
+        },
+        {
+          "begin_time": 123150,
+          "end_time": 126110,
+          "text": "女儿，她就不该来这世上！",
+          "sentence_id": 37,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 123150,
+              "end_time": 123710,
+              "text": "女儿",
+              "punctuation": "，",
+              "confidence": 0.978
+            },
+            {
+              "begin_time": 124510,
+              "end_time": 124710,
+              "text": "她",
+              "punctuation": "",
+              "confidence": 0.741
+            },
+            {
+              "begin_time": 124710,
+              "end_time": 125070,
+              "text": "就不",
+              "punctuation": "",
+              "confidence": 0.98
+            },
+            {
+              "begin_time": 125070,
+              "end_time": 125270,
+              "text": "该",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 125270,
+              "end_time": 125430,
+              "text": "来",
+              "punctuation": "",
+              "confidence": 0.964
+            },
+            {
+              "begin_time": 125430,
+              "end_time": 125590,
+              "text": "这",
+              "punctuation": "",
+              "confidence": 0.961
+            },
+            {
+              "begin_time": 125590,
+              "end_time": 126110,
+              "text": "世上",
+              "punctuation": "！",
+              "confidence": 0.972
+            }
+          ]
+        },
+        {
+          "begin_time": 127350,
+          "end_time": 131790,
+          "text": "原来妈妈并不爱我，原来我是多余的。",
+          "sentence_id": 38,
+          "speaker_id": 6,
+          "words": [
+            {
+              "begin_time": 127350,
+              "end_time": 128190,
+              "text": "原来",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 128630,
+              "end_time": 129070,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.964
+            },
+            {
+              "begin_time": 129070,
+              "end_time": 129510,
+              "text": "并不",
+              "punctuation": "",
+              "confidence": 0.976
+            },
+            {
+              "begin_time": 129510,
+              "end_time": 129710,
+              "text": "爱",
+              "punctuation": "",
+              "confidence": 0.985
+            },
+            {
+              "begin_time": 129710,
+              "end_time": 129870,
+              "text": "我",
+              "punctuation": "，",
+              "confidence": 0.966
+            },
+            {
+              "begin_time": 130270,
+              "end_time": 130630,
+              "text": "原来",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 130630,
+              "end_time": 130990,
+              "text": "我是",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 130990,
+              "end_time": 131790,
+              "text": "多余的",
+              "punctuation": "。",
+              "confidence": 0.988
+            }
+          ]
+        },
+        {
+          "begin_time": 133090,
+          "end_time": 133810,
+          "text": "没关系。",
+          "sentence_id": 39,
+          "speaker_id": 6,
+          "words": [
+            {
+              "begin_time": 133090,
+              "end_time": 133810,
+              "text": "没关系",
+              "punctuation": "。",
+              "confidence": 0.998
+            }
+          ]
+        },
+        {
+          "begin_time": 135540,
+          "end_time": 139700,
+          "text": "只要我将礼物送给妈妈，妈妈就一定会看到悠悠的好。",
+          "sentence_id": 40,
+          "speaker_id": 6,
+          "words": [
+            {
+              "begin_time": 135540,
+              "end_time": 135900,
+              "text": "只要",
+              "punctuation": "",
+              "confidence": 0.976
+            },
+            {
+              "begin_time": 135900,
+              "end_time": 136060,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 136060,
+              "end_time": 136260,
+              "text": "将",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 136260,
+              "end_time": 136620,
+              "text": "礼物",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 136620,
+              "end_time": 137020,
+              "text": "送给",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 137020,
+              "end_time": 137380,
+              "text": "妈妈",
+              "punctuation": "，",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 137780,
+              "end_time": 138060,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 138060,
+              "end_time": 138220,
+              "text": "就",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 138220,
+              "end_time": 138620,
+              "text": "一定会",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 138620,
+              "end_time": 138940,
+              "text": "看到",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 138940,
+              "end_time": 139260,
+              "text": "悠悠",
+              "punctuation": "",
+              "confidence": 0.955
+            },
+            {
+              "begin_time": 139260,
+              "end_time": 139700,
+              "text": "的好",
+              "punctuation": "。",
+              "confidence": 0.972
+            }
+          ]
+        },
+        {
+          "begin_time": 140580,
+          "end_time": 142620,
+          "text": "嗯，木雪，你别这样说。",
+          "sentence_id": 41,
+          "speaker_id": 4,
+          "words": [
+            {
+              "begin_time": 140580,
+              "end_time": 140700,
+              "text": "嗯",
+              "punctuation": "，",
+              "confidence": 0.38
+            },
+            {
+              "begin_time": 140820,
+              "end_time": 141020,
+              "text": "木",
+              "punctuation": "",
+              "confidence": 0.378
+            },
+            {
+              "begin_time": 141020,
+              "end_time": 141300,
+              "text": "雪",
+              "punctuation": "，",
+              "confidence": 0.936
+            },
+            {
+              "begin_time": 141700,
+              "end_time": 141820,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.963
+            },
+            {
+              "begin_time": 141820,
+              "end_time": 141980,
+              "text": "别",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 141980,
+              "end_time": 142620,
+              "text": "这样说",
+              "punctuation": "。",
+              "confidence": 0.992
+            }
+          ]
+        },
+        {
+          "begin_time": 143100,
+          "end_time": 144460,
+          "text": "毕竟他是你的亲生骨肉。",
+          "sentence_id": 42,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 143100,
+              "end_time": 143460,
+              "text": "毕竟",
+              "punctuation": "",
+              "confidence": 0.978
+            },
+            {
+              "begin_time": 143460,
+              "end_time": 143660,
+              "text": "他是",
+              "punctuation": "",
+              "confidence": 0.484
+            },
+            {
+              "begin_time": 143660,
+              "end_time": 143820,
+              "text": "你的",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 143820,
+              "end_time": 143980,
+              "text": "亲",
+              "punctuation": "",
+              "confidence": 0.934
+            },
+            {
+              "begin_time": 143980,
+              "end_time": 144140,
+              "text": "生",
+              "punctuation": "",
+              "confidence": 0.936
+            },
+            {
+              "begin_time": 144140,
+              "end_time": 144300,
+              "text": "骨",
+              "punctuation": "",
+              "confidence": 0.914
+            },
+            {
+              "begin_time": 144300,
+              "end_time": 144460,
+              "text": "肉",
+              "punctuation": "。",
+              "confidence": 0.431
+            }
+          ]
+        },
+        {
+          "begin_time": 144620,
+          "end_time": 145300,
+          "text": "闭嘴！",
+          "sentence_id": 43,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 144620,
+              "end_time": 144900,
+              "text": "闭",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 144900,
+              "end_time": 145300,
+              "text": "嘴",
+              "punctuation": "！",
+              "confidence": 0.973
+            }
+          ]
+        },
+        {
+          "begin_time": 146060,
+          "end_time": 151100,
+          "text": "你少在这里假惺惺的，都是因为你，你、你一直在破坏我的感情！",
+          "sentence_id": 44,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 146060,
+              "end_time": 146300,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 146300,
+              "end_time": 146540,
+              "text": "少",
+              "punctuation": "",
+              "confidence": 0.622
+            },
+            {
+              "begin_time": 146540,
+              "end_time": 146940,
+              "text": "在这里",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 146940,
+              "end_time": 147100,
+              "text": "假",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 147100,
+              "end_time": 147260,
+              "text": "惺",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 147260,
+              "end_time": 147420,
+              "text": "惺",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 147420,
+              "end_time": 147620,
+              "text": "的",
+              "punctuation": "，",
+              "confidence": 0.985
+            },
+            {
+              "begin_time": 147980,
+              "end_time": 148300,
+              "text": "都是",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 148300,
+              "end_time": 148740,
+              "text": "因为你",
+              "punctuation": "，",
+              "confidence": 0.982
+            },
+            {
+              "begin_time": 148860,
+              "end_time": 149180,
+              "text": "你",
+              "punctuation": "、",
+              "confidence": 0.885
+            },
+            {
+              "begin_time": 149380,
+              "end_time": 149580,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.962
+            },
+            {
+              "begin_time": 149580,
+              "end_time": 149980,
+              "text": "一直在",
+              "punctuation": "",
+              "confidence": 0.961
+            },
+            {
+              "begin_time": 149980,
+              "end_time": 150340,
+              "text": "破坏",
+              "punctuation": "",
+              "confidence": 0.953
+            },
+            {
+              "begin_time": 150340,
+              "end_time": 150580,
+              "text": "我的",
+              "punctuation": "",
+              "confidence": 0.965
+            },
+            {
+              "begin_time": 150580,
+              "end_time": 151100,
+              "text": "感情",
+              "punctuation": "！",
+              "confidence": 0.978
+            }
+          ]
+        },
+        {
+          "begin_time": 151500,
+          "end_time": 152060,
+          "text": "闭嘴！",
+          "sentence_id": 45,
+          "speaker_id": 1,
+          "words": [
+            {
+              "begin_time": 151500,
+              "end_time": 151780,
+              "text": "闭",
+              "punctuation": "",
+              "confidence": 0.975
+            },
+            {
+              "begin_time": 151780,
+              "end_time": 152060,
+              "text": "嘴",
+              "punctuation": "！",
+              "confidence": 0.75
+            }
+          ]
+        },
+        {
+          "begin_time": 153890,
+          "end_time": 159010,
+          "text": "青阳，当年若不是他从生化实验室里把我救出来，也不会瘸了腿。",
+          "sentence_id": 46,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 153890,
+              "end_time": 154130,
+              "text": "青",
+              "punctuation": "",
+              "confidence": 0.633
+            },
+            {
+              "begin_time": 154130,
+              "end_time": 154450,
+              "text": "阳",
+              "punctuation": "，",
+              "confidence": 0.783
+            },
+            {
+              "begin_time": 154730,
+              "end_time": 155090,
+              "text": "当年",
+              "punctuation": "",
+              "confidence": 0.972
+            },
+            {
+              "begin_time": 155090,
+              "end_time": 155210,
+              "text": "若",
+              "punctuation": "",
+              "confidence": 0.972
+            },
+            {
+              "begin_time": 155210,
+              "end_time": 155490,
+              "text": "不是",
+              "punctuation": "",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 155490,
+              "end_time": 155850,
+              "text": "他",
+              "punctuation": "",
+              "confidence": 0.965
+            },
+            {
+              "begin_time": 155850,
+              "end_time": 156050,
+              "text": "从",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 156050,
+              "end_time": 156170,
+              "text": "生",
+              "punctuation": "",
+              "confidence": 0.811
+            },
+            {
+              "begin_time": 156170,
+              "end_time": 156330,
+              "text": "化",
+              "punctuation": "",
+              "confidence": 0.73
+            },
+            {
+              "begin_time": 156330,
+              "end_time": 156690,
+              "text": "实验室",
+              "punctuation": "",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 156690,
+              "end_time": 156810,
+              "text": "里",
+              "punctuation": "",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 156810,
+              "end_time": 157090,
+              "text": "把我",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 157090,
+              "end_time": 157290,
+              "text": "救",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 157290,
+              "end_time": 157610,
+              "text": "出来",
+              "punctuation": "，",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 157970,
+              "end_time": 158490,
+              "text": "也不会",
+              "punctuation": "",
+              "confidence": 0.988
+            },
+            {
+              "begin_time": 158490,
+              "end_time": 158610,
+              "text": "瘸",
+              "punctuation": "",
+              "confidence": 0.057
+            },
+            {
+              "begin_time": 158610,
+              "end_time": 158730,
+              "text": "了",
+              "punctuation": "",
+              "confidence": 0.672
+            },
+            {
+              "begin_time": 158730,
+              "end_time": 159010,
+              "text": "腿",
+              "punctuation": "。",
+              "confidence": 0.542
+            }
+          ]
+        },
+        {
+          "begin_time": 159530,
+          "end_time": 164450,
+          "text": "我照顾他是理所应当，我不允许你污蔑他，更不允许你伤害他。",
+          "sentence_id": 47,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 159530,
+              "end_time": 159730,
+              "text": "我",
+              "punctuation": "",
+              "confidence": 0.99
+            },
+            {
+              "begin_time": 159730,
+              "end_time": 160050,
+              "text": "照顾",
+              "punctuation": "",
+              "confidence": 0.967
+            },
+            {
+              "begin_time": 160050,
+              "end_time": 160570,
+              "text": "他是",
+              "punctuation": "",
+              "confidence": 0.969
+            },
+            {
+              "begin_time": 160570,
+              "end_time": 160690,
+              "text": "理",
+              "punctuation": "",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 160690,
+              "end_time": 160890,
+              "text": "所",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 160890,
+              "end_time": 161370,
+              "text": "应当",
+              "punctuation": "，",
+              "confidence": 0.982
+            },
+            {
+              "begin_time": 161610,
+              "end_time": 162010,
+              "text": "我不",
+              "punctuation": "",
+              "confidence": 0.944
+            },
+            {
+              "begin_time": 162010,
+              "end_time": 162290,
+              "text": "允许",
+              "punctuation": "",
+              "confidence": 0.962
+            },
+            {
+              "begin_time": 162290,
+              "end_time": 162450,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.985
+            },
+            {
+              "begin_time": 162450,
+              "end_time": 162610,
+              "text": "污",
+              "punctuation": "",
+              "confidence": 0.418
+            },
+            {
+              "begin_time": 162610,
+              "end_time": 162850,
+              "text": "蔑",
+              "punctuation": "",
+              "confidence": 0.843
+            },
+            {
+              "begin_time": 162850,
+              "end_time": 163050,
+              "text": "他",
+              "punctuation": "，",
+              "confidence": 0.891
+            },
+            {
+              "begin_time": 163290,
+              "end_time": 163450,
+              "text": "更",
+              "punctuation": "",
+              "confidence": 0.936
+            },
+            {
+              "begin_time": 163450,
+              "end_time": 163810,
+              "text": "不允许",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 163810,
+              "end_time": 163930,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.994
+            },
+            {
+              "begin_time": 163930,
+              "end_time": 164250,
+              "text": "伤害",
+              "punctuation": "",
+              "confidence": 0.545
+            },
+            {
+              "begin_time": 164250,
+              "end_time": 164450,
+              "text": "他",
+              "punctuation": "。",
+              "confidence": 0.945
+            }
+          ]
+        },
+        {
+          "begin_time": 166630,
+          "end_time": 167070,
+          "text": "妈妈。",
+          "sentence_id": 48,
+          "speaker_id": 0,
+          "words": [
+            {
+              "begin_time": 166630,
+              "end_time": 167070,
+              "text": "妈妈",
+              "punctuation": "。",
+              "confidence": 0.995
+            }
+          ]
+        },
+        {
+          "begin_time": 167430,
+          "end_time": 168350,
+          "text": "你不要跟爸爸吵架！",
+          "sentence_id": 49,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 167430,
+              "end_time": 167630,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.999
+            },
+            {
+              "begin_time": 167630,
+              "end_time": 167870,
+              "text": "不要",
+              "punctuation": "",
+              "confidence": 0.998
+            },
+            {
+              "begin_time": 167870,
+              "end_time": 167990,
+              "text": "跟",
+              "punctuation": "",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 167990,
+              "end_time": 168190,
+              "text": "爸爸",
+              "punctuation": "",
+              "confidence": 0.864
+            },
+            {
+              "begin_time": 168190,
+              "end_time": 168350,
+              "text": "吵架",
+              "punctuation": "！",
+              "confidence": 0.139
+            }
+          ]
+        },
+        {
+          "begin_time": 168430,
+          "end_time": 168910,
+          "text": "滚开！",
+          "sentence_id": 50,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 168430,
+              "end_time": 168550,
+              "text": "滚",
+              "punctuation": "",
+              "confidence": 0.352
+            },
+            {
+              "begin_time": 168550,
+              "end_time": 168910,
+              "text": "开",
+              "punctuation": "！",
+              "confidence": 0.865
+            }
+          ]
+        },
+        {
+          "begin_time": 170750,
+          "end_time": 171430,
+          "text": "吃不许！",
+          "sentence_id": 51,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 170750,
+              "end_time": 170950,
+              "text": "吃",
+              "punctuation": "",
+              "confidence": 0.0294
+            },
+            {
+              "begin_time": 170950,
+              "end_time": 171110,
+              "text": "不",
+              "punctuation": "",
+              "confidence": 0.77
+            },
+            {
+              "begin_time": 171110,
+              "end_time": 171430,
+              "text": "许",
+              "punctuation": "！",
+              "confidence": 0.0711
+            }
+          ]
+        },
+        {
+          "begin_time": 172070,
+          "end_time": 172470,
+          "text": "悠悠！",
+          "sentence_id": 52,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 172070,
+              "end_time": 172470,
+              "text": "悠悠",
+              "punctuation": "！",
+              "confidence": 0.569
+            }
+          ]
+        },
+        {
+          "begin_time": 174430,
+          "end_time": 175750,
+          "text": "爸爸妈妈没吵架。",
+          "sentence_id": 53,
+          "speaker_id": 2,
+          "words": [
+            {
+              "begin_time": 174430,
+              "end_time": 174990,
+              "text": "爸爸妈妈",
+              "punctuation": "",
+              "confidence": 0.949
+            },
+            {
+              "begin_time": 174990,
+              "end_time": 175150,
+              "text": "没",
+              "punctuation": "",
+              "confidence": 0.993
+            },
+            {
+              "begin_time": 175150,
+              "end_time": 175750,
+              "text": "吵架",
+              "punctuation": "。",
+              "confidence": 0.978
+            }
+          ]
+        },
+        {
+          "begin_time": 176910,
+          "end_time": 180110,
+          "text": "妈妈，你别生爸爸的气好不好？",
+          "sentence_id": 54,
+          "speaker_id": 0,
+          "words": [
+            {
+              "begin_time": 176910,
+              "end_time": 177390,
+              "text": "妈妈",
+              "punctuation": "，",
+              "confidence": 0.966
+            },
+            {
+              "begin_time": 178110,
+              "end_time": 178470,
+              "text": "你",
+              "punctuation": "",
+              "confidence": 0.509
+            },
+            {
+              "begin_time": 178470,
+              "end_time": 178670,
+              "text": "别",
+              "punctuation": "",
+              "confidence": 0.995
+            },
+            {
+              "begin_time": 178670,
+              "end_time": 178870,
+              "text": "生",
+              "punctuation": "",
+              "confidence": 0.946
+            },
+            {
+              "begin_time": 178870,
+              "end_time": 179110,
+              "text": "爸爸",
+              "punctuation": "",
+              "confidence": 0.984
+            },
+            {
+              "begin_time": 179110,
+              "end_time": 179270,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.983
+            },
+            {
+              "begin_time": 179270,
+              "end_time": 179510,
+              "text": "气",
+              "punctuation": "",
+              "confidence": 0.997
+            },
+            {
+              "begin_time": 179510,
+              "end_time": 180110,
+              "text": "好不好",
+              "punctuation": "？",
+              "confidence": 0.996
+            }
+          ]
+        },
+        {
+          "begin_time": 180870,
+          "end_time": 187670,
+          "text": "悠悠带爸爸向妈妈道歉，这是悠悠送给妈妈的生日礼物，希望妈妈天天开心。",
+          "sentence_id": 55,
+          "speaker_id": 0,
+          "words": [
+            {
+              "begin_time": 180870,
+              "end_time": 181270,
+              "text": "悠悠",
+              "punctuation": "",
+              "confidence": 0.968
+            },
+            {
+              "begin_time": 181270,
+              "end_time": 181470,
+              "text": "带",
+              "punctuation": "",
+              "confidence": 0.967
+            },
+            {
+              "begin_time": 181470,
+              "end_time": 181950,
+              "text": "爸爸",
+              "punctuation": "",
+              "confidence": 0.987
+            },
+            {
+              "begin_time": 181950,
+              "end_time": 182190,
+              "text": "向",
+              "punctuation": "",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 182190,
+              "end_time": 182470,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.976
+            },
+            {
+              "begin_time": 182470,
+              "end_time": 182950,
+              "text": "道歉",
+              "punctuation": "，",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 183590,
+              "end_time": 183870,
+              "text": "这是",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 183870,
+              "end_time": 184190,
+              "text": "悠悠",
+              "punctuation": "",
+              "confidence": 0.973
+            },
+            {
+              "begin_time": 184190,
+              "end_time": 184430,
+              "text": "送给",
+              "punctuation": "",
+              "confidence": 0.989
+            },
+            {
+              "begin_time": 184430,
+              "end_time": 184670,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.967
+            },
+            {
+              "begin_time": 184670,
+              "end_time": 184790,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.992
+            },
+            {
+              "begin_time": 184790,
+              "end_time": 185110,
+              "text": "生日",
+              "punctuation": "",
+              "confidence": 0.996
+            },
+            {
+              "begin_time": 185110,
+              "end_time": 185590,
+              "text": "礼物",
+              "punctuation": "，",
+              "confidence": 0.977
+            },
+            {
+              "begin_time": 186230,
+              "end_time": 186630,
+              "text": "希望",
+              "punctuation": "",
+              "confidence": 0.981
+            },
+            {
+              "begin_time": 186630,
+              "end_time": 186910,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.983
+            },
+            {
+              "begin_time": 186910,
+              "end_time": 187230,
+              "text": "天天",
+              "punctuation": "",
+              "confidence": 0.986
+            },
+            {
+              "begin_time": 187230,
+              "end_time": 187670,
+              "text": "开心",
+              "punctuation": "。",
+              "confidence": 0.984
+            }
+          ]
+        },
+        {
+          "begin_time": 193730,
+          "end_time": 194690,
+          "text": "媳妇，没事吧？",
+          "sentence_id": 56,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 193730,
+              "end_time": 194090,
+              "text": "媳妇",
+              "punctuation": "，",
+              "confidence": 0.166
+            },
+            {
+              "begin_time": 194330,
+              "end_time": 194650,
+              "text": "没事",
+              "punctuation": "",
+              "confidence": 0.465
+            },
+            {
+              "begin_time": 194650,
+              "end_time": 194690,
+              "text": "吧",
+              "punctuation": "？",
+              "confidence": 0.00133
+            }
+          ]
+        },
+        {
+          "begin_time": 194810,
+          "end_time": 197450,
+          "text": "妈妈，可以先看悠悠的礼物吗？",
+          "sentence_id": 57,
+          "speaker_id": 0,
+          "words": [
+            {
+              "begin_time": 194810,
+              "end_time": 195170,
+              "text": "妈妈",
+              "punctuation": "，",
+              "confidence": 0.499
+            },
+            {
+              "begin_time": 195690,
+              "end_time": 196010,
+              "text": "可以",
+              "punctuation": "",
+              "confidence": 0.956
+            },
+            {
+              "begin_time": 196010,
+              "end_time": 196210,
+              "text": "先",
+              "punctuation": "",
+              "confidence": 0.971
+            },
+            {
+              "begin_time": 196210,
+              "end_time": 196490,
+              "text": "看",
+              "punctuation": "",
+              "confidence": 0.974
+            },
+            {
+              "begin_time": 196490,
+              "end_time": 196770,
+              "text": "悠悠",
+              "punctuation": "",
+              "confidence": 0.845
+            },
+            {
+              "begin_time": 196770,
+              "end_time": 196890,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.966
+            },
+            {
+              "begin_time": 196890,
+              "end_time": 197250,
+              "text": "礼物",
+              "punctuation": "",
+              "confidence": 0.979
+            },
+            {
+              "begin_time": 197250,
+              "end_time": 197450,
+              "text": "吗",
+              "punctuation": "？",
+              "confidence": 0.984
+            }
+          ]
+        },
+        {
+          "begin_time": 197730,
+          "end_time": 198250,
+          "text": "走开！",
+          "sentence_id": 58,
+          "speaker_id": 3,
+          "words": [
+            {
+              "begin_time": 197730,
+              "end_time": 197890,
+              "text": "走",
+              "punctuation": "",
+              "confidence": 0.764
+            },
+            {
+              "begin_time": 197890,
+              "end_time": 198250,
+              "text": "开",
+              "punctuation": "！",
+              "confidence": 0.97
+            }
+          ]
+        },
+        {
+          "begin_time": 199530,
+          "end_time": 200050,
+          "text": "悠悠！",
+          "sentence_id": 59,
+          "speaker_id": 5,
+          "words": [
+            {
+              "begin_time": 199530,
+              "end_time": 200050,
+              "text": "悠悠",
+              "punctuation": "！",
+              "confidence": 0.566
+            }
+          ]
+        },
+        {
+          "begin_time": 201330,
+          "end_time": 206090,
+          "text": "悠悠送给妈妈的生日礼物，怎么可以？",
+          "sentence_id": 60,
+          "speaker_id": 7,
+          "words": [
+            {
+              "begin_time": 201330,
+              "end_time": 201770,
+              "text": "悠悠",
+              "punctuation": "",
+              "confidence": 0.233
+            },
+            {
+              "begin_time": 201770,
+              "end_time": 202210,
+              "text": "送给",
+              "punctuation": "",
+              "confidence": 0.798
+            },
+            {
+              "begin_time": 202210,
+              "end_time": 202570,
+              "text": "妈妈",
+              "punctuation": "",
+              "confidence": 0.504
+            },
+            {
+              "begin_time": 202570,
+              "end_time": 202810,
+              "text": "的",
+              "punctuation": "",
+              "confidence": 0.916
+            },
+            {
+              "begin_time": 202810,
+              "end_time": 203290,
+              "text": "生日",
+              "punctuation": "",
+              "confidence": 0.9
+            },
+            {
+              "begin_time": 203290,
+              "end_time": 204050,
+              "text": "礼物",
+              "punctuation": "，",
+              "confidence": 0.175
+            },
+            {
+              "begin_time": 204810,
+              "end_time": 205290,
+              "text": "怎么",
+              "punctuation": "",
+              "confidence": 0.726
+            },
+            {
+              "begin_time": 205290,
+              "end_time": 206090,
+              "text": "可以",
+              "punctuation": "？",
+              "confidence": 0.881
+            }
+          ]
+        },
+        {
+          "begin_time": 206850,
+          "end_time": 208130,
+          "text": "怎么可以？",
+          "sentence_id": 61,
+          "speaker_id": 7,
+          "words": [
+            {
+              "begin_time": 206850,
+              "end_time": 207370,
+              "text": "怎么",
+              "punctuation": "",
+              "confidence": 0.703
+            },
+            {
+              "begin_time": 207370,
+              "end_time": 208130,
+              "text": "可以",
+              "punctuation": "？",
+              "confidence": 0.895
+            }
+          ]
+        },
+        {
+          "begin_time": 209090,
+          "end_time": 209530,
+          "text": "悠悠！",
+          "sentence_id": 62,
+          "speaker_id": 7,
+          "words": [
+            {
+              "begin_time": 209090,
+              "end_time": 209530,
+              "text": "悠悠",
+              "punctuation": "！",
+              "confidence": 0.13
+            }
+          ]
+        },
+        {
+          "begin_time": 210210,
+          "end_time": 210690,
+          "text": "悠悠！",
+          "sentence_id": 63,
+          "speaker_id": 7,
+          "words": [
+            {
+              "begin_time": 210210,
+              "end_time": 210690,
+              "text": "悠悠",
+              "punctuation": "！",
+              "confidence": 0.224
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

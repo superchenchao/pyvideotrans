@@ -1,0 +1,35 @@
+{
+  "summary": {
+    "existing:01-fen-mp4": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 5,
+      "transitions": 26,
+      "distribution": {
+        "spk0": 20,
+        "spk1": 33,
+        "spk2": 11,
+        "spk3": 14,
+        "spk4": 23
+      }
+    },
+    "ali_CAM": {
+      "lines": 101,
+      "expected_lines": 101,
+      "speakers": 5,
+      "transitions": 34,
+      "distribution": {
+        "spk0": 19,
+        "spk1": 36,
+        "spk2": 15,
+        "spk3": 30,
+        "spk4": 1
+      }
+    }
+  },
+  "timings": {
+    "existing:01-fen-mp4": null,
+    "ali_CAM": 51.95598888397217
+  },
+  "failures": {}
+}
