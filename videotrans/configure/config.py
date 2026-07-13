@@ -441,6 +441,7 @@ class AppSettings:
             "qwentts_models": Qwentts_Models,
             "show_more_settings": False,
             "speaker_type": "built",
+            "speaker_refine": True,
             "hf_token": "",
             "cjk_len": 20,
             "other_len": 48,

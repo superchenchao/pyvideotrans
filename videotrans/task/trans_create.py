@@ -58,6 +58,7 @@ class TransCreate(BaseTask):
     # 是否是音频翻译任务，如果是，则到配音完毕即结束，无需合并
     is_audio_trans: bool = False
     queue_tts: List = field(default_factory=list, repr=False)
+    auto_line_roles: Dict = field(default_factory=dict, repr=False)
     clone_ref: str = ""
     cost_duration:float=0.0
     should_recogn2:bool=False
@@ -868,6 +869,53 @@ class TransCreate(BaseTask):
         except Exception as e:
             logger.exception(f'人声背景声分离失败，静默跳过 {e}', exc_info=True)
 
+    def _prepare_line_roles(self, source_subs):
+        if not self.auto_line_roles:
+            speaker_path = Path(f'{self.cfg.cache_folder}/speaker.json')
+            if speaker_path.is_file():
+                try:
+                    speakers = json.loads(speaker_path.read_text(encoding='utf-8'))
+                    if len(speakers) == len(source_subs) and len(set(speakers)) > 1:
+                        from videotrans.process.speaker_roles import build_auto_line_roles
+
+                        available_voices = tools.role_menu(
+                            self.cfg.tts_type, self.cfg.target_language_code)
+                        self.auto_line_roles, report = build_auto_line_roles(
+                            speakers=speakers,
+                            subtitles=source_subs,
+                            available_voices=available_voices,
+                            default_voice=self.cfg.voice_role,
+                            audio_file=self.cfg.source_wav,
+                        )
+                        report.update({
+                            'target_language_code': self.cfg.target_language_code,
+                            'tts_type': self.cfg.tts_type,
+                            'default_voice': self.cfg.voice_role,
+                        })
+                        report_path = Path(f'{self.cfg.cache_folder}/speaker_roles.json')
+                        report_path.write_text(
+                            json.dumps(report, ensure_ascii=False, indent=2),
+                            encoding='utf-8')
+                        try:
+                            shutil.copy2(report_path, f'{self.cfg.target_dir}/speaker_roles.json')
+                        except (OSError, shutil.SameFileError):
+                            pass
+                        logger.info(
+                            f'已自动为 {report["speaker_count"]} 个说话人分配音色:'
+                            f'{report["speaker_to_voice"]}')
+                except Exception as e:
+                    logger.warning(f'自动生成多角色配音映射失败,使用默认音色:{e}')
+
+        line_roles = dict(self.auto_line_roles)
+        manual_path = Path(f'{self.cfg.cache_folder}/line_roles.json')
+        if manual_path.is_file():
+            try:
+                manual_roles = json.loads(manual_path.read_text(encoding='utf-8'))
+                line_roles.update({str(line): role for line, role in manual_roles.items() if role})
+            except Exception as e:
+                logger.warning(f'读取当前任务人工音色映射失败,保留自动映射:{e}')
+        return line_roles
+
     # 配音预处理，去掉无效字符，整理开始时间
     def _tts(self) -> None:
         queue_tts = []
@@ -882,10 +930,9 @@ class TransCreate(BaseTask):
 
         rate = f"+{rate}%" if rate >= 0 else f"{rate}%"
 
-        # 取出设置的每行角色
-        line_roles = app_cfg.line_roles
         voice_role = self.cfg.voice_role
         force_clone = str(voice_role).strip().lower() == 'clone' and self.cfg.tts_type in SUPPORT_CLONE
+        line_roles = {} if force_clone else self._prepare_line_roles(source_subs)
 
         # 取出每一条字幕，行号\n开始时间 --> 结束时间\n内容
         for i, it in enumerate(subs):

@@ -759,14 +759,18 @@ class WinAction(WinActionBase):
         if d['type'] == 'edit_subtitle_target':
             # 弹出编辑配音字幕
             from videotrans.component.onlyone_set_role import SpeakerAssignmentDialog
-            cache_folder, target_language, tts_type = d['text'].split('<|>')
+            parts = d['text'].split('<|>', 3)
+            cache_folder, target_language, tts_type = parts[:3]
+            source_audio = parts[3] if len(parts) > 3 else None
             dialog = SpeakerAssignmentDialog(
                 source_sub=None if not app_cfg.onlyone_trans else app_cfg.onlyone_source_sub,
+                source_audio=source_audio,
                 target_sub=app_cfg.onlyone_target_sub,
                 all_voices=self.main.current_rolelist,
                 cache_folder=cache_folder,
                 target_language=target_language,
                 tts_type=int(tts_type),
+                default_role=self.main.voice_role.currentText(),
                 parent=self.main
 
             )

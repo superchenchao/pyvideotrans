@@ -284,6 +284,12 @@ def cam_speakers(*, input_file, subtitles_file:str,speak_file:str, num_speakers=
         # 整理为 [ [[start_ms,end_ms],"spk\d"],... ]
         logger.debug(f'说话人分离原始返回结果:{result=}')
         diarizations = [[[int(it[0] * 1000), int(it[1] * 1000)], f'spk{int(it[2])}'] for it in result['text']]
+        speaker_path = Path(speak_file)
+        try:
+            speaker_path.with_name(f'{speaker_path.stem}.raw_segments.json').write_text(
+                json.dumps(diarizations, ensure_ascii=False), encoding='utf-8')
+        except Exception as diagnostic_error:
+            logger.warning(f'ali_CAM原始分段诊断写入失败,继续生成说话人结果:{diagnostic_error}')
         output = []
         for sub in subtitles:
             if len(sub) != 2 or sub[0] >= sub[1]:
@@ -330,6 +336,35 @@ def cam_speakers(*, input_file, subtitles_file:str,speak_file:str, num_speakers=
                     output.append(best_speaker)
                 else:
                     output.append("spk0")
+        if output and settings.get('speaker_refine', True):
+            try:
+                from videotrans.process.speaker_refine import refine_cam_speaker_labels
+                from videotrans.util import tools
+
+                model_id = 'damo/speech_campplus_sv_zh-cn_16k-common'
+                model_path = Path(f'{ROOT_DIR}/models/models/{model_id}')
+                if not (model_path / 'configuration.json').is_file():
+                    tools.check_and_down_ms(model_id=model_id)
+                if (model_path / 'configuration.json').is_file():
+                    refined, refine_report = refine_cam_speaker_labels(
+                        audio_file=input_file,
+                        subtitles=subtitles,
+                        diarizations=diarizations,
+                        model_path=model_path,
+                    )
+                    if len(refined) == len(output):
+                        try:
+                            speaker_path.with_name(f'{speaker_path.stem}.refine.json').write_text(
+                                json.dumps(refine_report, ensure_ascii=False, indent=2),
+                                encoding='utf-8')
+                        except Exception as diagnostic_error:
+                            logger.warning(
+                                f'ali_CAM修正诊断写入失败,继续使用修正结果:{diagnostic_error}')
+                        output = refined
+                        logger.debug(
+                            f'ali_CAM短句声纹修正完成,修正行:{refine_report["changed_lines"]}')
+            except Exception as refine_error:
+                logger.warning(f'ali_CAM短句声纹修正失败,保留原始分离结果:{refine_error}')
         logger.debug(f'说话人分离成功结束,识别出 {len(set(output))} 个说话人,耗时:{int(time.time() - _st)}s')
         if output:
             Path(speak_file).write_text(json.dumps(output), encoding='utf-8')

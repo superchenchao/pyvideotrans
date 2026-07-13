@@ -1,0 +1,43 @@
+{
+  "speaker_count": 4,
+  "speaker_counts": {
+    "spk0": 19,
+    "spk1": 33,
+    "spk2": 16,
+    "spk3": 33
+  },
+  "speaker_profiles": {
+    "spk0": {
+      "gender": "female",
+      "median_pitch_hz": 253.8,
+      "pitch_frames": 579
+    },
+    "spk1": {
+      "gender": "male",
+      "median_pitch_hz": 168.9,
+      "pitch_frames": 621
+    },
+    "spk2": {
+      "gender": "male",
+      "median_pitch_hz": 115.4,
+      "pitch_frames": 645
+    },
+    "spk3": {
+      "gender": "female",
+      "median_pitch_hz": 231.3,
+      "pitch_frames": 623
+    }
+  },
+  "speaker_to_voice": {
+    "spk1": "Steffan(Male/US)",
+    "spk3": "Yan(Female/HK)",
+    "spk0": "Sonia(Female/GB)",
+    "spk2": "WilliamMultilingual(Male/AU)"
+  },
+  "line_role_count": 101,
+  "voice_reused": false,
+  "available_voice_count": 47,
+  "target_language_code": "en",
+  "tts_type": 0,
+  "default_voice": "Steffan(Male/US)"
+}

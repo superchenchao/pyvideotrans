@@ -24,17 +24,22 @@ class SpeakerAssignmentDialog(QDialog):
             target_sub: str = None,
             all_voices: Optional[List[str]] = None,
             source_sub: str = None,
+            source_audio: str = None,
             cache_folder=None,
             target_language="en",
-            tts_type=0
+            tts_type=0,
+            default_role="",
     ):
         super().__init__()
         self.parent = parent
         self.target_sub = target_sub
+        self.source_sub = source_sub
+        self.source_audio = source_audio
         self.source_srtstring = None
         self.cache_folder = cache_folder
         self.target_language = target_language
         self.tts_type = tts_type
+        self.default_role = default_role
 
         if source_sub:
             sour_pt = Path(source_sub)
@@ -525,8 +530,41 @@ class SpeakerAssignmentDialog(QDialog):
         if not voices:
             return
 
-        for index, spk_id in enumerate(self.speakers):
-            self.speakers[spk_id] = voices[index % len(voices)]
+        mapping = {}
+        report_path = Path(f'{self.cache_folder}/speaker_roles.json')
+        if report_path.is_file():
+            try:
+                report = json.loads(report_path.read_text(encoding='utf-8'))
+                if (
+                    report.get('target_language_code') == self.target_language
+                    and int(report.get('tts_type', -1)) == int(self.tts_type)
+                ):
+                    mapping = {
+                        speaker: voice
+                        for speaker, voice in report.get('speaker_to_voice', {}).items()
+                        if voice in voices
+                    }
+            except Exception as e:
+                logger.warning(f'读取自动说话人音色映射失败,重新计算:{e}')
+        if not mapping:
+            from videotrans.process.speaker_roles import (
+                assign_speaker_voices,
+                estimate_speaker_profiles,
+            )
+
+            profiles = estimate_speaker_profiles(
+                audio_file=self.source_audio,
+                subtitles=self.srt_list_dict,
+                speakers=self.speaker_list_sub,
+            )
+            mapping, _ = assign_speaker_voices(
+                self.speaker_list_sub,
+                voices,
+                default_voice=self.default_role,
+                speaker_profiles=profiles,
+            )
+        for spk_id in self.speakers:
+            self.speakers[spk_id] = mapping.get(spk_id)
 
         for check, spk_id in getattr(self, 'speaker_checks', {}).items():
             role = self.speakers.get(spk_id, '') or ''
@@ -735,6 +773,10 @@ class SpeakerAssignmentDialog(QDialog):
             if self.cache_folder and self.speaker_list_sub:
                 Path(f'{self.cache_folder}/speaker.json').write_text(
                     json.dumps(self.speaker_list_sub, ensure_ascii=False),
+                    encoding="utf-8"
+                )
+                Path(f'{self.cache_folder}/line_roles.json').write_text(
+                    json.dumps(app_cfg.line_roles, ensure_ascii=False, indent=2),
                     encoding="utf-8"
                 )
         except Exception as e:
