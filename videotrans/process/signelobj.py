@@ -102,6 +102,17 @@ class GlobalProcessManager:
         return AsyncResultFutureWrapper(async_result)
 
     @classmethod
+    def reset_gpu_executor(cls):
+        executor = cls._executor_gpu
+        cls._executor_gpu = None
+        if executor is None:
+            return
+        try:
+            executor.terminate()
+        finally:
+            executor.join()
+
+    @classmethod
     def shutdown(cls):
         if cls._executor_cpu:
             cls._executor_cpu.close()

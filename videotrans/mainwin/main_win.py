@@ -215,6 +215,14 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.set_adv_status.clicked.connect(self.win_action.toggle_adv)
         self.btn_get_video.clicked.connect(self.win_action.get_mp4)
         self.listen_btn.clicked.connect(self.win_action.listen_voice_fun)
+        from videotrans.component.voice_selector import install_voice_selector
+        install_voice_selector(
+            self.voice_role,
+            tts_type_getter=lambda: self.tts_type.currentIndex(),
+            language_getter=lambda: translator.get_code(
+                show_text=self.target_language.currentText()
+            ) or "",
+        )
         self.recogn_type.currentIndexChanged.connect(self.win_action.recogn_type_change)
         self.model_name.currentIndexChanged.connect(self.win_action.model_type_change)
 
@@ -277,6 +285,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.actionopenrouter_key.triggered.connect(lambda: self.open_winform('openrouter'))
         self.actionsiliconflow_key.triggered.connect(lambda: self.open_winform('siliconflow'))
         self.actionwatermark.triggered.connect(lambda: self.open_winform('fn_watermark'))
+        self.action_subtitle_removal.triggered.connect(lambda: self.open_winform('subtitle_removal'))
         self.actionsepar.triggered.connect(lambda: self.open_winform('fn_separate'))
         self.actionsetini.triggered.connect(lambda: self.open_winform('setini'))
         self.actionvideoandaudio.triggered.connect(lambda: self.open_winform('fn_videoandaudio'))
@@ -398,6 +407,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             window = RealTimeWindow()
             app_cfg.child_forms[name] = window
             window.show()
+            return
+        if name == 'subtitle_removal':
+            from videotrans.component.subtitle_removal import create_subtitle_removal_window
+            window = create_subtitle_removal_window(self)
+            app_cfg.child_forms[name] = window
             return
 
         return winform.get_win(name).openwin()

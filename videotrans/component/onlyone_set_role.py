@@ -394,6 +394,12 @@ class SpeakerAssignmentDialog(QDialog):
         # 底部按钮
         self.subtitle_combo = QComboBox()
         self._fill_role_combo(self.subtitle_combo)
+        from videotrans.component.voice_selector import install_voice_selector
+        install_voice_selector(
+            self.subtitle_combo,
+            tts_type_getter=lambda: self.tts_type,
+            language_getter=lambda: self.target_language,
+        )
         self.bottom_button_container_layout.addWidget(self.subtitle_combo)
 
         assign_button = QPushButton(tr("Assign roles to selected subtitles"))
@@ -451,6 +457,12 @@ class SpeakerAssignmentDialog(QDialog):
         bottom_row = QHBoxLayout()
         self.speaker_combo = QComboBox()
         self._fill_role_combo(self.speaker_combo)
+        from videotrans.component.voice_selector import install_voice_selector
+        install_voice_selector(
+            self.speaker_combo,
+            tts_type_getter=lambda: self.tts_type,
+            language_getter=lambda: self.target_language,
+        )
         
         lbl = QLabel(tr('Dubbing role'))
         lbl.setStyleSheet("color: #dddddd;")

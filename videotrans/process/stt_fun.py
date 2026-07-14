@@ -2,12 +2,46 @@
 # 返回元组
 # 失败：第一个值为False，则为失败，第二个值存储失败原因
 # 成功，第一个值存在需要的返回值，不需要时返回True，第二个值为None
-import re, json, traceback
+import os, re, json, traceback
 from pathlib import Path
 from typing import List, Tuple, Union
 from videotrans.task.taskcfg import SrtItem
 from videotrans.util import gpus, tools
 from videotrans.configure.config import logger, ROOT_DIR, defaulelang
+
+
+def select_faster_compute_type(requested, *, is_cuda, supported_types):
+    """Choose a CTranslate2 compute type that the current device supports."""
+    requested = str(requested or "default").strip().lower()
+    if requested in {"default", "auto"}:
+        return requested
+
+    supported = {str(item).strip().lower() for item in supported_types or []}
+    if not supported or requested in supported:
+        return requested
+
+    preferences = (
+        ("int8", "int8_float16", "int8_float32", "float16", "float32")
+        if is_cuda
+        else ("int8", "int8_float32", "int16", "float32")
+    )
+    return next((item for item in preferences if item in supported), "default")
+
+
+def write_faster_result_sidecar(logs_file, data, error):
+    """Persist STT output before native model cleanup can terminate the worker."""
+    if not logs_file:
+        return
+    sidecar = Path(f"{logs_file}.result.json")
+    temporary = sidecar.with_name(f"{sidecar.name}.{os.getpid()}.tmp")
+    serialized = data
+    if isinstance(data, list):
+        serialized = [dict(item.items()) if hasattr(item, "items") else item for item in data]
+    temporary.write_text(
+        json.dumps({"data": serialized, "error": error}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    temporary.replace(sidecar)
 
 
 def openai_whisper(
@@ -160,18 +194,41 @@ def faster_whisper(
         max_speech_ms=6000
 ) -> Tuple[Union[List[SrtItem], bool], Union[str, None]]:
     import zhconv
+    import ctranslate2
     from faster_whisper import WhisperModel, BatchedInferencePipeline
 
     raws = []
     if detect_language == 'fil':
         detect_language = 'tl'
 
+    def _result(data, error):
+        write_faster_result_sidecar(logs_file, data, error)
+        return data, error
+
+    device = "cuda" if is_cuda else "cpu"
+    try:
+        supported_compute_types = ctranslate2.get_supported_compute_types(device)
+    except Exception as e:
+        supported_compute_types = set()
+        logger.warning(f'无法查询 CTranslate2 支持的计算类型，继续使用配置值:{e}')
+
+    selected_compute_type = select_faster_compute_type(
+        compute_type,
+        is_cuda=is_cuda,
+        supported_types=supported_compute_types,
+    )
+    if selected_compute_type != str(compute_type).strip().lower():
+        logger.warning(
+            f'faster-whisper 当前设备不支持 compute_type={compute_type}，'
+            f'自动改用 {selected_compute_type}；支持类型:{sorted(supported_compute_types)}'
+        )
+
     def _create_model(_compute_type):
         try:
             logger.debug(f'[faster_whisper]加载模型:当前 {is_cuda=},{_compute_type=}')
             model = WhisperModel(
                 local_dir,
-                device="cuda" if is_cuda else 'cpu',
+                device=device,
                 device_index=device_index if is_cuda else 0,
                 compute_type=_compute_type
             )
@@ -182,18 +239,18 @@ def faster_whisper(
             if not _is_compute_type or _compute_type == 'float32':
                 logger.exception(f'faster-whisper加载模型失败:{is_cuda=}, {_compute_type=},{e}', exc_info=True)
                 raise
-            # cuda下先尝试使用 float16
-            if is_cuda and _compute_type != 'float16':
-                logger.warning(f'faster-whisper CUDA下 加载模型失败，更改为 [float16] 类型后重试')
-                return _create_model('float16')
-            # 如果cpu并且非 int8,先尝试 int8
-            if not is_cuda and _compute_type != 'int8':
-                logger.warning(f'faster-whisper CPU下 加载模型失败，更改为 [int8] 类型后重试')
-                return _create_model('int8')
-            # 保底 float32
-            if _compute_type != 'float32':
-                logger.warning(f'faster-whisper  加载模型失败，更改为 [float32] 类型后重试, {is_cuda=}')
-                return _create_model('float32')
+            fallback_type = "default"
+            if supported_compute_types:
+                fallback_type = select_faster_compute_type(
+                    "__unsupported__",
+                    is_cuda=is_cuda,
+                    supported_types=supported_compute_types,
+                )
+            if fallback_type not in {_compute_type, "default"}:
+                logger.warning(
+                    f'faster-whisper 加载模型失败，更改为 [{fallback_type}] 类型后重试, {is_cuda=}'
+                )
+                return _create_model(fallback_type)
             raise
 
     try:
@@ -204,11 +261,11 @@ def faster_whisper(
         try:
             # 1. 加载基础模型
             _write_log(logs_file, json.dumps({"type": "logs", "text": 'loading model'}))
-            model = _create_model(compute_type)
+            model = _create_model(selected_compute_type)
         except Exception as e:
             error = traceback.format_exc()
             logger.error(f'[faster_whisper][{is_cuda=}]语音转录失败:{local_dir=}\n{error}')
-            return False, f'{e},{error}'
+            return _result(False, f'{e},{error}')
 
         if not temperature:
             temperature = [
@@ -311,17 +368,17 @@ def faster_whisper(
 
             logger.debug(f'faster-whisper模式下，对{model_name}模型返回的断句结果重新修正')
             if not texts:
-                return False, "No transcription results returned. Please check the original audio/video or model and try again."
+                return _result(False, "No transcription results returned. Please check the original audio/video or model and try again.")
             raws = _resegment(texts, info.language, max_speech_ms, logs_file)
             logger.debug('断句结果重新修正完毕')
             if jianfan and raws:
                 for it in raws:
                     it['text'] = zhconv.convert(it['text'], 'zh-hans')
             logger.debug('返回识别结果')
-        return raws,None
+        return _result(raws, None)
     except BaseException as e:
         msg = traceback.format_exc()
-        return False, f'{e}:{msg}'
+        return _result(False, f'{e}:{msg}')
 
 
 

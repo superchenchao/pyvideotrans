@@ -32,7 +32,7 @@ def openwin():
         winobj.test.setText('Testing...')
 
     def save():
-        key = winobj.speech_key.text()
+        key = winobj.speech_key.text().strip()
         region = winobj.speech_region.text().strip()
         if not region or not region.startswith('https:'):
             region = winobj.azuretts_area.currentText()

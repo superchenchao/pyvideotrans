@@ -115,6 +115,7 @@ class Ui_azurettsform(object):
             "NorthCentralUs",
             "EastUs",
             "WestUs2",
+            "WestUs3",
             "SouthCentralUs",
             "CentralUs",
             "EastUs2",

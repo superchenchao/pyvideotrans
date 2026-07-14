@@ -440,6 +440,8 @@ def openwin():
             else:
                 winobj.loglabel.setText('')
             if tts.is_input_api(tts_type=type) is not True:
+                winobj.hecheng_role.clear()
+                winobj.hecheng_role.addItems(['No'])
                 return False
         role_list = tools.role_menu(type, code)
         winobj.hecheng_role.clear()
@@ -542,5 +544,13 @@ def openwin():
         winobj.is_cuda.toggled.connect(check_cuda)
         tts_type_change(last_tts_type)
         winobj.hecheng_role.setCurrentIndex(int(params.get("dubb_role", 0)))
+        from videotrans.component.voice_selector import install_voice_selector
+        install_voice_selector(
+            winobj.hecheng_role,
+            tts_type_getter=lambda: winobj.tts_type.currentIndex(),
+            language_getter=lambda: translator.get_code(
+                show_text=winobj.hecheng_language.currentText()
+            ) or "",
+        )
     _bind()
     return winobj

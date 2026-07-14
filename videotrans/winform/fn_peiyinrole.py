@@ -288,6 +288,8 @@ def openwin():
             is_allow_lang_res = tts.is_allow_lang(langcode=code, tts_type=type)
             winobj.loglabel.setText(is_allow_lang_res if is_allow_lang_res is not True else '')
             if tts.is_input_api(tts_type=type) is not True:
+                winobj.hecheng_role.clear()
+                winobj.hecheng_role.addItems(['No'])
                 return False
 
         role_list = tools.role_menu(type, code)
@@ -389,5 +391,15 @@ def openwin():
         winobj.voice_autorate.toggled.connect(check_voice_autorate)
         tts_type_change(last_tts_type)
         winobj.hecheng_role.setCurrentIndex(int(params.get("dubb_role", 0)))
+        from videotrans.component.voice_selector import install_voice_selector
+        selector_args = {
+            "tts_type_getter": lambda: winobj.tts_type.currentIndex(),
+            "language_getter": lambda: translator.get_code(
+                show_text=winobj.hecheng_language.currentText()
+            ) or "",
+        }
+        install_voice_selector(winobj.hecheng_role, **selector_args)
+        install_voice_selector(winobj.tmp_rolelist, **selector_args)
+        install_voice_selector(winobj.tmp_rolelist2, **selector_args)
 
     QTimer.singleShot(10, _bind)

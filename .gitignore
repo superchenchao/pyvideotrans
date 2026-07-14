@@ -60,6 +60,7 @@ ytdarwin
 __pycache__
 pretrained_models
 runtime
+.codex_subtitle_removal_test/
 
 # Arquivos do sistema
 .DS_Store

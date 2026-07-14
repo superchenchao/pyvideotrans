@@ -247,7 +247,29 @@ class BaseCon:
                 **kwargs
             )
             # return Tuple[bool or result , None or error]
-            data,err = future.result()
+            result_sidecar = Path(f'{logs_file}.result.json')
+            recovered_from_sidecar = False
+            wait_started = time.monotonic()
+            while True:
+                if result_sidecar.is_file():
+                    try:
+                        payload = json.loads(result_sidecar.read_text(encoding='utf-8'))
+                        data, err = payload.get('data'), payload.get('error')
+                        recovered_from_sidecar = True
+                        break
+                    except (OSError, UnicodeError, json.JSONDecodeError):
+                        # The writer uses an atomic replace, but antivirus/indexers can briefly lock the file.
+                        pass
+                if future.done():
+                    data, err = future.result()
+                    break
+                if time.monotonic() - wait_started > 7200:
+                    raise TimeoutError(f'{title} timed out after 2 hours')
+                time.sleep(0.2)
+
+            if recovered_from_sidecar and is_cuda:
+                logger.warning(f'[{title}] 已从进程结果文件接收数据，重建 GPU 进程池')
+                GlobalProcessManager.reset_gpu_executor()
             logger.debug(f'[新进程任务 {title}], return')
             status_dict['is_end']=True
             if err or not data:
@@ -272,5 +294,6 @@ class BaseCon:
                 logger.debug(f'[新进程任务 结束:{title}]，耗时{time.time()-_st}s')
                 if logs_file:
                     Path(logs_file).unlink(missing_ok=True)
+                    Path(f'{logs_file}.result.json').unlink(missing_ok=True)
             except OSError:
                 pass

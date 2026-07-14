@@ -9,6 +9,33 @@ from videotrans.configure.excepts import NO_RETRY_EXCEPT, StopTask
 from videotrans.tts._base import BaseTTS
 from videotrans.util import tools
 
+
+def create_speech_config(subscription: str, region_or_endpoint: str):
+    """Create an Azure Speech config from either a region name or endpoint URL."""
+    subscription = subscription.strip()
+    region_or_endpoint = region_or_endpoint.strip()
+    if region_or_endpoint.lower().startswith(("http://", "https://")):
+        return speechsdk.SpeechConfig(
+            subscription=subscription,
+            endpoint=region_or_endpoint,
+        )
+    return speechsdk.SpeechConfig(
+        subscription=subscription,
+        region=region_or_endpoint,
+    )
+
+
+def resolve_voice_name(language: str, role_name: str) -> str:
+    """Resolve a display name while preserving an already valid Azure voice ID."""
+    resolved_name = tools.get_azure_rolelist(language.split('-')[0], role_name)
+    if not resolved_name:
+        resolved_name = tools.get_edge_rolelist(
+            role_name=role_name,
+            locale=language,
+        )
+    return resolved_name or role_name
+
+
 @dataclass
 class AzureTTS(BaseTTS):
 
@@ -16,9 +43,9 @@ class AzureTTS(BaseTTS):
     def _run(self, data_item: Union[Dict, List, None], idx: int = -1) -> Union[str, None]:
         try:
             filename = data_item['filename'] + f"-generate.wav"
-            speech_config = speechsdk.SpeechConfig(
-                subscription=params.get('azure_speech_key',''),
-                region=params.get('azure_speech_region','')
+            speech_config = create_speech_config(
+                params.get('azure_speech_key', ''),
+                params.get('azure_speech_region', ''),
             )
             speech_config.set_speech_synthesis_output_format(
                 speechsdk.SpeechSynthesisOutputFormat.Riff48Khz16BitMonoPcm)
@@ -26,13 +53,14 @@ class AzureTTS(BaseTTS):
             audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True, filename=filename)
             speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
             text_xml = f"<prosody rate='{self.rate}' pitch='{self.pitch}' volume='{self.volume}'>{data_item['text']}</prosody>"
+            voice_name = resolve_voice_name(self.language, data_item['role'])
             ssml = """<speak version='1.0' xml:lang='{}' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>
                                     <voice name='{}'>
                                         <prosody rate="{}" pitch='{}'  volume='{}'>
                                         {}
                                         </prosody>
                                     </voice>
-                                    </speak>""".format(self.language, tools.get_azure_rolelist(self.language.split('-')[0],data_item['role']), self.rate, self.pitch,
+                                    </speak>""".format(self.language, voice_name, self.rate, self.pitch,
                                                        self.volume,
                                                        text_xml)
             logger.debug(f'{ssml=}')

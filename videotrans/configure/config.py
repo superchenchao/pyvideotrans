@@ -637,6 +637,7 @@ class AppParams:
             "video_autorate": False,
             "align_sub_audio": True,
             "voice_role": "No",
+            "voice_favorites": {},
             "voice_rate": "0",
             "deepl_authkey": "",
             "deepl_api": "",

@@ -738,6 +738,8 @@ class Ui_MainWindow(object):
         self.actionElevenlabs_key.setObjectName("actionElevenlabs_key")
         self.actionwatermark = QtGui.QAction(MainWindow)
         self.actionwatermark.setObjectName("actionwatermark")
+        self.action_subtitle_removal = QtGui.QAction(MainWindow)
+        self.action_subtitle_removal.setObjectName("action_subtitle_removal")
         self.actionsepar = QtGui.QAction(MainWindow)
         self.actionsepar.setObjectName("actionsepar")
         self.actionsetini = QtGui.QAction(MainWindow)
@@ -872,6 +874,8 @@ class Ui_MainWindow(object):
         self.menu.addAction(self.action_clipvideo)
         self.menu.addSeparator()
         self.menu.addAction(self.actionwatermark)
+        self.menu.addSeparator()
+        self.menu.addAction(self.action_subtitle_removal)
         self.menu.addSeparator()
         self.menu.addAction(self.action_realtime_stt)
         self.menu.addSeparator()
@@ -1165,6 +1169,8 @@ class Ui_MainWindow(object):
         self.actionElevenlabs_key.setText("ElevenLabs.io")
 
         self.actionwatermark.setText(tr("Add watermark to video"))
+        self.action_subtitle_removal.setText(tr("Remove burned-in subtitles"))
+        self.action_subtitle_removal.setToolTip(tr("Remove burned-in subtitles"))
         self.actionsepar.setText(tr("Vocal & instrument Separate"))
         self.actionsetini.setText(tr("Options"))
 

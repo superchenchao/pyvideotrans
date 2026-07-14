@@ -160,7 +160,14 @@ class WinAction(WinActionBase):
 
     # tts类型改变时
     def tts_type_change(self, type):
-        if tts.is_input_api(tts_type=type) is not True:
+        api_ready = tts.is_input_api(tts_type=type)
+        # Azure's voice catalog is local, so it can be refreshed while the
+        # credential dialog is open. Otherwise the previous channel's voices
+        # remain visible until the user switches channels again.
+        if api_ready is not True and type != tts.AZURE_TTS:
+            self.main.voice_role.clear()
+            self.main.current_rolelist = ["No"]
+            self.main.voice_role.addItems(self.main.current_rolelist)
             return
 
         lang = translator.get_code(show_text=self.main.target_language.currentText())
