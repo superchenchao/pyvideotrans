@@ -1588,6 +1588,32 @@ class TransCreate(BaseTask):
             settings.get('cjk_len', 15) if self.cfg.target_language_code[:2] in contants.CJK_LANG else
             settings.get('other_len', 60))
         target_sub_list = tools.get_subtitle_from_srt(self.cfg.target_sub)
+        video_width = int(self.video_info.get('width') or 0)
+        video_height = int(self.video_info.get('height') or 0)
+        use_video_aware_hard_subtitles = (
+            self.cfg.subtitle_type in [1, 3] and video_width > 0 and video_height > 0
+        )
+        ass_style = tools.get_ass_style_config() if use_video_aware_hard_subtitles else {}
+        dialogue_font_scales = []
+
+        def layout_for_output(
+                text: str,
+                language: str,
+                max_chars: int,
+                *,
+                bottom_style: bool = False,
+        ) -> tuple[str, float]:
+            if use_video_aware_hard_subtitles:
+                return tools.layout_subtitle_for_video(
+                    text,
+                    language=language,
+                    video_width=video_width,
+                    video_height=video_height,
+                    max_chars=max_chars,
+                    bottom_style=bottom_style,
+                    style=ass_style,
+                )
+            return tools.simple_wrap(text, max_chars, language), 1.0
 
         srt_string = ""
         # 双硬字幕时的两种语言字幕分割符，用于定义不同样式
@@ -1605,15 +1631,28 @@ class TransCreate(BaseTask):
             # 双语字幕
             # 判断 双硬字幕 and 存在 ass.json 文件 and  (Bottom_Fontsize != Fontsize or PrimaryColour!=Bottom_PrimaryColour) 需要 对双语字幕的第2行设置不同颜色和尺寸
             _join_flag = self._get_join_flag()
+            target_uses_bottom_style = bool(_join_flag) and self.cfg.output_srt == 1
+            source_uses_bottom_style = bool(_join_flag) and self.cfg.output_srt != 1
 
             for i, it in enumerate(target_sub_list):
                 # 换行
-                _text = tools.simple_wrap(it['text'].strip(), maxlen, self.cfg.target_language_code)
+                _text, target_font_scale = layout_for_output(
+                    it['text'].strip(),
+                    self.cfg.target_language_code,
+                    maxlen,
+                    bottom_style=target_uses_bottom_style,
+                )
                 srt_string += f"{it['line']}\n{it['time']}\n"
                 if source_length > 0 and i < source_length:
-                    _text_source = tools.simple_wrap(source_sub_list[i]['text'], source_maxlen,
-                                                     self.cfg.source_language_code)
+                    _text_source, source_font_scale = layout_for_output(
+                        source_sub_list[i]['text'],
+                        self.cfg.source_language_code,
+                        source_maxlen,
+                        bottom_style=source_uses_bottom_style,
+                    )
+                    target_font_scale = min(target_font_scale, source_font_scale)
                     _text = f'{_text_source}\n{_join_flag}{_text}' if self.cfg.output_srt == 1 else f'{_text}\n{_join_flag}{_text_source}'
+                dialogue_font_scales.append(target_font_scale)
                 srt_string += f"{_text}\n\n"
             srt_string = srt_string.strip()
             process_end_subtitle = f"{self.cfg.cache_folder}/shuang.srt"
@@ -1623,7 +1662,8 @@ class TransCreate(BaseTask):
         else:
             # 单字幕，需处理字符数换行
             for i, it in enumerate(target_sub_list):
-                tmp = tools.simple_wrap(it['text'].strip(), maxlen, self.cfg.target_language_code)
+                tmp, font_scale = layout_for_output(it['text'].strip(), self.cfg.target_language_code, maxlen)
+                dialogue_font_scales.append(font_scale)
                 srt_string += f"{it['line']}\n{it['time']}\n{tmp.strip()}\n\n"
             with Path(process_end_subtitle).open('w', encoding='utf-8') as f:
                 f.write(srt_string)
@@ -1637,7 +1677,12 @@ class TransCreate(BaseTask):
             return os.path.basename(process_end_subtitle), subtitle_langcode
 
         # 硬字幕转为ass格式 并设置样式
-        process_end_subtitle_ass = tools.set_ass_font(process_end_subtitle)
+        process_end_subtitle_ass = tools.set_ass_font(
+            process_end_subtitle,
+            video_width=video_width,
+            video_height=video_height,
+            dialogue_font_scales=dialogue_font_scales,
+        )
         basename = os.path.basename(process_end_subtitle_ass)
         return basename, subtitle_langcode
 

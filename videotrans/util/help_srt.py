@@ -1,4 +1,4 @@
-import os, json, re
+import os, json, math, re, unicodedata
 from datetime import timedelta
 from typing import List, Union
 from videotrans.configure.config import ROOT_DIR, tr, logger
@@ -254,7 +254,57 @@ def get_srt_from_list(srt_list: List[SrtItem]) -> str:
     return txt
 
 
-def set_ass_font(srtfile: str) -> str:
+ASS_DEFAULT_PLAYRES_X = 384
+ASS_DEFAULT_PLAYRES_Y = 288
+ASS_SAFE_WIDTH_RATIO = 0.90
+ASS_MAX_AUTO_LINES = 3
+ASS_MIN_FONT_SCALE = 0.60
+
+
+def _format_ass_number(value: float) -> str:
+    if abs(value - round(value)) < 0.001:
+        return str(int(round(value)))
+    return f"{value:.2f}".rstrip('0').rstrip('.')
+
+
+def _load_ass_style() -> dict:
+    json_file = f'{ROOT_DIR}/videotrans/ass.json'
+    if not os.path.exists(json_file):
+        return {}
+    try:
+        with open(json_file, 'r', encoding='utf-8-sig') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.exception(f"[set_ass_font] 错误：无法读取或解析 JSON 文件 {json_file}: {e}", exc_info=True)
+        return {}
+
+
+def get_ass_style_config() -> dict:
+    """读取一次当前硬字幕样式，供同一批字幕复用。"""
+    return _load_ass_style()
+
+
+def _normalize_ass_script_info(content: str, *, width: int, height: int) -> str:
+    content = re.sub(r'(?im)^PlayResX:\s*\d+(?:\.\d+)?\s*$', f'PlayResX: {width}', content)
+    content = re.sub(r'(?im)^PlayResY:\s*\d+(?:\.\d+)?\s*$', f'PlayResY: {height}', content)
+    if not re.search(r'(?im)^PlayResX:', content):
+        content = re.sub(r'(?im)^(ScriptType:[^\r\n]*\r?\n)', rf'\1PlayResX: {width}\n', content, count=1)
+    if not re.search(r'(?im)^PlayResY:', content):
+        content = re.sub(r'(?im)^(PlayResX:[^\r\n]*\r?\n)', rf'\1PlayResY: {height}\n', content, count=1)
+    if re.search(r'(?im)^WrapStyle:', content):
+        content = re.sub(r'(?im)^WrapStyle:\s*\d+\s*$', 'WrapStyle: 0', content)
+    else:
+        content = re.sub(r'(?im)^(PlayResY:[^\r\n]*\r?\n)', r'\1WrapStyle: 0\n', content, count=1)
+    return content
+
+
+def set_ass_font(
+        srtfile: str,
+        *,
+        video_width: int | None = None,
+        video_height: int | None = None,
+        dialogue_font_scales: list[float] | None = None,
+) -> str:
     from . import help_ffmpeg
     """
     将 SRT 转换为 ASS，并自定义样式：
@@ -280,25 +330,39 @@ def set_ass_font(srtfile: str) -> str:
     ass_file_path = f'{srtfile[:-3]}ass'
     help_ffmpeg.runffmpeg(['-y', '-i', edit_srt, ass_file_path])
 
-    # ---------- 2. 读取 JSON 样式配置 ----------
-    JSON_FILE = f'{ROOT_DIR}/videotrans/ass.json'
-    if not os.path.exists(JSON_FILE):
-        logger.debug(f"[set_ass_font] 未修改硬字幕样式，跳过样式替换")
+    style = _load_ass_style()
+    if not style and not (video_width and video_height):
+        logger.debug("[set_ass_font] 未自定义硬字幕样式且未提供视频尺寸，保持 FFmpeg 默认 ASS")
         return ass_file_path
 
     try:
-        with open(JSON_FILE, 'r', encoding='utf-8-sig') as f:
-            style = json.load(f)
+        with open(ass_file_path, 'r', encoding='utf-8-sig') as f:
+            content = f.read()
     except Exception as e:
-        logger.exception(f"[set_ass_font] 错误：无法读取或解析 JSON 文件 {JSON_FILE}: {e}", exc_info=True)
+        logger.exception(f"[set_ass_font] 错误：无法读取 ASS 文件: {e}", exc_info=True)
         return ass_file_path
 
-    # ---------- 3. 构建两个 Style 行：Default（主样式）和 Bottom（副样式）----------
-    # 主样式属性（保持原有逻辑）
+    scale_x = 1.0
+    scale_y = 1.0
+    if video_width and video_height and video_width > 0 and video_height > 0:
+        scale_x = video_width / ASS_DEFAULT_PLAYRES_X
+        scale_y = video_height / ASS_DEFAULT_PLAYRES_Y
+        content = _normalize_ass_script_info(content, width=video_width, height=video_height)
+        logger.debug(f"[set_ass_font] ASS 画布已对齐视频尺寸：{video_width}x{video_height}")
+
+    def scaled(key: str, default: float, scale: float) -> str:
+        try:
+            value = float(style.get(key, default))
+        except (TypeError, ValueError):
+            value = default
+        return _format_ass_number(value * scale)
+
+    # 字号和纵向样式按高度缩放，左右边距按宽度缩放。
+    # 这样改写 PlayRes 后视觉尺寸保持不变，但 libass 能在真实竖屏宽度内正确换行。
     default_style = (
         f"Style: {style.get('Name', 'Default')},"
         f"{style.get('Fontname', 'Arial')},"
-        f"{style.get('Fontsize', 16)},"
+        f"{scaled('Fontsize', 16, scale_y)},"
         f"{style.get('PrimaryColour', '&H00FFFFFF&')},"
         f"{style.get('SecondaryColour', '&H00FFFFFF&')},"
         f"{style.get('OutlineColour', '&H00000000&')},"
@@ -309,20 +373,20 @@ def set_ass_font(srtfile: str) -> str:
         f"{style.get('StrikeOut', 0)},"
         f"{style.get('ScaleX', 100)},"
         f"{style.get('ScaleY', 100)},"
-        f"{style.get('Spacing', 0)},"
+        f"{scaled('Spacing', 0, scale_x)},"
         f"{style.get('Angle', 0)},"
         f"{style.get('BorderStyle', 1)},"
-        f"{style.get('Outline', 1)},"
-        f"{style.get('Shadow', 0)},"
+        f"{scaled('Outline', 1, scale_y)},"
+        f"{scaled('Shadow', 0, scale_y)},"
         f"{style.get('Alignment', 2)},"
-        f"{style.get('MarginL', 10)},"
-        f"{style.get('MarginR', 10)},"
-        f"{style.get('MarginV', 10)},"
+        f"{scaled('MarginL', 10, scale_x)},"
+        f"{scaled('MarginR', 10, scale_x)},"
+        f"{scaled('MarginV', 10, scale_y)},"
         f"{style.get('Encoding', 1)}\n"
     )
 
     # 副样式：继承主样式，但 Fontsize 和 PrimaryColour 使用底部专用值
-    bottom_fontsize = style.get('Bottom_Fontsize', 14)  # 默认 14
+    bottom_fontsize = scaled('Bottom_Fontsize', style.get('Fontsize', 16), scale_y)
     bottom_color = style.get('Bottom_PrimaryColour', '&H0000FFFF&')  # 默认黄色
 
     bottom_bold = style.get('Bottom_Bold', 0)  # 粗体
@@ -346,27 +410,19 @@ def set_ass_font(srtfile: str) -> str:
         f"{style.get('StrikeOut', 0)},"
         f"{style.get('ScaleX', 100)},"
         f"{style.get('ScaleY', 100)},"
-        f"{style.get('Spacing', 0)},"
+        f"{scaled('Spacing', 0, scale_x)},"
         f"{style.get('Angle', 0)},"
         f"{style.get('BorderStyle', 1)},"
-        f"{style.get('Outline', 1)},"
-        f"{style.get('Shadow', 0)},"
+        f"{scaled('Outline', 1, scale_y)},"
+        f"{scaled('Shadow', 0, scale_y)},"
         f"{style.get('Alignment', 2)},"
-        f"{style.get('MarginL', 10)},"
-        f"{style.get('MarginR', 10)},"
-        f"{style.get('MarginV', 10)},"
+        f"{scaled('MarginL', 10, scale_x)},"
+        f"{scaled('MarginR', 10, scale_x)},"
+        f"{scaled('MarginV', 10, scale_y)},"
         f"{style.get('Encoding', 1)}\n"
     )
 
-    # ---------- 4. 读取 ASS 文件并替换 [V4+ Styles] 区块 ----------
-    try:
-        with open(ass_file_path, 'r', encoding='utf-8-sig') as f:
-            content = f.read()
-    except Exception as e:
-        logger.exception(f"[set_ass_font] 错误：无法读取 ASS 文件: {e}", exc_info=True)
-        return ass_file_path
-
-    # 匹配 [V4+ Styles] 区块，保留 Format 行，替换为两个 Style 行
+    # 匹配 [V4+ Styles] 区块，保留 Format 行，替换为两个 Style 行。
     pattern = r'(^\[V4\+ Styles\]\s*\r?\n' \
               r'Format:[^\r\n]*\r?\n' \
               r'(?:Style:[^\r\n]*\r?\n)*)' \
@@ -390,10 +446,11 @@ def set_ass_font(srtfile: str) -> str:
         logger.exception(f"[set_ass_font] 错误：正则替换样式失败: {e}", exc_info=True)
         return ass_file_path
 
-    # ---------- 5. 处理 [Events] 中的每一条 Dialogue，对包含 '###' 的行应用副样式 ----------
+    # 处理 [Events] 中的每一条 Dialogue，对包含 '###' 的行应用副样式。
     lines = new_content.splitlines(keepends=True)
     processed_lines = []
     inside_events = False
+    dialogue_index = 0
     dialogue_pattern = re.compile(r'^(Dialogue:.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,.*?,)(.*)$')
 
     for line in lines:
@@ -423,8 +480,18 @@ def set_ass_font(srtfile: str) -> str:
                     if right:
                         # 使用 {\rBottom} 切换到副样式，结束后用 {\r} 恢复为 Default
                         new_text += f'{{\\rBottom}}{right}{{\\r}}'
-                    # 替换原行
-                    line = f'{prefix}{new_text}\n'
+                    text = new_text
+
+                font_scale = 1.0
+                if dialogue_font_scales and dialogue_index < len(dialogue_font_scales):
+                    font_scale = max(ASS_MIN_FONT_SCALE, min(1.0, float(dialogue_font_scales[dialogue_index])))
+                if font_scale < 0.999:
+                    percent = max(1, round(font_scale * 100))
+                    scale_tag = f'{{\\fscx{percent}\\fscy{percent}}}'
+                    text = scale_tag + text.replace(r'\N', r'\N' + scale_tag)
+                    text = text.replace(r'{\rBottom}', r'{\rBottom}' + scale_tag)
+                line = f'{prefix}{text}\n'
+                dialogue_index += 1
             else:
                 # 非标准格式，保留原样
                 pass
@@ -438,6 +505,184 @@ def set_ass_font(srtfile: str) -> str:
         logger.exception(f"[set_ass_font] 错误：无法写入 ASS 文件: {e}", exc_info=True)
 
     return ass_file_path
+
+
+_CJK_LINE_START_FORBIDDEN = set('、。，．！？!?；;：:）)]】》」』…')
+_CJK_LINE_END_FORBIDDEN = set('（([【《「『')
+
+
+def _estimated_ass_char_width(char: str, font_size: float) -> float:
+    if char.isspace():
+        return font_size * 0.30
+    if unicodedata.east_asian_width(char) in {'W', 'F', 'A'}:
+        return font_size * 0.82
+    if char.isupper():
+        return font_size * 0.58
+    if char.isalnum():
+        return font_size * 0.52
+    return font_size * 0.40
+
+
+def _estimated_ass_text_width(text: str, font_size: float) -> float:
+    return sum(_estimated_ass_char_width(char, font_size) for char in text)
+
+
+def _line_fits(text: str, *, max_width: float, max_chars: int, font_size: float) -> bool:
+    return (
+        (not max_chars or len(text) <= max_chars)
+        and _estimated_ass_text_width(text, font_size) <= max_width
+    )
+
+
+def _best_two_line_split(text: str, *, max_width: float, max_chars: int, font_size: float) -> str | None:
+    candidates = []
+    for index in range(1, len(text)):
+        left = text[:index].rstrip()
+        right = text[index:].lstrip()
+        if not left or not right:
+            continue
+        if left[-1] in _CJK_LINE_END_FORBIDDEN or right[0] in _CJK_LINE_START_FORBIDDEN:
+            continue
+        if not _line_fits(left, max_width=max_width, max_chars=max_chars, font_size=font_size):
+            continue
+        if not _line_fits(right, max_width=max_width, max_chars=max_chars, font_size=font_size):
+            continue
+        left_width = _estimated_ass_text_width(left, font_size)
+        right_width = _estimated_ass_text_width(right, font_size)
+        punctuation_bonus = -font_size * 0.25 if left[-1] in '，。！？,.!?；;：:' else 0
+        splits_ascii_word = (
+            left[-1].isascii()
+            and right[0].isascii()
+            and left[-1].isalnum()
+            and right[0].isalnum()
+            and any(char.isspace() for char in text)
+        )
+        word_break_penalty = font_size * 10 if splits_ascii_word else 0
+        candidates.append((abs(left_width - right_width) + punctuation_bonus + word_break_penalty, index, left, right))
+    if not candidates:
+        return None
+    _, _, left, right = min(candidates, key=lambda item: (item[0], item[1]))
+    return f'{left}\n{right}'
+
+
+def _greedy_visual_wrap(text: str, *, max_width: float, max_chars: int, font_size: float) -> str:
+    lines = []
+    remaining = text.strip()
+    while remaining:
+        if _line_fits(remaining, max_width=max_width, max_chars=max_chars, font_size=font_size):
+            lines.append(remaining)
+            break
+        last_valid = 0
+        preferred = 0
+        for index in range(1, len(remaining) + 1):
+            candidate = remaining[:index].rstrip()
+            if not _line_fits(candidate, max_width=max_width, max_chars=max_chars, font_size=font_size):
+                break
+            if candidate:
+                last_valid = index
+                if remaining[index - 1].isspace() or candidate[-1] in '，。！？,.!?；;：:':
+                    preferred = index
+        split_at = preferred or last_valid or 1
+        while split_at > 1 and remaining[split_at] in _CJK_LINE_START_FORBIDDEN:
+            split_at -= 1
+        line = remaining[:split_at].strip()
+        if not line:
+            line = remaining[:1]
+            split_at = 1
+        lines.append(line)
+        remaining = remaining[split_at:].lstrip()
+    return '\n'.join(lines)
+
+
+def wrap_subtitle_for_video(
+        text: str,
+        *,
+        language: str,
+        video_width: int,
+        video_height: int,
+        max_chars: int = 0,
+        bottom_style: bool = False,
+        style: dict | None = None,
+) -> str:
+    """按最终视频安全宽度为硬字幕换行，不修改源字幕文件。"""
+    return layout_subtitle_for_video(
+        text,
+        language=language,
+        video_width=video_width,
+        video_height=video_height,
+        max_chars=max_chars,
+        bottom_style=bottom_style,
+        style=style,
+    )[0]
+
+
+def layout_subtitle_for_video(
+        text: str,
+        *,
+        language: str,
+        video_width: int,
+        video_height: int,
+        max_chars: int = 0,
+        bottom_style: bool = False,
+        style: dict | None = None,
+) -> tuple[str, float]:
+    """返回安全换行文本和仅作用于当前字幕事件的字号缩放比例。"""
+    text = re.sub(r"\r?(\n|\\n)", ' ', text, flags=re.I).strip()
+    if not text or video_width <= 0 or video_height <= 0:
+        return text, 1.0
+
+    if style is None:
+        style = _load_ass_style()
+    font_key = 'Bottom_Fontsize' if bottom_style else 'Fontsize'
+    try:
+        base_font_size = float(style.get(font_key, style.get('Fontsize', 16)))
+        margin_l = float(style.get('MarginL', 10))
+        margin_r = float(style.get('MarginR', 10))
+    except (TypeError, ValueError):
+        base_font_size, margin_l, margin_r = 16.0, 10.0, 10.0
+
+    font_size = base_font_size * video_height / ASS_DEFAULT_PLAYRES_Y
+    margin_width = (margin_l + margin_r) * video_width / ASS_DEFAULT_PLAYRES_X
+    safe_width = min(video_width * ASS_SAFE_WIDTH_RATIO, video_width - margin_width)
+    safe_width = max(safe_width, video_width * 0.50)
+
+    max_chars = max(0, int(max_chars))
+    if _line_fits(text, max_width=safe_width, max_chars=max_chars, font_size=font_size):
+        return text, 1.0
+
+    two_lines = _best_two_line_split(
+        text,
+        max_width=safe_width,
+        max_chars=max_chars,
+        font_size=font_size,
+    )
+    if two_lines:
+        return two_lines, 1.0
+
+    wrapped = _greedy_visual_wrap(
+        text,
+        max_width=safe_width,
+        max_chars=max_chars,
+        font_size=font_size,
+    )
+    line_count = wrapped.count('\n') + 1
+    min_lines_by_chars = math.ceil(len(text) / max_chars) if max_chars else 1
+    if line_count <= ASS_MAX_AUTO_LINES or min_lines_by_chars > ASS_MAX_AUTO_LINES:
+        return wrapped, 1.0
+
+    total_width = _estimated_ass_text_width(text, font_size)
+    font_scale = max(
+        ASS_MIN_FONT_SCALE,
+        min(1.0, safe_width * ASS_MAX_AUTO_LINES / max(total_width, 1.0)),
+    )
+    if font_scale >= 0.999:
+        return wrapped, 1.0
+    return _greedy_visual_wrap(
+        text,
+        max_width=safe_width,
+        max_chars=max_chars,
+        font_size=font_size * font_scale,
+    ), font_scale
 
 
 # 简单换行，不保留换行符，用于视频翻译字幕嵌入
