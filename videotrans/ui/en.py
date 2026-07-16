@@ -136,6 +136,13 @@ class Ui_MainWindow(object):
         self.recogn2pass.setToolTip(tr("Secondary speech recognition of dubbing files"))
         self.recogn2pass.setText(tr("STT again"))
 
+        self.remove_burned_subtitles = QtWidgets.QCheckBox()
+        self.remove_burned_subtitles.setObjectName("remove_burned_subtitles")
+        self.remove_burned_subtitles.setText(tr("Remove original video subtitles"))
+        self.remove_burned_subtitles.setToolTip(
+            tr("Select the original subtitle area before starting and remove it from the final video"))
+        self.remove_burned_subtitles.setChecked(settings.get("remove_burned_subtitles", True))
+
         self.horizontalLayout_4.addWidget(self.reglabel)
         self.horizontalLayout_4.addWidget(self.recogn_type)
         self.horizontalLayout_4.addWidget(self.model_name_help)
@@ -143,6 +150,7 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout_4.addWidget(self.rephrase)
         self.horizontalLayout_4.addWidget(self.recogn2pass)
+        self.horizontalLayout_4.addWidget(self.remove_burned_subtitles)
         self.horizontalLayout_4.addStretch()
 
         self.verticalLayout_3.addLayout(self.horizontalLayout_4)

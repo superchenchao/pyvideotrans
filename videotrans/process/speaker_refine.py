@@ -1,7 +1,12 @@
 from collections import Counter, defaultdict
+import threading
 
 import numpy as np
 import soundfile as sf
+
+
+_VERIFIER_CACHE = {}
+_VERIFIER_LOCK = threading.RLock()
 
 
 def _normalize_segments(diarizations):
@@ -68,30 +73,34 @@ def _load_embeddings(audio_file, diagnostics, indices, model_path, min_audio_ms)
         audio = audio[:, 0]
     min_samples = round(min_audio_ms * sample_rate / 1000)
     ordered_indices = sorted(indices)
-    from modelscope.pipelines import pipeline
-
-    verifier = pipeline(
-        "speaker-verification",
-        str(model_path),
-        device="cpu",
-        disable_update=True,
-        disable_progress_bar=True,
-        disable_log=True,
-    )
-    embedding_batches = []
-    for offset in range(0, len(ordered_indices), 64):
-        batch_indices = ordered_indices[offset:offset + 64]
-        arrays = []
-        for index in batch_indices:
-            item = diagnostics[index]
-            start = max(0, round(item["start"] * sample_rate / 1000))
-            end = min(len(audio), round(item["end"] * sample_rate / 1000))
-            samples = audio[start:end]
-            if len(samples) < min_samples:
-                samples = np.pad(samples, (0, min_samples - len(samples)))
-            arrays.append(samples)
-        result = verifier(arrays, output_emb=True)
-        embedding_batches.append(np.asarray(result["embs"], dtype=np.float32))
+    with _VERIFIER_LOCK:
+        cache_key = str(model_path)
+        verifier = _VERIFIER_CACHE.get(cache_key)
+        if verifier is None:
+            from modelscope.pipelines import pipeline
+            verifier = pipeline(
+                "speaker-verification",
+                cache_key,
+                device="cpu",
+                disable_update=True,
+                disable_progress_bar=True,
+                disable_log=True,
+            )
+            _VERIFIER_CACHE[cache_key] = verifier
+        embedding_batches = []
+        for offset in range(0, len(ordered_indices), 64):
+            batch_indices = ordered_indices[offset:offset + 64]
+            arrays = []
+            for index in batch_indices:
+                item = diagnostics[index]
+                start = max(0, round(item["start"] * sample_rate / 1000))
+                end = min(len(audio), round(item["end"] * sample_rate / 1000))
+                samples = audio[start:end]
+                if len(samples) < min_samples:
+                    samples = np.pad(samples, (0, min_samples - len(samples)))
+                arrays.append(samples)
+            result = verifier(arrays, output_emb=True)
+            embedding_batches.append(np.asarray(result["embs"], dtype=np.float32))
     embeddings = np.concatenate(embedding_batches, axis=0)
     embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True) + 1e-9
     return dict(zip(ordered_indices, embeddings))

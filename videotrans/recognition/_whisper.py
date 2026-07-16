@@ -92,6 +92,7 @@ class FasterAll(BaseRecogn):
             "condition_on_previous_text": settings.get('condition_on_previous_text', False),
             "speech_timestamps": self.speech_timestamps_file,
             "audio_file": self.audio_file,
+            "refine_audio_file": self.refine_audio_file,
             "local_dir": self.local_dir,
             "compute_type": settings.get('cuda_com_type', 'int8'),
             "jianfan": self.jianfan,

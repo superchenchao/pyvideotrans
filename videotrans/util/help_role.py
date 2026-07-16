@@ -165,12 +165,128 @@ def get_edge_rolelist(role_name=None, locale=None):
     return voice_list
 
 
+@lru_cache(maxsize=1)
+def _get_static_azure_rolelist():
+    voice_file = Path(ROOT_DIR) / "videotrans" / "voicejson" / "azure_voice_list.json"
+    try:
+        return json.loads(voice_file.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _azure_voice_list_url(region_or_endpoint):
+    value = str(region_or_endpoint or "").strip().rstrip("/")
+    if not value:
+        return ""
+    if not value.lower().startswith(("http://", "https://")):
+        return (
+            f"https://{value.lower()}.tts.speech.microsoft.com/"
+            "cognitiveservices/voices/list"
+        )
+
+    parsed = urlsplit(value)
+    host = (parsed.hostname or "").lower()
+    if host.endswith(".api.cognitive.microsoft.com"):
+        region = host.split(".", 1)[0]
+        return (
+            f"https://{region}.tts.speech.microsoft.com/"
+            "cognitiveservices/voices/list"
+        )
+    base_path = parsed.path.rstrip("/")
+    if base_path.endswith("/cognitiveservices/voices/list"):
+        path = base_path
+    else:
+        path = f"{base_path}/cognitiveservices/voices/list"
+    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
+
+
+@lru_cache(maxsize=4)
+def _get_azure_region_voices(subscription, region_or_endpoint):
+    url = _azure_voice_list_url(region_or_endpoint)
+    if not subscription or not url:
+        return []
+    response = requests.get(
+        url,
+        headers={"Ocp-Apim-Subscription-Key": subscription},
+        timeout=(5, 15),
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, list) else []
+
+
+def _azure_locale_matches(candidate, language):
+    candidate = str(candidate or "").strip().lower().replace("_", "-")
+    language = str(language or "").strip().lower().replace("_", "-")
+    if not candidate or not language:
+        return False
+    if "-" in language:
+        return candidate == language
+    return candidate.split("-", 1)[0] == language
+
+
+def _format_azure_role(voice):
+    display_name = str(voice.get("DisplayName") or "").strip()
+    short_name = str(voice.get("ShortName") or voice.get("Name") or "").strip()
+    gender = str(voice.get("Gender") or "").strip()
+    if not display_name or not short_name:
+        return None, None
+    role = f"{display_name}({gender})" if gender else display_name
+    return role, short_name
+
+
+def _static_azure_roles_for_language(language):
+    voice_list = _get_static_azure_rolelist()
+    language = str(language or "").strip().lower().replace("_", "-")
+    roles = voice_list.get(language) or voice_list.get(language.split("-", 1)[0]) or {}
+    return {"No": "No"} | dict(roles)
+
+
+def get_azure_supported_rolelist(language):
+    """Return regional Azure voices whose primary or secondary locale matches."""
+    subscription = str(params.get("azure_speech_key", "") or "").strip()
+    region_or_endpoint = str(params.get("azure_speech_region", "") or "").strip()
+    if not subscription or not region_or_endpoint:
+        return _static_azure_roles_for_language(language)
+
+    try:
+        voices = _get_azure_region_voices(subscription, region_or_endpoint)
+        roles = {}
+        for voice in voices:
+            if not isinstance(voice, dict):
+                continue
+            secondary_locales = voice.get("SecondaryLocaleList") or []
+            if isinstance(secondary_locales, str):
+                secondary_locales = [secondary_locales]
+            locales = [voice.get("Locale"), *secondary_locales]
+            if not any(_azure_locale_matches(locale, language) for locale in locales):
+                continue
+            role, short_name = _format_azure_role(voice)
+            if role and short_name:
+                roles[role] = short_name
+        if roles:
+            return {"No": "No"} | roles
+    except (requests.RequestException, ValueError, TypeError) as exc:
+        logger.warning(f"Failed to refresh Azure voice list, using local catalog: {exc}")
+    return _static_azure_roles_for_language(language)
+
+
 def get_azure_rolelist(language=None, role_name=None):
-    voice_file = ROOT_DIR + "/videotrans/voicejson/azure_voice_list.json"
-    voice_list = json.loads(Path(voice_file).read_text(encoding='utf-8-sig'))
+    voice_list = _get_static_azure_rolelist()
     # 根据角色显示名字获取真实角色
     if language and role_name:
-        return voice_list.get(language, {}).get(role_name)
+        language_roles = voice_list.get(language, {}) or voice_list.get(
+            str(language).split('-')[0], {})
+        resolved = language_roles.get(role_name)
+        if resolved:
+            return resolved
+        # Multilingual voices can have a different primary locale, so the
+        # selected target language bucket is not sufficient for resolution.
+        for roles in voice_list.values():
+            resolved = roles.get(role_name)
+            if resolved:
+                return resolved
+        return get_azure_supported_rolelist(language).get(role_name)
     if role_name and (not language or language == 'auto'):
         for it in voice_list.values():
             for name, ro in it.items():
@@ -178,9 +294,10 @@ def get_azure_rolelist(language=None, role_name=None):
                     return ro
         return None
     try:
-        for k, it in voice_list.items():
-            it['No'] = 'No'
-            voice_list[k] = {"No": "No"} | it
+        voice_list = {
+            key: {"No": "No"} | dict(roles)
+            for key, roles in voice_list.items()
+        }
     except (OSError, json.JSONDecodeError):
         pass
     return voice_list
@@ -405,9 +522,8 @@ def role_menu(tts_type, langcode=None) -> List:
         _roledict = get_doubao2_rolelist()
     elif tts_type == tts.MINIMAXI_TTS:
         _roledict = get_minimaxi_rolelist()
-    else:
-        # AzureTTS
-        _roledict = get_azure_rolelist()
+    elif tts_type == tts.AZURE_TTS:
+        return list(get_azure_supported_rolelist(langcode).keys())
 
     if not _roledict:
         return ['No']

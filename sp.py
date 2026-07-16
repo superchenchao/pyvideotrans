@@ -24,12 +24,27 @@ AI嘲: 码之烂平生仅见
 
 import os
 import atexit, sys, time
+import subprocess
+from pathlib import Path
+
+
+if sys.platform == "win32" and not getattr(sys, "frozen", False):
+    project_dir = Path(__file__).resolve().parent
+    project_python = project_dir / ".venv" / "Scripts" / "python.exe"
+    project_pythonw = project_dir / ".venv" / "Scripts" / "pythonw.exe"
+    current_python = Path(sys.executable).resolve()
+    project_interpreters = {project_python.resolve(), project_pythonw.resolve()}
+    if project_python.is_file() and current_python not in project_interpreters:
+        launcher = project_pythonw if project_pythonw.is_file() else project_python
+        subprocess.Popen([str(launcher), *sys.argv], cwd=str(project_dir))
+        sys.exit(0)
+
+
 from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QMessageBox
 from PySide6.QtCore import Qt, qInstallMessageHandler, QTimer
 from PySide6.QtGui import QPixmap, QGuiApplication, QIcon
 import argparse
 import tempfile
-from pathlib import Path
 from PySide6.QtCore import QSize, QSettings
 import traceback
 from videotrans import VERSION

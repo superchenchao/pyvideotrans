@@ -1,4 +1,11 @@
 from videotrans.tts._base import BaseTTS
+from videotrans.tts import _base
+
+
+class ReturningErrorTTS(BaseTTS):
+    def _run(self, data_item, idx=-1):
+        self.received_idx = idx
+        return "temporary service failure"
 
 
 class TestBaseTTSCleantts:
@@ -110,3 +117,23 @@ class TestBaseTTSInitFields:
         ]
         btts = BaseTTS(queue_tts=data)
         assert btts.len == 3
+
+
+def test_item_task_passes_index_and_logs_returned_error(monkeypatch):
+    warnings = []
+    monkeypatch.setattr(_base.logger, "warning", warnings.append)
+    item = {
+        "text": "hello world",
+        "line": 18,
+        "role": "TestVoice",
+        "filename": "missing-output.wav",
+    }
+    tts = ReturningErrorTTS(queue_tts=[item])
+
+    error = tts._item_task(item, 4)
+
+    assert error == "temporary service failure"
+    assert tts.received_idx == 4
+    assert "index=5" in warnings[0]
+    assert "line=18" in warnings[0]
+    assert "temporary service failure" in warnings[0]

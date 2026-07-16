@@ -60,8 +60,11 @@ class TransCreate(BaseTask):
     queue_tts: List = field(default_factory=list, repr=False)
     auto_line_roles: Dict = field(default_factory=dict, repr=False)
     clone_ref: str = ""
+    recogn_vocal: str = ""
+    visual_source: str = ""
     cost_duration:float=0.0
     should_recogn2:bool=False
+    series_speaker_registered: bool = field(default=False, repr=False)
 
     def __post_init__(self):
         super().__post_init__()
@@ -179,6 +182,7 @@ class TransCreate(BaseTask):
         self.video_info = tools.get_video_info(self.cfg.name)
         # 视频时长，毫秒
         self.video_time = self.video_info['time']
+        self.visual_source = self.cfg.name
         # 音频时长，毫秒
         audio_stream_len = self.video_info.get('streams_audio', 0)
 
@@ -197,6 +201,9 @@ class TransCreate(BaseTask):
         if self.video_info['video_codec_name'] == 'h264' and self.video_info['color'] == 'yuv420p':
             self.is_copy_video = True
 
+        # OCR/ASR 继续读取原视频，仅最终视觉分支使用消除字幕后的中间视频。
+        self._prepare_clean_visual_source()
+
         # 如果存在字幕文本，则视为原始语言字幕，不再识别
         if self.cfg.subtitles.strip():
             with open(self.cfg.source_sub, 'w', encoding="utf-8", errors="ignore") as f:
@@ -205,8 +212,9 @@ class TransCreate(BaseTask):
                 f.write(txt)
             self.should_recogn = False
 
-        # 判断是否已存在人声文件，只要存在， 即使用此文件作为语音识别原料
+        # 分离后的人声仅用于背景声合成和声音克隆，不作为语音识别原料
         self.cfg.vocal = f"{self.cfg.cache_folder}/vocal.wav"
+        self.recogn_vocal = f"{self.cfg.cache_folder}/recognition-vocal.wav"
         raw_vocal = f"{self.cfg.target_dir}/vocal.wav"
 
         if tools.vail_file(raw_vocal):
@@ -246,28 +254,11 @@ class TransCreate(BaseTask):
                     self.cfg.is_separate = False
                     self.should_separate = False
 
-        if audio_stream_len > 0 and not tools.vail_file(self.cfg.source_wav) and tools.vail_file(self.cfg.vocal):
-            # 如果存在人声文件(可能仅仅分离成功人声，或者单独将其他工具分离出的人声放入目标文件夹)，则使用该文件作为语音识别文件
-            
-            cmd = [
-                "-y",
-                "-i",
-                self.cfg.vocal,
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-c:a",
-                "pcm_s16le",
-                self.cfg.source_wav
-            ]
-            try:
-                logger.debug(f'存在单独的人声文件 vocal.wav, 使用此作为语音识别原始音频')
-                tools.runffmpeg(cmd)
-            except Exception as e:
-                logger.exception(f'将 人声文件 转为 16000 source_wav 时失败 {e}', exc_info=True)
+        # 第一遍使用增强后的人声定位对白，第二遍再回原音轨校正文案
+        if self.cfg.is_separate:
+            self._prepare_recognition_vocal()
 
-        # 如果还不存在原音频 self.cfg.source_wav,说明失败，强制从原视频中提取 
+        # 语音识别始终使用原始音轨；人声分离结果不会覆盖 source_wav
         if audio_stream_len > 0 and not tools.vail_file(self.cfg.source_wav):
             self._split_audio_byraw()
         # 将分离后人声设为语音克隆参考音频
@@ -307,7 +298,7 @@ class TransCreate(BaseTask):
                                         callback=self._process_callback)
                 from videotrans.process.prepare_audio import remove_noise
                 kw = {
-                    "input_file": self.cfg.source_wav if not Path(self.cfg.vocal).exists() else self.cfg.vocal,
+                    "input_file": self.cfg.source_wav,
                     "output_file": _remove_noise_wav,
                     "is_cuda": self.cfg.is_cuda
                 }
@@ -320,11 +311,21 @@ class TransCreate(BaseTask):
                     logger.exception(f'降噪失败，跳过 {e}', exc_info=True)
 
         self.signal(text=tr("Speech Recognition to Word Processing"))
+        recognition_audio = self.cfg.source_wav
+        refine_audio = None
+        if self.cfg.recogn_type == FASTER_WHISPER and tools.vail_file(self.recogn_vocal):
+            recognition_audio = self.recogn_vocal
+            refine_audio = self.cfg.source_wav
+            logger.debug(
+                f'启用双阶段识别：分离人声定位对白，原始音轨校正文案，'
+                f'{recognition_audio=},{refine_audio=}'
+            )
         raw_subtitles = run_recogn(
             recogn_type=self.cfg.recogn_type,
             uuid=self.uuid,
             model_name=self.cfg.model_name,
-            audio_file=self.cfg.source_wav,# 必选 16000 采样
+            audio_file=recognition_audio,
+            refine_audio_file=refine_audio,
             detect_language=self.cfg.detect_language,
             cache_folder=self.cfg.cache_folder,
             is_cuda=self.cfg.is_cuda,
@@ -336,6 +337,7 @@ class TransCreate(BaseTask):
         if not raw_subtitles:
             raise SpeechToTextError(self.cfg.basename + tr('recogn result is empty'))
 
+        raw_subtitles = self._fuse_burned_subtitles(raw_subtitles)
         self._save_srt_target(raw_subtitles, self.cfg.source_sub)
         self.source_srt_list = raw_subtitles
 
@@ -484,9 +486,38 @@ class TransCreate(BaseTask):
 
     def diariz(self):
         _st=time.time()
+        speaker_path = Path(self.cfg.cache_folder + "/speaker.json")
         # 说话人设为1，不进行分离
-        if self._exit() or not self.cfg.enable_diariz or self.max_speakers == 1 or Path(
-                self.cfg.cache_folder + "/speaker.json").exists():
+        if self._exit() or not self.cfg.enable_diariz or self.max_speakers == 1:
+            return
+        expected_speakers = None
+        auto_retry_count = None
+        if self.max_speakers < 1:
+            try:
+                from videotrans.process.series_speakers import (
+                    infer_oversegmentation_speaker_count,
+                    previous_episode_speaker_count,
+                )
+                expected_speakers = previous_episode_speaker_count(
+                    Path(self.cfg.target_dir).parent,
+                    self.cfg.dirname,
+                    Path(self.cfg.name).name.casefold(),
+                    series_videos=self.cfg.series_video_paths,
+                )
+                if speaker_path.is_file():
+                    cached_speakers = json.loads(
+                        speaker_path.read_text(encoding='utf-8')
+                    )
+                    auto_retry_count = infer_oversegmentation_speaker_count(
+                        cached_speakers
+                    )
+            except (OSError, ValueError, TypeError):
+                pass
+        if speaker_path.exists() and not (
+            self.max_speakers < 1
+            and auto_retry_count
+            and (not expected_speakers or len(set(cached_speakers)) != expected_speakers)
+        ):
             return
         # built pyannote reverb ali_CAM
         speaker_type = settings.get('speaker_type', 'built')
@@ -517,10 +548,17 @@ class TransCreate(BaseTask):
                 "input_file": self.cfg.source_wav,
                 "subtitles_file": subtitles_file,
                 "speak_file":self.cfg.cache_folder + "/speaker.json",
-                "num_speakers": self.max_speakers,
+                "num_speakers": (
+                    expected_speakers or auto_retry_count or self.max_speakers
+                ),
                 "is_cuda": self.cfg.is_cuda
             }
-            if speaker_type == 'built':
+            correction_count = expected_speakers or auto_retry_count
+            run_speaker_type = (
+                'ali_CAM'
+                if speaker_type == 'built' and correction_count else speaker_type
+            )
+            if run_speaker_type == 'built':
                 tools.down_file_from_ms(f'{ROOT_DIR}/models/onnx', [
                     "https://www.modelscope.cn/models/himyworld/videotrans/resolve/master/onnx/seg_model.onnx",
                     "https://www.modelscope.cn/models/himyworld/videotrans/resolve/master/onnx/nemo_en_titanet_small.onnx",
@@ -528,15 +566,23 @@ class TransCreate(BaseTask):
                 ], callback=self._process_callback)
                 from videotrans.process.prepare_audio import built_speakers as _run_speakers
                 del kw['is_cuda']
-                kw['num_speakers'] = -1 if self.max_speakers < 1 else self.max_speakers
+                kw['num_speakers'] = (
+                    expected_speakers or auto_retry_count
+                    or (-1 if self.max_speakers < 1 else self.max_speakers)
+                )
                 kw['language'] = self.cfg.detect_language
-            elif speaker_type == 'ali_CAM':
+            elif run_speaker_type == 'ali_CAM':
                 tools.check_and_down_ms(model_id='iic/speech_campplus_speaker-diarization_common',
                                         callback=self._process_callback)
                 from videotrans.process.prepare_audio import cam_speakers as _run_speakers
-            elif speaker_type == 'pyannote':
+                if speaker_type == 'built':
+                    logger.warning(
+                        f'检测到内置模型说话人过切，改用 CAM++ 按 '
+                        f'{correction_count} 个角色重新识别'
+                    )
+            elif run_speaker_type == 'pyannote':
                 from videotrans.process.prepare_audio import pyannote_speakers as _run_speakers
-            elif speaker_type == 'reverb':
+            elif run_speaker_type == 'reverb':
                 from videotrans.process.prepare_audio import reverb_speakers as _run_speakers
             else:
                 logger.error(f'当前所选说话人分离模型不支持:{speaker_type=}')
@@ -551,7 +597,50 @@ class TransCreate(BaseTask):
                 )
 
             _rs = self._new_process(callback=_run_speakers, title=title,
-                                         is_cuda=self.cfg.is_cuda and speaker_type != 'built', kwargs=kw)
+                                         is_cuda=self.cfg.is_cuda and run_speaker_type != 'built', kwargs=kw)
+
+            # “无上限”在短剧上偶尔会把同一人按场景/音色变化切成几十个
+            # spk。只对明显过切结果做一次有界重跑，显式指定人数时不干预。
+            if _rs and self.max_speakers < 1 and not expected_speakers and not auto_retry_count:
+                try:
+                    detected_speakers = json.loads(
+                        speaker_path.read_text(encoding='utf-8')
+                    )
+                    from videotrans.process.series_speakers import (
+                        infer_oversegmentation_speaker_count,
+                    )
+                    retry_count = infer_oversegmentation_speaker_count(
+                        detected_speakers
+                    )
+                    if retry_count:
+                        logger.warning(
+                            f'无上限说话人分离疑似过切:'
+                            f'{len(set(detected_speakers))} 个角色，'
+                            f'自动按 {retry_count} 个角色重新识别'
+                        )
+                        retry_kw = dict(kw)
+                        retry_callback = _run_speakers
+                        retry_run_type = run_speaker_type
+                        if speaker_type == 'built':
+                            tools.check_and_down_ms(
+                                model_id='iic/speech_campplus_speaker-diarization_common',
+                                callback=self._process_callback,
+                            )
+                            from videotrans.process.prepare_audio import (
+                                cam_speakers as retry_callback,
+                            )
+                            retry_kw.pop('language', None)
+                            retry_kw['is_cuda'] = self.cfg.is_cuda
+                            retry_run_type = 'ali_CAM'
+                        retry_kw['num_speakers'] = retry_count
+                        _rs = self._new_process(
+                            callback=retry_callback,
+                            title=title,
+                            is_cuda=self.cfg.is_cuda and retry_run_type != 'built',
+                            kwargs=retry_kw,
+                        )
+                except (OSError, ValueError, TypeError) as retry_error:
+                    logger.warning(f'说话人过切检查失败,保留首次结果:{retry_error}')
 
             if _rs:
                 logger.debug('分离说话人成功完成')
@@ -749,7 +838,7 @@ class TransCreate(BaseTask):
             "-fflags",
             "+genpts",
             "-i",
-            self.cfg.name,
+            self.visual_source,
             "-an",
             "-c:v",
             "copy" if self.is_copy_video else f"libx264"
@@ -770,7 +859,7 @@ class TransCreate(BaseTask):
 
             cmd += [
                 "-i",
-                self.cfg.name,
+                self.visual_source,
                 "-an",
                 "-c:v",
                 vcodec,
@@ -785,15 +874,91 @@ class TransCreate(BaseTask):
                 "-fflags",
                 "+genpts",
                 "-i",
-                self.cfg.name,
+                self.visual_source,
                 "-an",
                 "-c:v",
                 "libx264",
                 _name
             ], noextname=self.uuid, cmd_dir=self.cfg.cache_folder, force_cpu=True)
 
+    def _prepare_clean_visual_source(self):
+        if not self.cfg.remove_burned_subtitles:
+            return
+        if not self.cfg.subtitle_removal_rect:
+            raise VideoTransError("已启用消除原视频字幕，但没有框选字幕区域")
+
+        from videotrans.subtitle_removal import (
+            remove_burned_subtitles,
+            scale_normalized_rect,
+        )
+        try:
+            rect = scale_normalized_rect(
+                self.cfg.subtitle_removal_rect,
+                int(self.video_info["width"]),
+                int(self.video_info["height"]),
+                reference_aspect_ratio=float(self.cfg.subtitle_removal_aspect_ratio or 0.0),
+            )
+        except (TypeError, ValueError) as error:
+            raise VideoTransError(
+                f"视频画面比例与首个视频不一致，无法安全复用字幕区域：{error}"
+            ) from error
+
+        clean_source = f"{self.cfg.cache_folder}/source-without-burned-subtitles.mp4"
+        clean_metadata = Path(f"{clean_source}.json")
+        input_path = Path(self.cfg.name).resolve()
+        try:
+            input_stat = input_path.stat()
+            expected_metadata = {
+                "input_file": input_path.as_posix(),
+                "input_size": input_stat.st_size,
+                "input_mtime_ns": input_stat.st_mtime_ns,
+                "rect": list(rect),
+                "duration_ms": int(self.video_info["time"]),
+            }
+        except OSError:
+            expected_metadata = None
+
+        if tools.vail_file(clean_source) and expected_metadata and clean_metadata.is_file():
+            try:
+                cached_metadata = json.loads(clean_metadata.read_text(encoding="utf-8"))
+            except (OSError, ValueError, json.JSONDecodeError):
+                cached_metadata = None
+            if cached_metadata == expected_metadata:
+                self.visual_source = clean_source
+                logger.info(f"复用已消除原字幕的视频：{clean_source}")
+                return
+
+        self.signal(text="Removing original video subtitles")
+        last_progress = -10
+
+        def report_progress(value):
+            nonlocal last_progress
+            value = int(value)
+            if value - last_progress >= 10 or value == 100:
+                self.signal(text=f"Removing original subtitles {value}%")
+                last_progress = value
+
+        try:
+            self.visual_source = remove_burned_subtitles(
+                input_file=self.cfg.name,
+                output_file=clean_source,
+                rect=rect,
+                duration_ms=int(self.video_info["time"]),
+                progress_callback=report_progress,
+                log_callback=lambda message: logger.info(f"[subtitle-removal] {message}"),
+                cancel_callback=self._exit,
+            )
+            if expected_metadata:
+                clean_metadata.write_text(
+                    json.dumps(expected_metadata, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+        except Exception as error:
+            raise VideoTransError(f"消除原视频字幕失败：{error}") from error
+
     # 从原始视频中分离出音频
     def _split_audio_byraw(self, is_separate=False):
+        # source_wav 专供语音识别，必须始终直接来自原始音轨
         cmd = [
             "-y",
             "-i",
@@ -848,26 +1013,176 @@ class TransCreate(BaseTask):
         try:
             rs = self._new_process(callback=vocal_bgm, title=title, is_cuda=False, kwargs=kw)
             if rs and tools.vail_file(self.cfg.vocal) and tools.vail_file(self.cfg.instrument):
-                cmd = [
-                    "-y",
-                    "-i",
-                    self.cfg.vocal,
-                    "-ac",
-                    "1",
-                    "-ar",
-                    "16000",
-                    "-c:a",
-                    "pcm_s16le",
-                    '-af',
-                    "volume=1.5",
-                    self.cfg.source_wav
-                ]
-                tools.runffmpeg(cmd)
                 shutil.copy2(self.cfg.vocal, f'{self.cfg.target_dir}/vocal.wav')
                 shutil.copy2(self.cfg.instrument, f'{self.cfg.target_dir}/instrument.wav')
                 
         except Exception as e:
             logger.exception(f'人声背景声分离失败，静默跳过 {e}', exc_info=True)
+
+    def _prepare_recognition_vocal(self):
+        if not tools.vail_file(self.cfg.vocal) or tools.vail_file(self.recogn_vocal):
+            return
+        try:
+            tools.runffmpeg([
+                "-y",
+                "-i",
+                self.cfg.vocal,
+                "-ac",
+                "1",
+                "-ar",
+                "16000",
+                "-c:a",
+                "pcm_s16le",
+                "-af",
+                "volume=1.5",
+                self.recogn_vocal,
+            ])
+        except Exception as e:
+            logger.exception(f'生成人声定位音轨失败，回退到原始音轨识别 {e}', exc_info=True)
+
+    def _resolve_burned_subtitle_ocr_rect(self):
+        rect = getattr(self.cfg, "subtitle_removal_rect", None)
+        aspect_ratio = getattr(self.cfg, "subtitle_removal_aspect_ratio", 0.0) or 0.0
+        source = "本次框选"
+
+        if not rect:
+            saved_rect = settings.get("subtitle_removal_last_rect", "")
+            if saved_rect:
+                try:
+                    rect = json.loads(saved_rect) if isinstance(saved_rect, str) else saved_rect
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    rect = None
+            aspect_ratio = settings.get("subtitle_removal_last_aspect_ratio", 0.0) or 0.0
+            source = "上次保存"
+
+        if not rect:
+            logger.info("硬字幕 OCR 未找到框选区域，跳过 OCR 并保留 ASR 结果")
+            return None
+
+        try:
+            normalized_rect = [float(value) for value in rect]
+            aspect_ratio = float(aspect_ratio)
+            if len(normalized_rect) != 4:
+                raise ValueError("字幕区域必须包含 x、y、宽、高")
+            x, y, width, height = normalized_rect
+            if (
+                    not all(math.isfinite(value) for value in normalized_rect)
+                    or x < 0 or y < 0 or width <= 0 or height <= 0
+                    or x + width > 1.000001 or y + height > 1.000001
+            ):
+                raise ValueError("字幕区域超出视频画面")
+            from videotrans.subtitle_removal import scale_normalized_rect
+            scale_normalized_rect(
+                normalized_rect,
+                int(self.video_info["width"]),
+                int(self.video_info["height"]),
+                reference_aspect_ratio=aspect_ratio,
+            )
+        except (KeyError, TypeError, ValueError) as error:
+            logger.warning(
+                f"硬字幕 OCR 无法复用{source}的字幕区域，跳过 OCR 并保留 ASR 结果：{error}"
+            )
+            return None
+
+        logger.info(f"硬字幕 OCR 使用{source}的字幕区域：{normalized_rect}")
+        return normalized_rect
+
+    def _fuse_burned_subtitles(self, raw_subtitles):
+        if (
+                not settings.get("burned_subtitle_ocr", True)
+                or self.is_audio_trans
+                or self.cfg.recogn_type != FASTER_WHISPER
+                or not self.cfg.detect_language
+                or self.cfg.detect_language[:2].lower() != "zh"
+                or not tools.vail_file(self.cfg.name)
+        ):
+            return raw_subtitles
+
+        try:
+            from videotrans.subtitle_ocr import extract_burned_subtitles, fuse_ocr_with_asr
+
+            Path(self.cfg.cache_folder, "asr-before-ocr.srt").write_text(
+                tools.get_srt_from_list(raw_subtitles),
+                encoding="utf-8",
+            )
+            last_progress = -10
+
+            def report_progress(value):
+                nonlocal last_progress
+                value = int(value)
+                if value - last_progress >= 10 or value == 100:
+                    self.signal(text=f"Burned subtitle OCR {value}%")
+                    last_progress = value
+
+            ocr_rect = self._resolve_burned_subtitle_ocr_rect()
+            if not ocr_rect:
+                return raw_subtitles
+
+            ocr_subtitles = extract_burned_subtitles(
+                self.cfg.name,
+                self.cfg.cache_folder,
+                normalized_rect=ocr_rect,
+                progress_callback=report_progress,
+                cancel_callback=self._exit,
+            )
+            if not ocr_subtitles:
+                return raw_subtitles
+            Path(self.cfg.cache_folder, "ocr-before-fusion.srt").write_text(
+                tools.get_srt_from_list(ocr_subtitles),
+                encoding="utf-8",
+            )
+            fused, stats = fuse_ocr_with_asr(raw_subtitles, ocr_subtitles)
+            logger.info(f"硬字幕 OCR + ASR 融合完成：{stats}")
+            return fused or raw_subtitles
+        except Exception as error:
+            logger.exception(f"硬字幕 OCR + ASR 融合失败，保留 ASR 结果：{error}", exc_info=True)
+            return raw_subtitles
+
+    def _series_voice_preferences(self):
+        """Return persisted choices; manual choices are locked against automation."""
+        try:
+            from videotrans.process.series_speakers import (
+                character_voice,
+                load_manifest,
+                manifest_path_for_series,
+                voice_scope_key,
+            )
+            series_videos = getattr(self.cfg, 'series_video_paths', [])
+            manifest_path = manifest_path_for_series(
+                Path(self.cfg.target_dir).parent,
+                self.cfg.dirname,
+                series_videos,
+            )
+            manifest = load_manifest(
+                manifest_path,
+                series_folder=self.cfg.dirname,
+                series_videos=series_videos,
+            )
+            episode_key = Path(self.cfg.name).name.casefold()
+            episode = manifest.get('episodes', {}).get(episode_key, {})
+            characters = {
+                str(character.get('id')): character
+                for character in manifest.get('characters', [])
+                if character.get('id')
+            }
+            scope = voice_scope_key(
+                self.cfg.tts_type, self.cfg.target_language_code
+            )
+            preferred = {}
+            locked = set()
+            for speaker, speaker_data in episode.get('speakers', {}).items():
+                character = characters.get(
+                    str(speaker_data.get('character_id', '')), {}
+                )
+                voice = character_voice(character, scope)
+                if not voice:
+                    continue
+                preferred[str(speaker)] = voice
+                if character.get('voice_sources', {}).get(scope) == 'manual':
+                    locked.add(str(speaker))
+            return preferred, locked
+        except (AttributeError, KeyError, OSError, TypeError, ValueError):
+            return {}, set()
 
     def _prepare_line_roles(self, source_subs):
         if not self.auto_line_roles:
@@ -875,34 +1190,58 @@ class TransCreate(BaseTask):
             if speaker_path.is_file():
                 try:
                     speakers = json.loads(speaker_path.read_text(encoding='utf-8'))
-                    if len(speakers) == len(source_subs) and len(set(speakers)) > 1:
+                    if len(speakers) != len(source_subs) or not speakers:
+                        raise ValueError('说话人数量与字幕行数不一致')
+                    unique_speakers = list(dict.fromkeys(str(item) for item in speakers))
+                    if len(unique_speakers) > 1:
                         from videotrans.process.speaker_roles import build_auto_line_roles
 
                         available_voices = tools.role_menu(
                             self.cfg.tts_type, self.cfg.target_language_code)
+                        preferred_voices, locked_speakers = (
+                            self._series_voice_preferences()
+                        )
                         self.auto_line_roles, report = build_auto_line_roles(
                             speakers=speakers,
                             subtitles=source_subs,
                             available_voices=available_voices,
                             default_voice=self.cfg.voice_role,
                             audio_file=self.cfg.source_wav,
+                            preferred_voices=preferred_voices,
+                            locked_speakers=locked_speakers,
                         )
-                        report.update({
-                            'target_language_code': self.cfg.target_language_code,
-                            'tts_type': self.cfg.tts_type,
-                            'default_voice': self.cfg.voice_role,
-                        })
-                        report_path = Path(f'{self.cfg.cache_folder}/speaker_roles.json')
-                        report_path.write_text(
-                            json.dumps(report, ensure_ascii=False, indent=2),
-                            encoding='utf-8')
-                        try:
-                            shutil.copy2(report_path, f'{self.cfg.target_dir}/speaker_roles.json')
-                        except (OSError, shutil.SameFileError):
-                            pass
-                        logger.info(
-                            f'已自动为 {report["speaker_count"]} 个说话人分配音色:'
-                            f'{report["speaker_to_voice"]}')
+                    else:
+                        speaker = unique_speakers[0]
+                        voice = str(self.cfg.voice_role or '').strip()
+                        report = {
+                            'speaker_count': 1,
+                            'speaker_counts': {speaker: len(speakers)},
+                            'speaker_to_voice': (
+                                {speaker: voice}
+                                if voice and voice not in {'No', '-', 'clone'} else {}
+                            ),
+                        }
+                    report.update({
+                        'target_language_code': self.cfg.target_language_code,
+                        'tts_type': self.cfg.tts_type,
+                        'default_voice': self.cfg.voice_role,
+                    })
+                    self._register_series_speakers(
+                        source_subs=source_subs,
+                        speakers=speakers,
+                        report=report,
+                    )
+                    report_path = Path(f'{self.cfg.cache_folder}/speaker_roles.json')
+                    report_path.write_text(
+                        json.dumps(report, ensure_ascii=False, indent=2),
+                        encoding='utf-8')
+                    try:
+                        shutil.copy2(report_path, f'{self.cfg.target_dir}/speaker_roles.json')
+                    except (OSError, shutil.SameFileError):
+                        pass
+                    logger.info(
+                        f'已自动为 {report["speaker_count"]} 个说话人分配音色:'
+                        f'{report["speaker_to_voice"]}')
                 except Exception as e:
                     logger.warning(f'自动生成多角色配音映射失败,使用默认音色:{e}')
 
@@ -915,6 +1254,108 @@ class TransCreate(BaseTask):
             except Exception as e:
                 logger.warning(f'读取当前任务人工音色映射失败,保留自动映射:{e}')
         return line_roles
+
+    def _register_series_speakers(self, *, source_subs, speakers, report):
+        """Build stable cross-episode character IDs without trusting local spk IDs."""
+        if (
+            getattr(self, 'series_speaker_registered', False)
+            or not getattr(self.cfg, 'name', None)
+        ):
+            return
+        audio_path = Path(self.cfg.source_wav)
+        if not audio_path.is_file():
+            return
+
+        try:
+            from videotrans.process.series_speakers import (
+                extract_episode_speaker_embeddings,
+                character_voice,
+                manifest_path_for_series,
+                register_episode_file,
+                speaker_counts,
+                suggest_character_names,
+                voice_scope_key,
+            )
+
+            model_id = 'damo/speech_campplus_sv_zh-cn_16k-common'
+            model_path = Path(f'{ROOT_DIR}/models/models/{model_id}')
+            if not (model_path / 'configuration.json').is_file():
+                tools.check_and_down_ms(model_id=model_id)
+            if not (model_path / 'configuration.json').is_file():
+                logger.warning('跨集说话人识别模型不可用,跳过角色档案更新')
+                return
+
+            profiles = extract_episode_speaker_embeddings(
+                audio_file=audio_path,
+                subtitles=source_subs,
+                speakers=speakers,
+                model_path=model_path,
+            )
+            if not profiles:
+                logger.warning('当前视频没有足够的清晰语音,跳过跨集角色匹配')
+                return
+
+            series_output_dir = Path(self.cfg.target_dir).parent
+            manifest_path = manifest_path_for_series(
+                series_output_dir,
+                self.cfg.dirname,
+                self.cfg.series_video_paths,
+            )
+            episode_key = Path(self.cfg.name).name.casefold()
+            manifest, assignments = register_episode_file(
+                manifest_path,
+                series_folder=self.cfg.dirname,
+                series_videos=self.cfg.series_video_paths,
+                episode_key=episode_key,
+                episode_name=Path(self.cfg.name).name,
+                speaker_profiles=profiles,
+                speaker_counts=speaker_counts(speakers),
+                speaker_to_voice=report.get('speaker_to_voice', {}),
+                name_candidates=suggest_character_names(source_subs, speakers),
+                voice_scope=voice_scope_key(
+                    self.cfg.tts_type, self.cfg.target_language_code
+                ),
+            )
+
+            characters = {
+                character['id']: character
+                for character in manifest.get('characters', [])
+                if character.get('id')
+            }
+            inherited_voices = {}
+            voice_scope = voice_scope_key(
+                self.cfg.tts_type, self.cfg.target_language_code
+            )
+            for speaker, assignment in assignments.items():
+                character = characters.get(assignment['character_id'], {})
+                voice = character_voice(character, voice_scope)
+                if voice:
+                    inherited_voices[speaker] = voice
+            if inherited_voices:
+                report['speaker_to_voice'].update(inherited_voices)
+                for index, speaker in enumerate(speakers):
+                    if index >= len(source_subs):
+                        break
+                    voice = inherited_voices.get(str(speaker))
+                    if voice:
+                        line = source_subs[index].get('line', index + 1)
+                        self.auto_line_roles[str(line)] = voice
+            report['series_manifest'] = manifest_path.as_posix()
+            report['series_character_ids'] = {
+                speaker: assignment['character_id']
+                for speaker, assignment in assignments.items()
+            }
+            report['series_match_state'] = {
+                speaker: assignment['match_state']
+                for speaker, assignment in assignments.items()
+            }
+            self.series_speaker_registered = True
+            logger.info(
+                f'跨集角色匹配完成:{Path(self.cfg.name).name} -> '
+                f'{report["series_character_ids"]}'
+            )
+        except Exception as error:
+            logger.warning(f'跨集角色匹配失败,保留本集说话人结果:{error}')
 
     # 配音预处理，去掉无效字符，整理开始时间
     def _tts(self) -> None:

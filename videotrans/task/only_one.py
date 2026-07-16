@@ -1,5 +1,6 @@
 # 执行单个视频翻译任务时 暂停等待
 import json
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -17,6 +18,24 @@ from videotrans.util.tools import (
 )
 
 
+_ACTIVE_WORKER_UUIDS = set()
+_ACTIVE_WORKERS_LOCK = threading.Lock()
+
+
+def _claim_active_worker(uuid: str) -> bool:
+    """Allow only one single-video worker for the same source at a time."""
+    with _ACTIVE_WORKERS_LOCK:
+        if uuid in _ACTIVE_WORKER_UUIDS:
+            return False
+        _ACTIVE_WORKER_UUIDS.add(uuid)
+        return True
+
+
+def _release_active_worker(uuid: str) -> None:
+    with _ACTIVE_WORKERS_LOCK:
+        _ACTIVE_WORKER_UUIDS.discard(uuid)
+
+
 class Worker(QThread):
     uito = Signal(str, SignMsg)
 
@@ -31,13 +50,25 @@ class Worker(QThread):
         self.uuid = None
 
     def run(self) -> None:
+        self.uuid = self.file['uuid']
+        if not _claim_active_worker(self.uuid):
+            message = "该视频任务正在运行，请等待完成后再试"
+            logger.warning(f'[单视频翻译模式]:{message} uuid={self.uuid}')
+            # A stop-then-immediate-restart leaves this UUID in the stopped
+            # set, so normal _post() would suppress the message and leave the
+            # new progress row hanging forever. Emit this rejection directly.
+            self.uito.emit(
+                self.uuid,
+                SignMsg(text=message, type='error', uuid=self.uuid),
+            )
+            return
 
-        # 从停止队列中移出，以便重新开始
-        app_cfg.rm_uuid(self.file['uuid'])
+        # 从停止队列中移出，以便重新开始。必须在抢占成功后执行，避免
+        # 重复点击把正在运行的同 UUID 任务从停止集合中错误移除。
+        app_cfg.rm_uuid(self.uuid)
         logger.debug(f'[单视频翻译模式]:{self.file.name}')
         trk=None
         try:
-            self.uuid = self.file['uuid']
             trk = TransCreate(cfg=TaskCfgVTT(**self.cfg | self.file))
             # 原始语言字幕文件
             app_cfg.onlyone_source_sub = trk.cfg.source_sub
@@ -83,8 +114,17 @@ class Worker(QThread):
                     app_cfg.set_countdown(86400)
                     # 传递过去临时目录，用于获取 speaker.json，等待修改待配音的字幕
                     self._post(
-                        text=(f'{trk.cfg.cache_folder}<|>{trk.cfg.target_language_code}'
-                              f'<|>{trk.cfg.tts_type}<|>{trk.cfg.source_wav}'),
+                        text=json.dumps({
+                            'cache_folder': trk.cfg.cache_folder,
+                            'target_language': trk.cfg.target_language_code,
+                            'source_language': trk.cfg.source_language_code,
+                            'tts_type': trk.cfg.tts_type,
+                            'source_audio': trk.cfg.source_wav,
+                            'video_path': trk.cfg.name,
+                            'series_folder': trk.cfg.dirname,
+                            'series_video_paths': trk.cfg.series_video_paths,
+                            'series_output_dir': Path(trk.cfg.target_dir).parent.as_posix(),
+                        }, ensure_ascii=False),
                         type="edit_subtitle_target")
                     self._post(tr('The subtitle editing interface is rendering'))
                     while app_cfg.task_countdown > 0:
@@ -144,6 +184,8 @@ class Worker(QThread):
             detail_back = (traceback.format_exc()).strip()
             channel=f"{tr('shibiechucuo')}:{get_recogn_type(trk.cfg.recogn_type)}, {tr('fanyichucuo')}: {get_tanslate_type(trk.cfg.translate_type)}, {tr('peiyinchucuo')}:{get_tts_type(trk.cfg.tts_type)}"
             self._post(text=str(e) + f"{channel}\n{detail_back}\n{trk.cfg if trk else ''}", type='error')
+        finally:
+            _release_active_worker(self.uuid)
 
     def _post(self, text='', type='logs'):
         try:
@@ -153,6 +195,8 @@ class Worker(QThread):
             pass
 
     def _exit(self):
-        if app_cfg.exit_soft or app_cfg.current_status != 'ing':
+        if (app_cfg.exit_soft
+                or app_cfg.current_status != 'ing'
+                or self.uuid in app_cfg.stoped_uuid_set):
             return True
         return False

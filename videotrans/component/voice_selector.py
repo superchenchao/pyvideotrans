@@ -313,7 +313,10 @@ class VoiceSelectorDialog(QDialog):
             self.visible_cards[entry.role] = card
         self.shown_count = end
         total = len(self.filtered_entries)
-        self.result_label.setText(f"{total} 个音色")
+        voice_total = sum(
+            entry.role not in {"No", "-"} for entry in self.filtered_entries
+        )
+        self.result_label.setText(f"{voice_total} 个音色")
         self.load_more_button.setVisible(self.shown_count < total)
         self.empty_label.setVisible(total == 0)
         self.voice_list.setVisible(total > 0)
@@ -399,14 +402,19 @@ class VoiceSelectorEventFilter(QObject):
         tts_type_getter: Callable[[], int],
         language_getter: Callable[[], str],
     ):
-        super().__init__(combo)
+        # QObject initialization can dispatch Qt events before __init__ returns.
+        # Keep the Python-side state ready before handing the object to Qt.
         self.combo = combo
         self.tts_type_getter = tts_type_getter
         self.language_getter = language_getter
         self._opening = False
+        super().__init__(combo)
 
     def eventFilter(self, watched, event):
-        if watched is self.combo and event.type() == QEvent.Wheel:
+        combo = getattr(self, "combo", None)
+        if combo is None:
+            return False
+        if watched is combo and event.type() == QEvent.Wheel:
             return True
         should_open = False
         if isinstance(event, QMouseEvent) and event.type() == QEvent.MouseButtonPress:
@@ -419,7 +427,7 @@ class VoiceSelectorEventFilter(QObject):
                 Qt.Key_Up,
                 Qt.Key_Down,
             )
-        if watched is self.combo and should_open and self.combo.isEnabled():
+        if watched is combo and should_open and combo.isEnabled():
             self.open_selector()
             return True
         return super().eventFilter(watched, event)

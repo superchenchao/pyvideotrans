@@ -11,6 +11,7 @@ from PySide6.QtGui import QColor, QDesktopServices, QImage, QMouseEvent, QPainte
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -30,8 +31,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from videotrans.configure import contants
-from videotrans.configure.config import HOME_DIR, ROOT_DIR, params, tr
+from videotrans.configure import config, contants
+from videotrans.configure.config import HOME_DIR, ROOT_DIR, params, settings, tr
+from videotrans.subtitle_removal.automation import normalize_rect, scale_normalized_rect
 from videotrans.subtitle_removal.engine import EngineSpec, find_subtitle_remover_engine
 from videotrans.util import tools
 
@@ -93,6 +95,16 @@ class VideoSelectionCanvas(QWidget):
         self._selection = None
         self._drag_start = None
         self.selection_changed.emit(None)
+        self.update()
+
+    def set_selection(self, rect: tuple[int, int, int, int] | None) -> None:
+        if rect is None:
+            self.clear_selection()
+            return
+        x, y, width, height = rect
+        self._selection = QRectF(float(x), float(y), float(width), float(height)).normalized()
+        self._drag_start = None
+        self.selection_changed.emit(self.selection)
         self.update()
 
     def _image_rect(self) -> QRectF:
@@ -307,6 +319,440 @@ class SubtitleRemovalWorker(QThread):
             )
         else:
             process.terminate()
+
+
+class SubtitleFrameLocatorWorker(QThread):
+    found = Signal(int, str)
+    not_found = Signal()
+    failed = Signal(str)
+
+    def __init__(self, *, engine: EngineSpec, input_file: str, parent=None):
+        super().__init__(parent)
+        self.engine = engine
+        self.input_file = input_file
+        self.process: subprocess.Popen | None = None
+        self.cancelled = False
+
+    def run(self) -> None:
+        worker_script = Path(ROOT_DIR) / "scripts" / "subtitle_locate_worker.py"
+        creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        command = [
+            str(self.engine.python),
+            "-u",
+            str(worker_script),
+            "--video", self.input_file,
+            "--engine-root", str(self.engine.root),
+        ]
+        frame_dir = Path(config.TEMP_DIR) / "subtitle-removal-locator"
+        frame_file = frame_dir / f"frame-{os.getpid()}-{datetime.now().strftime('%Y%m%d%H%M%S%f')}.jpg"
+        command.extend(["--frame-output", str(frame_file)])
+        try:
+            self.process = subprocess.Popen(
+                command,
+                cwd=self.engine.root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=creationflags,
+            )
+            assert self.process.stdout is not None
+            for raw_line in self.process.stdout:
+                if self.cancelled:
+                    return
+                line = raw_line.strip()
+                event_position = line.rfind("PYVT_LOCATE_EVENT ")
+                if event_position < 0:
+                    continue
+                try:
+                    event = json.loads(line[event_position + len("PYVT_LOCATE_EVENT "):])
+                except json.JSONDecodeError:
+                    continue
+                if event.get("type") == "found":
+                    self.found.emit(
+                        max(0, int(event.get("time_ms", 0))),
+                        str(event.get("frame_file", "")),
+                    )
+                    self.process.wait()
+                    return
+                if event.get("type") == "not_found":
+                    self.not_found.emit()
+                    self.process.wait()
+                    return
+            if not self.cancelled and self.process.wait() != 0:
+                self.failed.emit(tr("Could not automatically locate subtitles"))
+        except Exception as error:
+            if not self.cancelled:
+                self.failed.emit(str(error))
+        finally:
+            self.process = None
+
+    def cancel(self) -> None:
+        self.cancelled = True
+        process = self.process
+        if process is None or process.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+                check=False,
+            )
+        else:
+            process.terminate()
+
+
+class BatchSubtitleRemovalDialog(QDialog):
+    def __init__(
+            self, *, input_file: str,
+            initial_normalized_rect: list[float] | None = None,
+            parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(tr("Select original subtitle area"))
+        self.resize(1040, 720)
+        self.setModal(True)
+        self.input_file = str(Path(input_file).resolve())
+        self.engine = find_subtitle_remover_engine(ROOT_DIR)
+        self.video_info = tools.get_video_info(self.input_file)
+        self.duration_ms = int(self.video_info.get("time", 0))
+        self.slider_dragging = False
+        self.user_interacted = False
+        self.normalized_rect: list[float] | None = None
+        self.reference_aspect_ratio = self.video_info["width"] / self.video_info["height"]
+        self.preview_worker: SubtitleRemovalWorker | None = None
+        self.locator_worker: SubtitleFrameLocatorWorker | None = None
+        self.preview_position = 0
+        self.showing_preview = False
+        self.automatic_seek_position: int | None = None
+        self.automatic_seek_image = QImage()
+
+        self.player = QMediaPlayer(self)
+        self.audio_output = QAudioOutput(self)
+        self.audio_output.setVolume(0.45)
+        self.video_sink = QVideoSink(self)
+        self.player.setAudioOutput(self.audio_output)
+        self.player.setVideoOutput(self.video_sink)
+
+        self._build_ui()
+        self._bind_signals()
+        self.canvas.set_source_size(self.video_info["width"], self.video_info["height"])
+        if initial_normalized_rect:
+            try:
+                rect = scale_normalized_rect(
+                    initial_normalized_rect,
+                    self.video_info["width"],
+                    self.video_info["height"],
+                )
+                self.canvas.set_selection(rect)
+                self.user_interacted = False
+            except (TypeError, ValueError):
+                pass
+        # set_source_size/预载框选会发出 selection_changed，属于程序初始化，
+        # 不能因此阻止稍后的自动字幕帧跳转。
+        self.user_interacted = False
+        self.seek_slider.setRange(0, self.duration_ms)
+        self.player.setSource(QUrl.fromLocalFile(self.input_file))
+        self.player.play()
+        QTimer.singleShot(180, self.player.pause)
+        QTimer.singleShot(0, self._start_locator)
+
+    def _build_ui(self) -> None:
+        root = QVBoxLayout(self)
+        instruction = QLabel(
+            tr("Drag a rectangle around the original subtitles. "
+               "The same relative area will be reused for this batch."))
+        instruction.setWordWrap(True)
+        root.addWidget(instruction)
+
+        self.canvas = VideoSelectionCanvas()
+        root.addWidget(self.canvas, 1)
+
+        playback = QHBoxLayout()
+        self.play_button = QToolButton()
+        self.play_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        self.seek_slider = QSlider(Qt.Orientation.Horizontal)
+        self.time_label = QLabel(f"00:00:00.000 / {format_milliseconds(self.duration_ms)}")
+        playback.addWidget(self.play_button)
+        playback.addWidget(self.seek_slider, 1)
+        playback.addWidget(self.time_label)
+        root.addLayout(playback)
+
+        info_row = QHBoxLayout()
+        self.status_label = QLabel(
+            tr("Loading the subtitle locator; the first run usually takes 10 to 20 seconds..."))
+        self.selection_label = QLabel(tr("No area selected"))
+        self.selection_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        info_row.addWidget(self.status_label, 1)
+        info_row.addWidget(self.selection_label)
+        root.addLayout(info_row)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setVisible(False)
+        root.addWidget(self.progress_bar)
+
+        buttons = QHBoxLayout()
+        buttons.addStretch()
+        self.preview_button = QPushButton(tr("Preview removal"))
+        self.preview_button.setEnabled(self.canvas.selection is not None)
+        self.start_button = QPushButton(tr("Start directly"))
+        self.start_button.setDefault(True)
+        self.cancel_button = QPushButton(tr("Cancel"))
+        buttons.addWidget(self.preview_button)
+        buttons.addWidget(self.start_button)
+        buttons.addWidget(self.cancel_button)
+        root.addLayout(buttons)
+
+    def _bind_signals(self) -> None:
+        self.video_sink.videoFrameChanged.connect(self._video_frame_changed)
+        self.player.positionChanged.connect(self._position_changed)
+        self.player.playbackStateChanged.connect(self._playback_state_changed)
+        self.play_button.clicked.connect(self._toggle_playback)
+        self.seek_slider.sliderPressed.connect(self._slider_pressed)
+        self.seek_slider.sliderReleased.connect(self._seek_from_slider)
+        self.seek_slider.sliderMoved.connect(
+            lambda value: self.time_label.setText(
+                f"{format_milliseconds(value)} / {format_milliseconds(self.duration_ms)}"
+            )
+        )
+        self.canvas.selection_changed.connect(self._selection_changed)
+        self.preview_button.clicked.connect(self._preview)
+        self.start_button.clicked.connect(self._accept_selection)
+        self.cancel_button.clicked.connect(self.reject)
+
+    def _video_frame_changed(self, frame: QVideoFrame) -> None:
+        image = frame.toImage()
+        if not image.isNull():
+            self.canvas.set_frame(image)
+
+    def _position_changed(self, position: int) -> None:
+        if not self.slider_dragging:
+            self.seek_slider.setValue(min(position, self.duration_ms))
+        self.time_label.setText(
+            f"{format_milliseconds(position)} / {format_milliseconds(self.duration_ms)}"
+        )
+
+    def _playback_state_changed(self, state) -> None:
+        icon = QStyle.StandardPixmap.SP_MediaPause if state == QMediaPlayer.PlaybackState.PlayingState else QStyle.StandardPixmap.SP_MediaPlay
+        self.play_button.setIcon(self.style().standardIcon(icon))
+
+    def _toggle_playback(self) -> None:
+        self.user_interacted = True
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.player.pause()
+        else:
+            if self.automatic_seek_position is not None:
+                self.player.setPosition(self.automatic_seek_position)
+                self.automatic_seek_position = None
+            self.player.play()
+
+    def _slider_pressed(self) -> None:
+        self.slider_dragging = True
+        self.user_interacted = True
+        self.automatic_seek_position = None
+
+    def _seek_from_slider(self) -> None:
+        self.slider_dragging = False
+        self.player.setPosition(self.seek_slider.value())
+
+    def _selection_changed(self, rect) -> None:
+        self.user_interacted = True
+        self.preview_button.setEnabled(rect is not None and self.preview_worker is None)
+        if rect is None:
+            self.selection_label.setText(tr("No area selected"))
+        else:
+            x, y, width, height = rect
+            self.selection_label.setText(f"x={x}, y={y}, {width} x {height}")
+
+    def _start_locator(self) -> None:
+        if not self.engine:
+            self.status_label.setText(tr("Subtitle removal engine is not installed"))
+            return
+        self.locator_worker = SubtitleFrameLocatorWorker(
+            engine=self.engine,
+            input_file=self.input_file,
+            parent=self,
+        )
+        self.locator_worker.found.connect(self._subtitle_frame_found)
+        self.locator_worker.not_found.connect(
+            lambda: self.status_label.setText(
+                tr("No subtitle frame was found automatically; use the progress bar to find subtitles")
+            )
+        )
+        self.locator_worker.failed.connect(
+            lambda message: self.status_label.setText(
+                tr("Automatic location failed; use the progress bar to find subtitles")
+            )
+        )
+        self.locator_worker.finished.connect(self._locator_finished)
+        self.locator_worker.start()
+
+    def _subtitle_frame_found(self, time_ms: int, frame_file: str) -> None:
+        self.status_label.setText(tr("The first subtitle frame was located automatically"))
+        if self.user_interacted:
+            return
+        # 部分 Qt Multimedia 后端在暂停状态下只更新进度、不刷新目标帧。
+        # 短暂静音播放可确保画面真正跳到检测到字幕的位置。
+        self.audio_output.setMuted(True)
+        self.automatic_seek_position = time_ms
+        self.automatic_seek_image = QImage(frame_file) if frame_file else QImage()
+        self.player.setPosition(time_ms)
+        self.seek_slider.setValue(time_ms)
+        self.player.play()
+        QTimer.singleShot(320, self._finish_automatic_seek)
+
+    def _finish_automatic_seek(self) -> None:
+        self.player.pause()
+        self.audio_output.setMuted(False)
+        if self.automatic_seek_position is not None:
+            self.seek_slider.setValue(self.automatic_seek_position)
+            self.time_label.setText(
+                f"{format_milliseconds(self.automatic_seek_position)} / "
+                f"{format_milliseconds(self.duration_ms)}"
+            )
+        if not self.automatic_seek_image.isNull():
+            self.canvas.set_frame(self.automatic_seek_image)
+
+    def _locator_finished(self) -> None:
+        worker = self.locator_worker
+        self.locator_worker = None
+        if worker:
+            worker.deleteLater()
+
+    def _preview(self) -> None:
+        rect = self.canvas.selection
+        if not rect or not self.engine:
+            return
+        missing = self.engine.missing_files("auto")
+        if missing:
+            QMessageBox.critical(
+                self,
+                tr("Remove burned-in subtitles"),
+                tr("Subtitle removal model is incomplete") + "\n" + "\n".join(str(path) for path in missing),
+            )
+            return
+
+        if not self.showing_preview:
+            current_position = (
+                self.automatic_seek_position
+                if self.automatic_seek_position is not None
+                else self.player.position()
+            )
+            self.preview_position = min(current_position, self.duration_ms)
+        start_ms = max(0, self.preview_position - 1000)
+        end_ms = min(self.duration_ms, start_ms + 2000)
+        preview_dir = Path(config.TEMP_DIR) / "subtitle-removal-preview"
+        preview_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
+        preview_source = preview_dir / f"source-{stamp}.mp4"
+        preview_output = preview_dir / f"clean-{stamp}.mp4"
+        try:
+            tools.runffmpeg([
+                "-y",
+                "-ss", f"{start_ms / 1000:.3f}",
+                "-i", self.input_file,
+                "-t", f"{max(0.2, (end_ms - start_ms) / 1000):.3f}",
+                "-an",
+                "-c:v", "libx264",
+                "-crf", "18",
+                str(preview_source),
+            ])
+        except Exception as error:
+            QMessageBox.critical(self, tr("Preview removal"), str(error))
+            return
+
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+        self.status_label.setText(tr("Generating a two-second preview..."))
+        self._set_busy(True)
+        self.preview_worker = SubtitleRemovalWorker(
+            engine=self.engine,
+            input_file=str(preview_source),
+            output_file=str(preview_output),
+            mode="auto",
+            rect=rect,
+            start_ms=0,
+            end_ms=max(1, end_ms - start_ms),
+            parent=self,
+        )
+        self.preview_worker.progress.connect(self.progress_bar.setValue)
+        self.preview_worker.completed.connect(self._preview_completed)
+        self.preview_worker.failed.connect(self._preview_failed)
+        self.preview_worker.finished.connect(self._preview_finished)
+        self.preview_worker.start()
+
+    def _set_busy(self, busy: bool) -> None:
+        self.preview_button.setDisabled(busy or self.canvas.selection is None)
+        self.start_button.setDisabled(busy)
+        self.cancel_button.setDisabled(busy)
+        self.seek_slider.setDisabled(busy)
+        self.play_button.setDisabled(busy)
+
+    def _preview_completed(self, output_file: str) -> None:
+        self.status_label.setText(tr("Preview complete. Confirm the result or adjust the area."))
+        self.showing_preview = True
+        self.player.setSource(QUrl.fromLocalFile(output_file))
+        self.player.play()
+
+    def _preview_failed(self, message: str) -> None:
+        self.status_label.setText(tr("Preview failed"))
+        QMessageBox.critical(self, tr("Preview removal"), message)
+
+    def _preview_finished(self) -> None:
+        worker = self.preview_worker
+        self.preview_worker = None
+        self._set_busy(False)
+        if worker:
+            worker.deleteLater()
+
+    def _accept_selection(self) -> None:
+        rect = self.canvas.selection
+        if rect is None:
+            QMessageBox.warning(self, tr("Remove burned-in subtitles"), tr("Select an area first"))
+            return
+        self.normalized_rect = normalize_rect(
+            rect,
+            self.video_info["width"],
+            self.video_info["height"],
+        )
+        self._stop_workers()
+        self.accept()
+
+    def _stop_workers(self) -> None:
+        self.player.stop()
+        if self.locator_worker:
+            self.locator_worker.cancel()
+            self.locator_worker.wait(5000)
+        if self.preview_worker:
+            self.preview_worker.cancel()
+            self.preview_worker.wait(5000)
+
+    def reject(self) -> None:
+        self._stop_workers()
+        super().reject()
+
+    def closeEvent(self, event) -> None:
+        self._stop_workers()
+        super().closeEvent(event)
+
+
+def select_batch_subtitle_area(
+        *, input_file: str, initial_normalized_rect: list[float] | None = None,
+        parent=None) -> dict | None:
+    dialog = BatchSubtitleRemovalDialog(
+        input_file=input_file,
+        initial_normalized_rect=initial_normalized_rect,
+        parent=parent,
+    )
+    if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.normalized_rect:
+        return None
+    return {
+        "normalized_rect": dialog.normalized_rect,
+        "reference_aspect_ratio": dialog.reference_aspect_ratio,
+    }
 
 
 class SubtitleRemovalWindow(QMainWindow):

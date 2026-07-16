@@ -41,6 +41,21 @@ Path(f"{ROOT_DIR}/models").mkdir(parents=True, exist_ok=True)
 Path(f"{ROOT_DIR}/logs").mkdir(parents=True, exist_ok=True)
 Path(f"{TRANSLATE_CACHE}").mkdir(parents=True, exist_ok=True)
 
+
+def _preserve_saved_subtitle_region(current: Dict, persisted: Dict) -> Dict:
+    """Keep a valid saved ROI when a stale process tries to save an empty one."""
+    if not isinstance(persisted, dict):
+        return current
+    if (not current.get("subtitle_removal_last_rect")
+            and persisted.get("subtitle_removal_last_rect")):
+        current["subtitle_removal_last_rect"] = persisted[
+            "subtitle_removal_last_rect"
+        ]
+        current["subtitle_removal_last_aspect_ratio"] = persisted.get(
+            "subtitle_removal_last_aspect_ratio", 0.0
+        )
+    return current
+
 def _set_env():
     # 环境变量设置
     if IS_FROZEN:
@@ -379,6 +394,11 @@ class AppSettings:
             "no_speech_threshold": 0.6,
             "whisper_prepare":False,
             "merge_short_sub": False,
+            # 中文短剧存在清晰画面字幕时，使用 OCR 校正 ASR 并过滤歌曲误识别
+            "burned_subtitle_ocr": True,
+            "remove_burned_subtitles": True,
+            "subtitle_removal_last_rect": "",
+            "subtitle_removal_last_aspect_ratio": 0.0,
             "vad_type": "silero",
             "trans_thread": 10,
             "aitrans_thread": 50,
@@ -478,7 +498,25 @@ class AppSettings:
 
     def _save_to_disk(self):
         try:
-            _write_with_retry(self._json_path,json.dumps(self.to_dict(), ensure_ascii=False))
+            data = self.to_dict()
+            json_path = Path(self._json_path)
+            if json_path.exists():
+                try:
+                    persisted = json.loads(json_path.read_text(encoding='utf-8'))
+                except (json.JSONDecodeError, OSError):
+                    persisted = {}
+                _preserve_saved_subtitle_region(data, persisted)
+                # Keep this instance in sync as well, otherwise its next save
+                # would repeatedly attempt to write the stale empty value.
+                self._apply_dict({
+                    key: data[key]
+                    for key in (
+                        "subtitle_removal_last_rect",
+                        "subtitle_removal_last_aspect_ratio",
+                    )
+                    if key in data
+                })
+            _write_with_retry(self._json_path, json.dumps(data, ensure_ascii=False))
         except Exception as e:
             logger.exception(f'保存settings到本地失败：{e}',exc_info=True)
 

@@ -3,6 +3,7 @@
 # 失败：第一个值为False，则为失败，第二个值存储失败原因
 # 成功，第一个值存在需要的返回值，不需要时返回True，第二个值为None
 import os, re, json, traceback
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import List, Tuple, Union
 from videotrans.task.taskcfg import SrtItem
@@ -26,6 +27,122 @@ def select_faster_compute_type(requested, *, is_cuda, supported_types):
         else ("int8", "int8_float32", "int16", "float32")
     )
     return next((item for item in preferences if item in supported), "default")
+
+
+def _build_refinement_groups(raws, *, max_gap_ms=2000, max_group_ms=25000,
+                             padding_ms=800, audio_duration=0):
+    groups = []
+    for item in raws:
+        if not item.get('text', '').strip():
+            continue
+        start, end = int(item['start_time']), int(item['end_time'])
+        if (not groups
+                or start - groups[-1]['end'] > max_gap_ms
+                or end - groups[-1]['start'] > max_group_ms):
+            groups.append({'items': [item], 'start': start, 'end': end})
+        else:
+            groups[-1]['items'].append(item)
+            groups[-1]['end'] = end
+
+    for group in groups:
+        group['clip_start'] = max(0, group['start'] - padding_ms)
+        group['clip_end'] = group['end'] + padding_ms
+        if audio_duration > 0:
+            group['clip_end'] = min(group['clip_end'], audio_duration)
+
+    for index in range(len(groups) - 1):
+        current, following = groups[index], groups[index + 1]
+        if current['clip_end'] > following['clip_start']:
+            boundary = (current['end'] + following['start']) // 2
+            current['clip_end'] = boundary
+            following['clip_start'] = boundary
+    return groups
+
+
+def _normalized_refinement_text(text):
+    return re.sub(r'[\W_]+', '', text or '', flags=re.UNICODE).lower()
+
+
+def _merge_refined_faster_result(groups, refined_raws, *, similarity_threshold=0.75):
+    merged = []
+    for group in groups:
+        base_text = _normalized_refinement_text(''.join(item['text'] for item in group['items']))
+        candidates = [
+            item for item in refined_raws
+            if item['end_time'] > group['clip_start'] and item['start_time'] < group['clip_end']
+        ]
+        candidates = [
+            item for item in candidates
+            if len(_normalized_refinement_text(item['text'])) > 1
+            or _normalized_refinement_text(item['text']) in base_text
+        ]
+        candidate_text = _normalized_refinement_text(''.join(item['text'] for item in candidates))
+        similarity = (
+            SequenceMatcher(None, base_text, candidate_text).ratio()
+            if base_text and candidate_text else 0.0
+        )
+        merged.extend(candidates if similarity >= similarity_threshold else group['items'])
+
+    merged.sort(key=lambda item: (item['start_time'], item['end_time']))
+    for index, item in enumerate(merged, 1):
+        item['line'] = index
+    return merged
+
+
+def _refine_faster_result(*, model, raws, refine_audio_file, detect_language, prompt,
+                          temperature, beam_size, best_of, no_speech_threshold,
+                          condition_on_previous_text, hotwords, repetition_penalty,
+                          compression_ratio_threshold, max_speech_ms, audio_duration,
+                          logs_file):
+    if not raws or not refine_audio_file or not Path(refine_audio_file).is_file():
+        return raws
+
+    groups = _build_refinement_groups(raws, audio_duration=audio_duration)
+    if not groups:
+        return raws
+
+    clip_timestamps = []
+    for group in groups:
+        clip_timestamps.extend([group['clip_start'] / 1000.0, group['clip_end'] / 1000.0])
+
+    _write_log(logs_file, json.dumps({
+        "type": "logs",
+        "text": "Refining transcription with original audio",
+    }))
+    segments, info = model.transcribe(
+        refine_audio_file,
+        beam_size=beam_size,
+        best_of=best_of,
+        condition_on_previous_text=condition_on_previous_text,
+        vad_filter=False,
+        clip_timestamps=clip_timestamps,
+        word_timestamps=True,
+        temperature=temperature,
+        hotwords=hotwords,
+        repetition_penalty=repetition_penalty,
+        compression_ratio_threshold=compression_ratio_threshold,
+        no_speech_threshold=no_speech_threshold,
+        language=detect_language.split('-')[0] if detect_language and detect_language != 'auto' else None,
+        initial_prompt=prompt if prompt else None,
+    )
+    texts = []
+    for segment in segments:
+        if not segment.text.strip():
+            continue
+        texts.append({
+            "text": segment.text,
+            "start": segment.start,
+            "end": segment.end,
+            "words": [
+                {'word': word.word, 'start': word.start, 'end': word.end}
+                for word in segment.words
+            ],
+        })
+    if not texts:
+        return raws
+
+    refined_raws = _resegment(texts, info.language, max_speech_ms, logs_file)
+    return _merge_refined_faster_result(groups, refined_raws)
 
 
 def write_faster_result_sidecar(logs_file, data, error):
@@ -180,6 +297,7 @@ def faster_whisper(
         condition_on_previous_text=False,
         speech_timestamps=None,
         audio_file=None,
+        refine_audio_file=None,
         local_dir=None,
         compute_type="default",
         beam_size=5,
@@ -322,8 +440,6 @@ def faster_whisper(
                     continue
                 i += 1
                 s, e = int(segment.start * 1000), int(segment.end * 1000)
-                if jianfan:
-                    text = zhconv.convert(text, 'zh-hans')
                 tmp = SrtItem(**{
                     'text': text,
                     'start_time': s,
@@ -371,10 +487,35 @@ def faster_whisper(
                 return _result(False, "No transcription results returned. Please check the original audio/video or model and try again.")
             raws = _resegment(texts, info.language, max_speech_ms, logs_file)
             logger.debug('断句结果重新修正完毕')
-            if jianfan and raws:
-                for it in raws:
-                    it['text'] = zhconv.convert(it['text'], 'zh-hans')
             logger.debug('返回识别结果')
+
+        if refine_audio_file and raws:
+            baseline_raws = raws
+            try:
+                raws = _refine_faster_result(
+                    model=model,
+                    raws=raws,
+                    refine_audio_file=refine_audio_file,
+                    detect_language=detect_language,
+                    prompt=prompt,
+                    temperature=temperature,
+                    beam_size=beam_size,
+                    best_of=best_of,
+                    no_speech_threshold=no_speech_threshold,
+                    condition_on_previous_text=condition_on_previous_text,
+                    hotwords=hotwords,
+                    repetition_penalty=repetition_penalty,
+                    compression_ratio_threshold=compression_ratio_threshold,
+                    max_speech_ms=max_speech_ms,
+                    audio_duration=audio_duration,
+                    logs_file=logs_file,
+                )
+            except Exception as e:
+                raws = baseline_raws
+                logger.exception(f'原始音轨二次校正失败，保留第一遍人声识别结果:{e}', exc_info=True)
+        if jianfan and raws:
+            for it in raws:
+                it['text'] = zhconv.convert(it['text'], 'zh-hans')
         return _result(raws, None)
     except BaseException as e:
         msg = traceback.format_exc()

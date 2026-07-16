@@ -24,6 +24,8 @@ class BaseRecogn(BaseCon):
     model_name: Optional[str] = None
     # 待识别的 16k wav
     audio_file: Optional[str] = None
+    # 可选的原始音轨，用于对分离人声识别结果做第二遍校正
+    refine_audio_file: Optional[str] = None
     # 临时目录
     cache_folder: Optional[str] = None
 

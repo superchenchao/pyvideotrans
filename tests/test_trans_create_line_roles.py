@@ -49,3 +49,33 @@ def test_prepare_line_roles_keeps_auto_mapping_task_local_and_applies_manual_ove
     assert result == {"1": "AutoVoiceA", "2": "ManualVoice"}
     assert task.auto_line_roles == {"1": "AutoVoiceA", "2": "AutoVoiceB"}
     assert (cache_dir / "speaker_roles.json").is_file()
+
+
+def test_prepare_line_roles_registers_single_speaker_episode(tmp_path):
+    cache_dir = tmp_path / "cache"
+    target_dir = tmp_path / "target"
+    cache_dir.mkdir()
+    target_dir.mkdir()
+    (cache_dir / "speaker.json").write_text(
+        json.dumps(["spk0", "spk0"]), encoding="utf-8"
+    )
+    task = object.__new__(TransCreate)
+    task.auto_line_roles = {}
+    task.cfg = SimpleNamespace(
+        cache_folder=cache_dir.as_posix(),
+        target_dir=target_dir.as_posix(),
+        target_language_code="ja",
+        tts_type=0,
+        voice_role="Nanami",
+        source_wav=(tmp_path / "source.wav").as_posix(),
+    )
+    captured = {}
+    task._register_series_speakers = lambda **kwargs: captured.update(kwargs)
+    subtitles = [
+        {"line": 1, "start_time": 0, "end_time": 1000},
+        {"line": 2, "start_time": 1000, "end_time": 2000},
+    ]
+
+    assert task._prepare_line_roles(subtitles) == {}
+    assert captured["speakers"] == ["spk0", "spk0"]
+    assert captured["report"]["speaker_to_voice"] == {"spk0": "Nanami"}

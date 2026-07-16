@@ -26,11 +26,10 @@ class EditRecognResultDialog2(QDialog):
         self.setWindowIcon(QIcon(f"{ROOT_DIR}/videotrans/styles/icon.ico"))
         self.setMinimumWidth(int(parent.width*0.95))
         self.setMinimumHeight(int(parent.height*0.95))
-        self.setWindowFlags(Qt.Window |         
-            Qt.WindowStaysOnTopHint |       # 2. 始终在最顶层
-            Qt.WindowTitleHint |            # 3. 显示标题栏
-            Qt.CustomizeWindowHint |        # 4. 允许自定义标题栏按钮（否则OS会强制加关闭按钮）
-            Qt.WindowMaximizeButtonHint     # 5. 只加最大化按钮，不加关闭按钮
+        self.setWindowFlags(Qt.Window |
+            Qt.WindowTitleHint |            # 显示标题栏
+            Qt.CustomizeWindowHint |        # 允许自定义标题栏按钮（否则OS会强制加关闭按钮）
+            Qt.WindowMaximizeButtonHint     # 只加最大化按钮，不加关闭按钮
         )
 
         self.count_down = int(float(settings.get('countdown_sec', 1)))

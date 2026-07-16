@@ -2,6 +2,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QEvent
 from PySide6.QtWidgets import QApplication, QComboBox
 
 from videotrans import tts
@@ -31,6 +32,18 @@ def test_dialog_search_filters_current_channel_roles():
     ]
 
 
+def test_dialog_does_not_count_no_as_a_voice():
+    _app()
+    dialog = VoiceSelectorDialog(
+        tts_type=tts.AZURE_TTS,
+        language="ja",
+        roles=["No", "Nanami(Female)", "Andrew Multilingual(Male)"],
+    )
+
+    assert dialog.voice_list.count() == 3
+    assert dialog.result_label.text() == "2 个音色"
+
+
 def test_combo_adapter_preserves_item_data_as_role_value():
     _app()
     combo = QComboBox()
@@ -49,6 +62,16 @@ def test_combo_adapter_preserves_item_data_as_role_value():
 
     event_filter._select_role("Victor(Male/PR)")
     assert combo.currentData() == "Victor(Male/PR)"
+
+
+def test_event_filter_ignores_events_during_partial_initialization():
+    event_filter = VoiceSelectorEventFilter.__new__(VoiceSelectorEventFilter)
+
+    assert VoiceSelectorEventFilter.eventFilter(
+        event_filter,
+        None,
+        QEvent(QEvent.Type.User),
+    ) is False
 
 
 def test_dialog_pages_large_channel_but_searches_all_roles():

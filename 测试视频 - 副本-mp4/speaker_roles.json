@@ -1,0 +1,43 @@
+{
+  "speaker_count": 4,
+  "speaker_counts": {
+    "spk0": 13,
+    "spk2": 7,
+    "spk4": 16,
+    "spk5": 10
+  },
+  "speaker_profiles": {
+    "spk0": {
+      "gender": "female",
+      "median_pitch_hz": 236.6,
+      "pitch_frames": 604
+    },
+    "spk2": {
+      "gender": "male",
+      "median_pitch_hz": 111.7,
+      "pitch_frames": 509
+    },
+    "spk4": {
+      "gender": "female",
+      "median_pitch_hz": 239.2,
+      "pitch_frames": 629
+    },
+    "spk5": {
+      "gender": "female",
+      "median_pitch_hz": 235.7,
+      "pitch_frames": 580
+    }
+  },
+  "speaker_to_voice": {
+    "spk4": "Elena(Female)",
+    "spk0": "Sofia(Female)",
+    "spk5": "Catalina(Female)",
+    "spk2": "Tomas(Male)"
+  },
+  "line_role_count": 46,
+  "voice_reused": false,
+  "available_voice_count": 79,
+  "target_language_code": "es",
+  "tts_type": 28,
+  "default_voice": "Elena(Female)"
+}

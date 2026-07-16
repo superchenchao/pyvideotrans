@@ -1,4 +1,5 @@
 import copy
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import QFileDialog
 from videotrans import translator, recognition, tts
 from videotrans.component.progressbar import ClickableProgressBar
 from videotrans.configure import contants
-from videotrans.configure.config import tr, params, settings, app_cfg
+from videotrans.configure.config import ROOT_DIR, tr, params, settings, app_cfg
 from videotrans.mainwin._actions_base import WinActionBase
 from videotrans.task.taskcfg import InputFile, SignMsg
 from videotrans.util import tools
@@ -207,7 +208,9 @@ class WinAction(WinActionBase):
             self.main.voice_role.addItems(['No'])
             return
 
-        _role_list = tools.role_menu(self.main.tts_type.currentIndex(), code.split('-')[0])
+        tts_type = self.main.tts_type.currentIndex()
+        role_language = code if tts_type == tts.AZURE_TTS else code.split('-')[0]
+        _role_list = tools.role_menu(tts_type, role_language)
         self.main.current_rolelist = _role_list
         self.main.voice_role.addItems(_role_list)
 
@@ -351,6 +354,7 @@ class WinAction(WinActionBase):
         self.cfg['clear_cache'] = self.main.clear_cache.isChecked()
         self.cfg['only_out_mp4'] = self.main.only_out_mp4.isChecked()
         self.cfg['fix_punc'] = self.main.fix_punc.isChecked()
+        self.cfg['remove_burned_subtitles'] = self.main.remove_burned_subtitles.isChecked()
 
         # 配音设置
         self.cfg['tts_type'] = self.main.tts_type.currentIndex()
@@ -465,6 +469,80 @@ class WinAction(WinActionBase):
         self.cfg['app_mode'] = self.main.app_mode
         self.cfg['output_srt'] = self.main.output_srt.currentIndex()
 
+        first_video = next((
+            video_path for video_path in self.queue_mp4
+            if Path(video_path).suffix.lower().lstrip('.') in contants.VIDEO_EXTS
+        ), None)
+        should_remove_subtitles = bool(
+            self.cfg['remove_burned_subtitles']
+            and self.main.app_mode != 'tiqu'
+            and first_video
+        )
+        self.cfg['remove_burned_subtitles'] = should_remove_subtitles
+        settings['remove_burned_subtitles'] = self.main.remove_burned_subtitles.isChecked()
+
+        initial_rect = None
+        saved_rect = settings.get("subtitle_removal_last_rect", "")
+        if saved_rect:
+            try:
+                candidate = json.loads(saved_rect) if isinstance(saved_rect, str) else saved_rect
+                if isinstance(candidate, list) and len(candidate) == 4:
+                    initial_rect = candidate
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+        should_prompt_for_ocr_area = bool(
+            settings.get("burned_subtitle_ocr", True)
+            and self.main.app_mode != 'tiqu'
+            and first_video
+            and self.cfg.get('recogn_type') == recognition.FASTER_WHISPER
+            and str(self.cfg.get('source_language_code', '')).lower().startswith('zh')
+            and not initial_rect
+        )
+        engine = None
+        if should_remove_subtitles or should_prompt_for_ocr_area:
+            from videotrans.subtitle_removal import find_subtitle_remover_engine
+            engine = find_subtitle_remover_engine(ROOT_DIR)
+            if should_remove_subtitles and not engine:
+                self.main.startbtn.setDisabled(False)
+                tools.show_error(tr("Subtitle removal engine is not installed"))
+                return
+            missing = engine.missing_files("auto") if engine else []
+            if should_remove_subtitles and missing:
+                self.main.startbtn.setDisabled(False)
+                tools.show_error(
+                    tr("Subtitle removal model is incomplete")
+                    + "\n" + "\n".join(str(path) for path in missing)
+                )
+                return
+            # OCR-only selection needs the text detector, not the inpainting
+            # model required by subtitle removal.
+            ocr_detector = (
+                engine.root / "backend" / "models" / "V5"
+                / "ch_det_fast" / "inference.json"
+            ) if engine else None
+            if not ocr_detector or not ocr_detector.is_file():
+                should_prompt_for_ocr_area = False
+
+        if should_remove_subtitles or should_prompt_for_ocr_area:
+            from videotrans.component.subtitle_removal import select_batch_subtitle_area
+            selection = select_batch_subtitle_area(
+                input_file=first_video,
+                initial_normalized_rect=initial_rect,
+                parent=self.main,
+            )
+            if selection is None:
+                self.main.startbtn.setDisabled(False)
+                return
+            self.cfg['subtitle_removal_rect'] = selection['normalized_rect']
+            self.cfg['subtitle_removal_aspect_ratio'] = selection['reference_aspect_ratio']
+            settings['subtitle_removal_last_rect'] = json.dumps(selection['normalized_rect'])
+            settings['subtitle_removal_last_aspect_ratio'] = selection['reference_aspect_ratio']
+        else:
+            self.cfg['subtitle_removal_rect'] = None
+            self.cfg['subtitle_removal_aspect_ratio'] = 0.0
+        settings.save()
+
         if self.main.recogn_type.currentIndex() == recognition.FASTER_WHISPER or self.main.app_mode == 'biaozhun':
             # 背景音量
             self.cfg['loop_backaudio'] = self.main.is_loop_bgm.currentIndex()
@@ -518,6 +596,7 @@ class WinAction(WinActionBase):
                 name=obj['name'],
                 uuid=obj['uuid'])
 
+        cfg['series_video_paths'] = [Path(obj['name']).as_posix() for obj in self.obj_list]
         cfg['clear_cache'] = False
 
         from videotrans.task.mult_video import MultVideo
@@ -553,7 +632,13 @@ class WinAction(WinActionBase):
 
         txt = self.main.subtitle_area.toPlainText().strip()
         self.cfg.update(
-            {'subtitles': txt, 'app_mode': self.main.app_mode}
+            {
+                'subtitles': txt,
+                'app_mode': self.main.app_mode,
+                'series_video_paths': [
+                    Path(obj['name']).as_posix() for obj in self.obj_list
+                ],
+            }
         )
         cfg = copy.deepcopy(self.cfg)
 
@@ -766,17 +851,29 @@ class WinAction(WinActionBase):
         if d['type'] == 'edit_subtitle_target':
             # 弹出编辑配音字幕
             from videotrans.component.onlyone_set_role import SpeakerAssignmentDialog
-            parts = d['text'].split('<|>', 3)
-            cache_folder, target_language, tts_type = parts[:3]
-            source_audio = parts[3] if len(parts) > 3 else None
+            try:
+                role_payload = json.loads(d['text'])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                parts = d['text'].split('<|>', 3)
+                role_payload = {
+                    'cache_folder': parts[0],
+                    'target_language': parts[1],
+                    'tts_type': parts[2],
+                    'source_audio': parts[3] if len(parts) > 3 else None,
+                }
             dialog = SpeakerAssignmentDialog(
                 source_sub=None if not app_cfg.onlyone_trans else app_cfg.onlyone_source_sub,
-                source_audio=source_audio,
+                source_audio=role_payload.get('source_audio'),
                 target_sub=app_cfg.onlyone_target_sub,
                 all_voices=self.main.current_rolelist,
-                cache_folder=cache_folder,
-                target_language=target_language,
-                tts_type=int(tts_type),
+                cache_folder=role_payload.get('cache_folder'),
+                target_language=role_payload.get('target_language', 'en'),
+                source_language=role_payload.get('source_language', ''),
+                tts_type=int(role_payload.get('tts_type', 0)),
+                video_path=role_payload.get('video_path'),
+                series_folder=role_payload.get('series_folder'),
+                series_video_paths=role_payload.get('series_video_paths'),
+                series_output_dir=role_payload.get('series_output_dir'),
                 default_role=self.main.voice_role.currentText(),
                 parent=self.main
 

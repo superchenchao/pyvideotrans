@@ -1,3 +1,6 @@
+import pytest
+from tenacity import RetryError
+
 from videotrans.tts import _azuretts
 
 
@@ -74,3 +77,80 @@ def test_resolve_voice_name_accepts_cached_edge_display_name(monkeypatch):
     assert _azuretts.resolve_voice_name("es", "Ximena(Female/ES)") == (
         "es-ES-XimenaNeural"
     )
+
+
+def test_azure_always_has_at_least_one_retry(monkeypatch):
+    monkeypatch.setitem(_azuretts.settings, "retry_nums", 1)
+
+    assert _azuretts.azure_retry_attempts() == 2
+
+
+def test_describe_cancellation_marks_transient_errors_retryable():
+    details = type("Details", (), {
+        "error_code": type("Code", (), {"name": "ServiceTimeout"})(),
+        "error_details": "request timed out",
+        "reason": "Error",
+    })()
+
+    message, permanent = _azuretts.describe_cancellation(details)
+
+    assert "ServiceTimeout" in message
+    assert "request timed out" in message
+    assert permanent is False
+
+
+def test_describe_cancellation_does_not_retry_authentication_errors():
+    details = type("Details", (), {
+        "error_code": type("Code", (), {"name": "AuthenticationFailure"})(),
+        "error_details": "invalid subscription key",
+        "reason": "Error",
+    })()
+
+    message, permanent = _azuretts.describe_cancellation(details)
+
+    assert "AuthenticationFailure" in message
+    assert permanent is True
+
+
+def test_transient_cancellation_is_retried_once(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(_azuretts.logger, "disabled", True)
+
+    class FakeSpeechConfig:
+        def set_speech_synthesis_output_format(self, output_format):
+            self.output_format = output_format
+
+    class FakeAsyncResult:
+        def get(self):
+            calls.append("synthesize")
+            return type("Result", (), {
+                "reason": _azuretts.speechsdk.ResultReason.Canceled,
+                "cancellation_details": type("Details", (), {
+                    "error_code": type("Code", (), {"name": "ServiceTimeout"})(),
+                    "error_details": "request timed out",
+                    "reason": "Error",
+                })(),
+            })()
+
+    class FakeSynthesizer:
+        def speak_ssml_async(self, ssml):
+            return FakeAsyncResult()
+
+    monkeypatch.setattr(_azuretts, "create_speech_config", lambda *args: FakeSpeechConfig())
+    monkeypatch.setattr(_azuretts, "resolve_voice_name", lambda *args: "ja-JP-TestVoice")
+    monkeypatch.setattr(_azuretts.speechsdk.audio, "AudioOutputConfig", lambda **kwargs: object())
+    monkeypatch.setattr(_azuretts.speechsdk, "SpeechSynthesizer", lambda **kwargs: FakeSynthesizer())
+    monkeypatch.setattr(_azuretts.AzureTTS._run.retry, "sleep", lambda seconds: None)
+
+    item = {
+        "text": "テスト",
+        "role": "TestVoice",
+        "line": 18,
+        "filename": str(tmp_path / "line-18.wav"),
+    }
+    tts = _azuretts.AzureTTS(queue_tts=[item], language="ja")
+
+    with pytest.raises(RetryError):
+        tts._run(item, 0)
+
+    assert calls == ["synthesize", "synthesize"]

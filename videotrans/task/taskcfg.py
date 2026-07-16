@@ -1,6 +1,6 @@
 import os
-from dataclasses import dataclass, asdict
-from typing import Optional, Union
+from dataclasses import dataclass, asdict, field
+from typing import List, Optional, Union
 
 @dataclass
 class InputFile:
@@ -103,6 +103,10 @@ class TaskCfgBase:
 
     cache_folder: str = None  # 当前文件的临时文件夹,用于存放临时过程文件
 
+    # 本次导入/重试批次中的全部视频。角色库必须以用户实际选择的批次为
+    # 边界，不能直接扫描源目录，否则目录中的测试视频也会被误算成剧集。
+    series_video_paths: List[str] = field(default_factory=list)
+
     is_cuda: bool = False  # 是否使用cuda加速
 
     source_language: str = None  # 原始语言名称或代码
@@ -177,3 +181,6 @@ class TaskCfgVTT(TaskCfgSTT, TaskCfgTTS, TaskCfgSTS):
     copysrt_rawvideo: bool = False  # 是否将生成的字幕复制到视频目录下
     loop_backaudio: int = 0  # 循环背景音 或 延长拉伸背景音
     backaudio_volume: float = 0.8  # 背景音量
+    remove_burned_subtitles: bool = False  # 是否在最终视频画面中消除原硬字幕
+    subtitle_removal_rect: Optional[list] = None  # 首视频框选区域的归一化坐标
+    subtitle_removal_aspect_ratio: float = 0.0  # 首视频宽高比，用于批量安全校验

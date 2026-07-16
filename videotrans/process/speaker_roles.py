@@ -23,6 +23,32 @@ def is_assignable_voice(voice):
     return bool(text) and text.lower() not in {"no", "-", "clone"}
 
 
+def classify_pitch_gender(
+    *,
+    primary_median,
+    primary_upper_quartile,
+    primary_high_ratio,
+    octave_safe_median,
+    octave_safe_high_ratio,
+    male_max_hz=190.0,
+    female_min_hz=200.0,
+):
+    """Classify pitch while guarding against the common half-frequency error."""
+    octave_recovered_female = (
+        octave_safe_median >= female_min_hz + 5
+        and octave_safe_high_ratio >= 0.50
+        and primary_upper_quartile >= female_min_hz + 15
+        and primary_high_ratio >= 0.30
+    )
+    if octave_recovered_female:
+        return "female", "octave_recovered"
+    if primary_median <= male_max_hz:
+        return "male", "primary_pitch"
+    if primary_median >= female_min_hz:
+        return "female", "primary_pitch"
+    return "unknown", "pitch_overlap"
+
+
 def estimate_speaker_profiles(
     *,
     audio_file,
@@ -34,7 +60,14 @@ def estimate_speaker_profiles(
     female_min_hz=200.0,
 ):
     profiles = {
-        speaker: {"gender": "unknown", "median_pitch_hz": None, "pitch_frames": 0}
+        speaker: {
+            "gender": "unknown",
+            "median_pitch_hz": None,
+            "octave_safe_pitch_hz": None,
+            "high_pitch_ratio": 0.0,
+            "pitch_frames": 0,
+            "gender_reason": "insufficient_audio",
+        }
         for speaker in dict.fromkeys(normalize_speaker(value) for value in speakers)
         if speaker
     }
@@ -73,42 +106,61 @@ def estimate_speaker_profiles(
             samples = np.concatenate(parts)
             if len(samples) < sample_rate // 2:
                 continue
-            pitches = librosa.yin(
-                samples,
-                fmin=70,
-                fmax=350,
-                sr=sample_rate,
-                frame_length=1024,
-                hop_length=256,
-            )
             rms = librosa.feature.rms(
                 y=samples,
                 frame_length=1024,
                 hop_length=256,
                 center=True,
             )[0]
-            size = min(len(pitches), len(rms))
-            pitches = pitches[:size]
-            rms = rms[:size]
             energy_floor = max(float(np.percentile(rms, 30)), 0.005)
-            voiced = pitches[
-                (rms >= energy_floor)
-                & np.isfinite(pitches)
-                & (pitches >= 70)
-                & (pitches < 345)
-            ]
+
+            def voiced_pitches(fmin):
+                pitches = librosa.yin(
+                    samples,
+                    fmin=fmin,
+                    fmax=350,
+                    sr=sample_rate,
+                    frame_length=1024,
+                    hop_length=256,
+                )
+                size = min(len(pitches), len(rms))
+                values = pitches[:size]
+                energy = rms[:size]
+                return values[
+                    (energy >= energy_floor)
+                    & np.isfinite(values)
+                    & (values >= fmin)
+                    & (values < 345)
+                ]
+
+            voiced = voiced_pitches(70)
             if len(voiced) < 12:
                 continue
+            octave_safe = voiced_pitches(130)
+            if len(octave_safe) < 12:
+                octave_safe = voiced
             median_pitch = float(np.median(voiced))
-            gender = "unknown"
-            if median_pitch <= male_max_hz:
-                gender = "male"
-            elif median_pitch >= female_min_hz:
-                gender = "female"
+            octave_safe_median = float(np.median(octave_safe))
+            primary_high_ratio = float(np.mean(voiced >= female_min_hz))
+            octave_safe_high_ratio = float(
+                np.mean(octave_safe >= female_min_hz)
+            )
+            gender, gender_reason = classify_pitch_gender(
+                primary_median=median_pitch,
+                primary_upper_quartile=float(np.percentile(voiced, 75)),
+                primary_high_ratio=primary_high_ratio,
+                octave_safe_median=octave_safe_median,
+                octave_safe_high_ratio=octave_safe_high_ratio,
+                male_max_hz=male_max_hz,
+                female_min_hz=female_min_hz,
+            )
             profiles[speaker] = {
                 "gender": gender,
                 "median_pitch_hz": round(median_pitch, 1),
+                "octave_safe_pitch_hz": round(octave_safe_median, 1),
+                "high_pitch_ratio": round(primary_high_ratio, 3),
                 "pitch_frames": int(len(voiced)),
+                "gender_reason": gender_reason,
             }
     except Exception:
         return profiles
@@ -120,6 +172,8 @@ def assign_speaker_voices(
     available_voices,
     default_voice="",
     speaker_profiles=None,
+    preferred_voices=None,
+    locked_speakers=None,
 ):
     normalized = [normalize_speaker(value) for value in speakers]
     normalized = [value for value in normalized if value]
@@ -151,13 +205,48 @@ def assign_speaker_voices(
         "unknown": voices,
     }
     profiles = speaker_profiles or {}
+    preferred_voices = preferred_voices or {}
+    locked_speakers = {str(value) for value in (locked_speakers or set())}
+
+    # Reserve still-valid automatic choices before allocating replacements, so
+    # correcting one bad gender guess does not reshuffle every other character.
+    auto_preferred = {}
+    reserved_voices = set()
+    for speaker in ordered_speakers:
+        preferred = str(preferred_voices.get(speaker, "") or "").strip()
+        if not preferred or preferred not in voices or speaker in locked_speakers:
+            continue
+        expected_gender = profiles.get(speaker, {}).get("gender", "unknown")
+        preferred_gender = voice_gender(preferred)
+        if (
+            expected_gender not in {"male", "female"}
+            or preferred_gender not in {"male", "female"}
+            or expected_gender == preferred_gender
+        ) and preferred not in reserved_voices:
+            auto_preferred[speaker] = preferred
+            reserved_voices.add(preferred)
+
     used = set()
     pool_offsets = defaultdict(int)
     mapping = {}
     for speaker in ordered_speakers:
         gender = profiles.get(speaker, {}).get("gender", "unknown")
         preferred = gender_pools.get(gender) or voices
-        voice = next((item for item in preferred if item not in used), None)
+        locked_voice = str(preferred_voices.get(speaker, "") or "").strip()
+        if speaker in locked_speakers and locked_voice in voices:
+            voice = locked_voice
+        else:
+            voice = auto_preferred.get(speaker)
+        if voice is None:
+            voice = next(
+                (
+                    item for item in preferred
+                    if item not in used and item not in reserved_voices
+                ),
+                None,
+            )
+        if voice is None:
+            voice = next((item for item in preferred if item not in used), None)
         if voice is None:
             voice = preferred[pool_offsets[gender] % len(preferred)]
             pool_offsets[gender] += 1
@@ -176,6 +265,8 @@ def build_auto_line_roles(
     available_voices,
     default_voice="",
     audio_file=None,
+    preferred_voices=None,
+    locked_speakers=None,
 ):
     normalized = [normalize_speaker(value) for value in speakers]
     profiles = estimate_speaker_profiles(
@@ -188,6 +279,8 @@ def build_auto_line_roles(
         available_voices,
         default_voice=default_voice,
         speaker_profiles=profiles,
+        preferred_voices=preferred_voices,
+        locked_speakers=locked_speakers,
     )
     line_roles = {}
     for index, speaker in enumerate(normalized):
@@ -199,6 +292,7 @@ def build_auto_line_roles(
             line_roles[str(line)] = voice
     counts = Counter(speaker for speaker in normalized if speaker)
     report = {
+        "profile_version": 2,
         "speaker_count": len(counts),
         "speaker_counts": dict(sorted(counts.items())),
         "speaker_profiles": profiles,

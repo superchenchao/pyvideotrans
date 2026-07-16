@@ -131,6 +131,7 @@ class WinActionBase:
         # 翻译
         self.main.label_9.show()
         self.main.recogn2pass.show()
+        self.main.remove_burned_subtitles.show()
         self.main.translate_type.show()
         self.main.label_2.show()
         self.main.source_language.show()
@@ -211,6 +212,7 @@ class WinActionBase:
 
         # 配音角色
         self.main.recogn2pass.hide()
+        self.main.remove_burned_subtitles.hide()
         self.main.only_out_mp4.hide()
         self.main.tts_text.hide()
         self.main.tts_type.hide()
@@ -441,6 +443,7 @@ class WinActionBase:
         self.main.pitch_rate.setDisabled(type)
         self.main.only_out_mp4.setDisabled(type)
         self.main.recogn2pass.setDisabled(type)
+        self.main.remove_burned_subtitles.setDisabled(type)
         self.main.import_sub.setDisabled(type)
         self.main.btn_get_video.setDisabled(type)
         self.main.btn_save_dir.setDisabled(type)
