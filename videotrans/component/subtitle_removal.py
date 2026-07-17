@@ -334,6 +334,8 @@ class SubtitleFrameLocatorWorker(QThread):
         self.cancelled = False
 
     def run(self) -> None:
+        if self.cancelled:
+            return
         worker_script = Path(ROOT_DIR) / "scripts" / "subtitle_locate_worker.py"
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         command = [
@@ -357,6 +359,9 @@ class SubtitleFrameLocatorWorker(QThread):
                 errors="replace",
                 creationflags=creationflags,
             )
+            if self.cancelled:
+                self.cancel()
+                return
             assert self.process.stdout is not None
             for raw_line in self.process.stdout:
                 if self.cancelled:
@@ -407,21 +412,29 @@ class SubtitleFrameLocatorWorker(QThread):
 
 class BatchSubtitleRemovalDialog(QDialog):
     def __init__(
-            self, *, input_file: str,
+            self, *, input_file: str | None = None,
+            input_files: list[str] | None = None,
             initial_normalized_rect: list[float] | None = None,
             parent=None):
         super().__init__(parent)
         self.setWindowTitle(tr("Select original subtitle area"))
         self.resize(1040, 720)
         self.setModal(True)
-        self.input_file = str(Path(input_file).resolve())
+        candidates = input_files or ([input_file] if input_file else [])
+        self.input_files = [str(Path(path).resolve()) for path in candidates if path]
+        if not self.input_files:
+            raise ValueError("At least one video is required for subtitle area selection")
+        self.current_file_index = 0
+        self.initial_normalized_rect = initial_normalized_rect
+        self.input_file = self.input_files[0]
         self.engine = find_subtitle_remover_engine(ROOT_DIR)
-        self.video_info = tools.get_video_info(self.input_file)
-        self.duration_ms = int(self.video_info.get("time", 0))
+        self.video_info = {}
+        self.duration_ms = 0
         self.slider_dragging = False
         self.user_interacted = False
         self.normalized_rect: list[float] | None = None
-        self.reference_aspect_ratio = self.video_info["width"] / self.video_info["height"]
+        self.reference_aspect_ratio = 0.0
+        self.skip_ocr = False
         self.preview_worker: SubtitleRemovalWorker | None = None
         self.locator_worker: SubtitleFrameLocatorWorker | None = None
         self.preview_position = 0
@@ -438,11 +451,32 @@ class BatchSubtitleRemovalDialog(QDialog):
 
         self._build_ui()
         self._bind_signals()
+        self._load_input_file(0)
+
+    def _load_input_file(self, index: int) -> None:
+        self.player.stop()
+        self._stop_locator_worker()
+        self.current_file_index = index % len(self.input_files)
+        self.input_file = self.input_files[self.current_file_index]
+        self.video_info = tools.get_video_info(self.input_file)
+        self.duration_ms = int(self.video_info.get("time", 0))
+        self.reference_aspect_ratio = self.video_info["width"] / self.video_info["height"]
+        self.preview_position = 0
+        self.showing_preview = False
+        self.automatic_seek_position = None
+        self.automatic_seek_image = QImage()
+        self.file_label.setText(
+            f"{self.current_file_index + 1}/{len(self.input_files)}  "
+            f"{Path(self.input_file).name}"
+        )
+        self.status_label.setText(
+            tr("Loading the subtitle locator; the first run usually takes 10 to 20 seconds...")
+        )
         self.canvas.set_source_size(self.video_info["width"], self.video_info["height"])
-        if initial_normalized_rect:
+        if self.initial_normalized_rect:
             try:
                 rect = scale_normalized_rect(
-                    initial_normalized_rect,
+                    self.initial_normalized_rect,
                     self.video_info["width"],
                     self.video_info["height"],
                 )
@@ -459,6 +493,16 @@ class BatchSubtitleRemovalDialog(QDialog):
         QTimer.singleShot(180, self.player.pause)
         QTimer.singleShot(0, self._start_locator)
 
+    def _show_next_video(self) -> None:
+        selection = self.canvas.selection
+        if selection:
+            self.initial_normalized_rect = normalize_rect(
+                selection,
+                self.video_info["width"],
+                self.video_info["height"],
+            )
+        self._load_input_file(self.current_file_index + 1)
+
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         instruction = QLabel(
@@ -466,6 +510,10 @@ class BatchSubtitleRemovalDialog(QDialog):
                "The same relative area will be reused for this batch."))
         instruction.setWordWrap(True)
         root.addWidget(instruction)
+
+        self.file_label = QLabel()
+        self.file_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(self.file_label)
 
         self.canvas = VideoSelectionCanvas()
         root.addWidget(self.canvas, 1)
@@ -496,11 +544,16 @@ class BatchSubtitleRemovalDialog(QDialog):
 
         buttons = QHBoxLayout()
         buttons.addStretch()
+        self.next_video_button = QPushButton(tr("Try another video"))
+        self.next_video_button.setVisible(len(self.input_files) > 1)
+        self.skip_ocr_button = QPushButton(tr("No burned-in subtitles in this batch; skip OCR"))
         self.preview_button = QPushButton(tr("Preview removal"))
         self.preview_button.setEnabled(self.canvas.selection is not None)
         self.start_button = QPushButton(tr("Start directly"))
         self.start_button.setDefault(True)
         self.cancel_button = QPushButton(tr("Cancel"))
+        buttons.addWidget(self.next_video_button)
+        buttons.addWidget(self.skip_ocr_button)
         buttons.addWidget(self.preview_button)
         buttons.addWidget(self.start_button)
         buttons.addWidget(self.cancel_button)
@@ -519,6 +572,8 @@ class BatchSubtitleRemovalDialog(QDialog):
             )
         )
         self.canvas.selection_changed.connect(self._selection_changed)
+        self.next_video_button.clicked.connect(self._show_next_video)
+        self.skip_ocr_button.clicked.connect(self._skip_ocr_for_batch)
         self.preview_button.clicked.connect(self._preview)
         self.start_button.clicked.connect(self._accept_selection)
         self.cancel_button.clicked.connect(self.reject)
@@ -685,6 +740,8 @@ class BatchSubtitleRemovalDialog(QDialog):
         self.preview_worker.start()
 
     def _set_busy(self, busy: bool) -> None:
+        self.next_video_button.setDisabled(busy)
+        self.skip_ocr_button.setDisabled(busy)
         self.preview_button.setDisabled(busy or self.canvas.selection is None)
         self.start_button.setDisabled(busy)
         self.cancel_button.setDisabled(busy)
@@ -721,11 +778,30 @@ class BatchSubtitleRemovalDialog(QDialog):
         self._stop_workers()
         self.accept()
 
+    def _skip_ocr_for_batch(self) -> None:
+        self.skip_ocr = True
+        self.normalized_rect = None
+        self._stop_workers()
+        self.accept()
+
+    def _stop_locator_worker(self) -> None:
+        worker = self.locator_worker
+        self.locator_worker = None
+        if not worker:
+            return
+        try:
+            worker.finished.disconnect(self._locator_finished)
+        except (RuntimeError, TypeError):
+            pass
+        worker.cancel()
+        if worker.wait(5000):
+            worker.deleteLater()
+        else:
+            worker.finished.connect(worker.deleteLater)
+
     def _stop_workers(self) -> None:
         self.player.stop()
-        if self.locator_worker:
-            self.locator_worker.cancel()
-            self.locator_worker.wait(5000)
+        self._stop_locator_worker()
         if self.preview_worker:
             self.preview_worker.cancel()
             self.preview_worker.wait(5000)
@@ -740,16 +816,23 @@ class BatchSubtitleRemovalDialog(QDialog):
 
 
 def select_batch_subtitle_area(
-        *, input_file: str, initial_normalized_rect: list[float] | None = None,
+        *, input_file: str | None = None, input_files: list[str] | None = None,
+        initial_normalized_rect: list[float] | None = None,
         parent=None) -> dict | None:
     dialog = BatchSubtitleRemovalDialog(
         input_file=input_file,
+        input_files=input_files,
         initial_normalized_rect=initial_normalized_rect,
         parent=parent,
     )
-    if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.normalized_rect:
+    if dialog.exec() != QDialog.DialogCode.Accepted:
+        return None
+    if dialog.skip_ocr:
+        return {"skip_ocr": True}
+    if not dialog.normalized_rect:
         return None
     return {
+        "skip_ocr": False,
         "normalized_rect": dialog.normalized_rect,
         "reference_aspect_ratio": dialog.reference_aspect_ratio,
     }

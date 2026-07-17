@@ -2,9 +2,9 @@ import copy
 import json
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Union
+from typing import Dict, List, Union
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QTextCursor
@@ -17,15 +17,38 @@ from videotrans.configure.config import ROOT_DIR, tr, params, settings, app_cfg
 from videotrans.mainwin._actions_base import WinActionBase
 from videotrans.task.taskcfg import InputFile, SignMsg
 from videotrans.util import tools
+from videotrans.util.subtitle_import import (
+    match_subtitles_to_videos,
+    read_timed_subtitle,
+)
+
+
+def _should_prompt_for_ocr_area(
+        *, burned_subtitle_ocr, app_mode, first_video, recogn_type,
+        source_language_code, initial_rect=None):
+    """Require confirmation for every eligible batch; saved ROI only pre-fills."""
+    return bool(
+        burned_subtitle_ocr
+        and app_mode != 'tiqu'
+        and first_video
+        and recogn_type == recognition.FASTER_WHISPER
+        and str(source_language_code).lower().startswith('zh')
+    )
 
 
 @dataclass
 class WinAction(WinActionBase):
 
+    imported_subtitle_files: List[str] = field(default_factory=list, init=False)
+    imported_subtitle_map: Dict[str, str] = field(default_factory=dict, init=False)
+
     def _reset(self):
         # 存放需要处理的视频dict信息，包括uuid
         self.obj_list = []
         self.main.source_mp4.setText(tr("No select videos"))
+        self.imported_subtitle_files = []
+        self.imported_subtitle_map = {}
+        self._set_import_subtitle_status()
 
     # 删除进度按钮
     def delete_process(self):
@@ -214,22 +237,153 @@ class WinAction(WinActionBase):
         self.main.current_rolelist = _role_list
         self.main.voice_role.addItems(_role_list)
 
-    # 从本地导入字幕文件
-    def import_sub_fun(self):
-        fname, _ = QFileDialog.getOpenFileName(self.main, tr('selectmp4'), params.get('last_opendir', ''),
-                                               "Srt files(*.srt *.txt)")
-        if not fname:return
-        content = ""
-        try:
-            content = Path(fname).read_text(encoding='utf-8')
-        except UnicodeError:
-            content = Path(fname).read_text(encoding='gbk')
-
-        if content:
-            self.main.subtitle_area.clear()
-            self.main.subtitle_area.insertPlainText(content.strip())
+    def _set_import_subtitle_status(self):
+        button = getattr(self.main, 'import_sub', None)
+        if not button:
+            return
+        if not self.imported_subtitle_files:
+            button.setText(tr("Import original language SRT"))
+            button.setToolTip(tr("Import text to be translated from a file.."))
+            return
+        if not self.queue_mp4:
+            button.setText(tr("Imported subtitle files", len(self.imported_subtitle_files)))
         else:
-            return tools.show_error(tr('import src error'))
+            button.setText(tr(
+                "Matched subtitle files",
+                len(self.imported_subtitle_map),
+                len(self.queue_mp4),
+            ))
+        button.setToolTip("\n".join(self.imported_subtitle_files))
+
+    def _subtitle_match_error(self, result):
+        messages = [tr("Subtitle files could not be matched to every video")]
+        if result.unmatched_videos:
+            messages.append(tr("Unmatched videos") + ":\n" + "\n".join(
+                Path(path).name for path in result.unmatched_videos
+            ))
+        if result.ambiguous_videos:
+            messages.append(tr("Ambiguous subtitle matches") + ":\n" + "\n".join(
+                Path(path).name for path in result.ambiguous_videos
+            ))
+        if result.unmatched_subtitles:
+            messages.append(tr("Unused subtitle files") + ":\n" + "\n".join(
+                Path(path).name for path in result.unmatched_subtitles
+            ))
+        return "\n\n".join(messages)
+
+    @staticmethod
+    def _collect_subtitles(folder, *, recursive=False):
+        iterator = Path(folder).rglob('*') if recursive else Path(folder).iterdir()
+        return sorted(
+            path.resolve().as_posix() for path in iterator
+            if path.is_file()
+            and path.suffix.casefold() in ('.srt', '.txt')
+            and not path.name.casefold().startswith('combined')
+        )
+
+    def _auto_import_subtitles_for_video_folder(self, selected_folder):
+        if self.imported_subtitle_files:
+            return False
+        folder = Path(selected_folder)
+        candidates = [folder / '字幕']
+        if folder.name.casefold() == '视频':
+            candidates.insert(0, folder.parent / '字幕')
+        for subtitle_folder in candidates:
+            if not subtitle_folder.is_dir():
+                continue
+            subtitles = self._collect_subtitles(subtitle_folder)
+            if subtitles:
+                return bool(self._set_imported_subtitle_files(subtitles))
+        return False
+
+    def _refresh_imported_subtitle_matches(
+            self, *, show_error=False, reload_single=True):
+        self.imported_subtitle_map = {}
+        if not self.imported_subtitle_files:
+            self._set_import_subtitle_status()
+            return True
+        if not self.queue_mp4:
+            self.main.subtitle_area.clear()
+            self._set_import_subtitle_status()
+            return True
+
+        result = match_subtitles_to_videos(
+            self.queue_mp4,
+            self.imported_subtitle_files,
+        )
+        self.imported_subtitle_map = result.mapping
+        if result.complete and len(self.queue_mp4) == 1:
+            if reload_single:
+                subtitle_path = next(iter(result.mapping.values()))
+                self.main.subtitle_area.clear()
+                self.main.subtitle_area.insertPlainText(
+                    read_timed_subtitle(subtitle_path)
+                )
+        else:
+            self.main.subtitle_area.clear()
+        self._set_import_subtitle_status()
+        if result.unmatched_videos:
+            tips = getattr(self.main, 'show_tips', None)
+            if tips:
+                tips.setText(tr(
+                    "Videos without matched subtitles will use speech recognition",
+                    len(result.unmatched_videos),
+                ))
+        if result.ambiguous_videos and show_error:
+            tools.show_error(self._subtitle_match_error(result))
+        return result.safe_to_run
+
+    def _set_imported_subtitle_files(self, filenames):
+        subtitle_files = [Path(path).resolve().as_posix() for path in filenames]
+        invalid = []
+        for path in subtitle_files:
+            try:
+                read_timed_subtitle(path)
+            except (OSError, ValueError, UnicodeError):
+                invalid.append(Path(path).name)
+        if invalid:
+            self.imported_subtitle_files = []
+            self.imported_subtitle_map = {}
+            self.main.subtitle_area.clear()
+            self._set_import_subtitle_status()
+            tools.show_error(
+                tr("Subtitle files must contain valid SRT timestamps")
+                + "\n" + "\n".join(invalid)
+            )
+            return False
+        self.imported_subtitle_files = subtitle_files
+        params['last_opendir'] = Path(subtitle_files[0]).parent.as_posix()
+        params.save()
+        return self._refresh_imported_subtitle_matches(show_error=True)
+
+    # 从本地导入一个或多个字幕文件
+    def import_sub_fun(self):
+        return self.import_sub_files()
+
+    def import_sub_files(self):
+        filenames, _ = QFileDialog.getOpenFileNames(
+            self.main,
+            tr("Select one or more subtitle files"),
+            params.get('last_opendir', ''),
+            "Subtitle files (*.srt *.txt)",
+        )
+        if not filenames:
+            return False
+        return self._set_imported_subtitle_files(filenames)
+
+    def import_sub_folder(self):
+        folder = QFileDialog.getExistingDirectory(
+            self.main,
+            tr("Select subtitle folder"),
+            params.get('last_opendir', ''),
+        )
+        if not folder:
+            return False
+        filenames = self._collect_subtitles(folder, recursive=True)
+        if not filenames:
+            tools.show_error(tr("No subtitle files found in the selected folder"))
+            return False
+        return self._set_imported_subtitle_files(filenames)
 
     # 判断是否需要翻译
     def shound_translate(self):
@@ -334,6 +488,10 @@ class WinAction(WinActionBase):
         # 无视频选择 ，也无导入字幕，无法处理
         if len(self.queue_mp4) < 1:
             tools.show_error(tr("Video file must be selected"))
+            self.main.startbtn.setDisabled(False)
+            return
+        if not self._refresh_imported_subtitle_matches(
+                show_error=True, reload_single=False):
             self.main.startbtn.setDisabled(False)
             return
         # 核对代理
@@ -469,16 +627,20 @@ class WinAction(WinActionBase):
         self.cfg['app_mode'] = self.main.app_mode
         self.cfg['output_srt'] = self.main.output_srt.currentIndex()
 
-        first_video = next((
+        batch_videos = [
             video_path for video_path in self.queue_mp4
             if Path(video_path).suffix.lower().lstrip('.') in contants.VIDEO_EXTS
-        ), None)
+        ]
+        first_video = batch_videos[0] if batch_videos else None
         should_remove_subtitles = bool(
             self.cfg['remove_burned_subtitles']
             and self.main.app_mode != 'tiqu'
             and first_video
         )
         self.cfg['remove_burned_subtitles'] = should_remove_subtitles
+        self.cfg['burned_subtitle_ocr'] = bool(
+            settings.get("burned_subtitle_ocr", True)
+        )
         settings['remove_burned_subtitles'] = self.main.remove_burned_subtitles.isChecked()
 
         initial_rect = None
@@ -491,14 +653,14 @@ class WinAction(WinActionBase):
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
 
-        should_prompt_for_ocr_area = bool(
-            settings.get("burned_subtitle_ocr", True)
-            and self.main.app_mode != 'tiqu'
-            and first_video
-            and self.cfg.get('recogn_type') == recognition.FASTER_WHISPER
-            and str(self.cfg.get('source_language_code', '')).lower().startswith('zh')
-            and not initial_rect
-        )
+        should_prompt_for_ocr_area = _should_prompt_for_ocr_area(
+            burned_subtitle_ocr=self.cfg['burned_subtitle_ocr'],
+            app_mode=self.main.app_mode,
+            first_video=first_video,
+            recogn_type=self.cfg.get('recogn_type'),
+            source_language_code=self.cfg.get('source_language_code', ''),
+            initial_rect=initial_rect,
+        ) and len(self.imported_subtitle_map) < len(self.queue_mp4)
         engine = None
         if should_remove_subtitles or should_prompt_for_ocr_area:
             from videotrans.subtitle_removal import find_subtitle_remover_engine
@@ -528,16 +690,23 @@ class WinAction(WinActionBase):
             from videotrans.component.subtitle_removal import select_batch_subtitle_area
             selection = select_batch_subtitle_area(
                 input_file=first_video,
+                input_files=batch_videos,
                 initial_normalized_rect=initial_rect,
                 parent=self.main,
             )
             if selection is None:
                 self.main.startbtn.setDisabled(False)
                 return
-            self.cfg['subtitle_removal_rect'] = selection['normalized_rect']
-            self.cfg['subtitle_removal_aspect_ratio'] = selection['reference_aspect_ratio']
-            settings['subtitle_removal_last_rect'] = json.dumps(selection['normalized_rect'])
-            settings['subtitle_removal_last_aspect_ratio'] = selection['reference_aspect_ratio']
+            if selection.get("skip_ocr"):
+                self.cfg['burned_subtitle_ocr'] = False
+                self.cfg['remove_burned_subtitles'] = False
+                self.cfg['subtitle_removal_rect'] = None
+                self.cfg['subtitle_removal_aspect_ratio'] = 0.0
+            else:
+                self.cfg['subtitle_removal_rect'] = selection['normalized_rect']
+                self.cfg['subtitle_removal_aspect_ratio'] = selection['reference_aspect_ratio']
+                settings['subtitle_removal_last_rect'] = json.dumps(selection['normalized_rect'])
+                settings['subtitle_removal_last_aspect_ratio'] = selection['reference_aspect_ratio']
         else:
             self.cfg['subtitle_removal_rect'] = None
             self.cfg['subtitle_removal_aspect_ratio'] = 0.0
@@ -631,6 +800,11 @@ class WinAction(WinActionBase):
             return
 
         txt = self.main.subtitle_area.toPlainText().strip()
+        self.cfg['subtitle_files'] = copy.deepcopy(self.imported_subtitle_map)
+        if self.imported_subtitle_files:
+            # Single-file text remains editable in the text area; batch items
+            # are read from their own matched files inside TransCreate.
+            txt = txt if len(self.queue_mp4) == 1 else ''
         self.cfg.update(
             {
                 'subtitles': txt,

@@ -296,6 +296,7 @@ class WinActionBase:
         allowed_exts = contants.VIDEO_EXTS + contants.AUDIO_EXITS
         format_str = " ".join(['*.' + f for f in allowed_exts])
         mp4_list = []
+        selected_folder = None
         if self.main.select_file_type.isChecked():
             """选择文件夹并添加到 selected_files 列表中"""
             folder_path = QtWidgets.QFileDialog.getExistingDirectory(
@@ -307,6 +308,7 @@ class WinActionBase:
             if not folder_path:
                 return
             p = Path(folder_path)
+            selected_folder = p
             p_out = p.parent / '_video_out' / p.name
 
             # 使用列表推导式一行完成
@@ -332,6 +334,15 @@ class WinActionBase:
         if len(mp4_list) > 0:
             self.main.source_mp4.setText(f'{len(mp4_list)} videos')
             self.queue_mp4 = mp4_list
+            auto_import_subtitles = getattr(
+                self, '_auto_import_subtitles_for_video_folder', None
+            )
+            did_auto_import = False
+            if selected_folder and callable(auto_import_subtitles):
+                did_auto_import = bool(auto_import_subtitles(selected_folder))
+            refresh_subtitles = getattr(self, '_refresh_imported_subtitle_matches', None)
+            if callable(refresh_subtitles) and not did_auto_import:
+                refresh_subtitles(show_error=True)
 
     # 保存目录
     def get_save_dir(self):

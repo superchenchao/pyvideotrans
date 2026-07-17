@@ -5,13 +5,15 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from .strategy import PROPAINTER_BACKEND, propainter_required_files
+
 
 @dataclass(frozen=True)
 class EngineSpec:
     root: Path
     python: Path
 
-    def missing_files(self, mode: str) -> list[Path]:
+    def missing_files(self, mode: str, inpaint_backend: str = "sttn") -> list[Path]:
         required = [self.root / "backend" / "main.py"]
         if mode == "force":
             required.append(self.root / "backend" / "models" / "sttn-auto" / "infer_model.pth")
@@ -22,6 +24,8 @@ class EngineSpec:
                     self.root / "backend" / "models" / "V5" / "ch_det_fast" / "inference.json",
                 ]
             )
+            if inpaint_backend == PROPAINTER_BACKEND:
+                required.extend(propainter_required_files(self.root))
         return [path for path in required if not path.exists()]
 
 

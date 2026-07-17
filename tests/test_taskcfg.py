@@ -324,6 +324,7 @@ class TestTaskCfgVTT:
         assert cfg.copysrt_rawvideo is False
         assert cfg.loop_backaudio == 0
         assert cfg.backaudio_volume == 0.8
+        assert cfg.burned_subtitle_ocr is None
 
     def test_isinstance_checks(self):
         cfg = TaskCfgVTT()

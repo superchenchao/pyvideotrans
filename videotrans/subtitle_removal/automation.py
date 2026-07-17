@@ -10,10 +10,21 @@ from typing import Callable, Optional, Sequence, Tuple
 from videotrans.configure.config import ROOT_DIR
 
 from .engine import find_subtitle_remover_engine
+from .strategy import AUTO_BACKEND, PROPAINTER_BACKEND, STTN_BACKEND, requested_backend
 
 
 EVENT_PREFIX = "PYVT_EVENT "
 _REMOVAL_LOCK = threading.Lock()
+
+
+def _write_backend_record(output_file: str, backend: str) -> None:
+    try:
+        Path(f"{output_file}.inpaint.json").write_text(
+            json.dumps({"backend": backend}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
 
 
 def normalize_rect(rect: Sequence[int], width: int, height: int) -> list[float]:
@@ -60,11 +71,16 @@ def remove_burned_subtitles(
         rect: Sequence[int], duration_ms: int,
         progress_callback: Optional[Callable[[int], None]] = None,
         log_callback: Optional[Callable[[str], None]] = None,
-        cancel_callback: Optional[Callable[[], bool]] = None) -> str:
+        cancel_callback: Optional[Callable[[], bool]] = None,
+        inpaint_engine: Optional[str] = None) -> str:
     engine = find_subtitle_remover_engine(ROOT_DIR)
     if not engine:
         raise RuntimeError("Subtitle removal engine is not installed")
-    missing = engine.missing_files("auto")
+    selected_request = inpaint_engine or requested_backend()
+    required_backend = (
+        selected_request if selected_request != AUTO_BACKEND else STTN_BACKEND
+    )
+    missing = engine.missing_files("auto", inpaint_backend=required_backend)
     if missing:
         raise RuntimeError(
             "Subtitle removal model is incomplete: "
@@ -84,9 +100,12 @@ def remove_burned_subtitles(
         "--start-ms", "0",
         "--end-ms", str(max(1, int(duration_ms))),
         "--rect", *(str(int(value)) for value in rect),
+        "--inpaint-engine", selected_request,
     ]
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     output_tail = []
+    worker_selected_backend = ""
+    failure_message = ""
     Path(output_file).parent.mkdir(parents=True, exist_ok=True)
 
     with _REMOVAL_LOCK:
@@ -135,15 +154,47 @@ def remove_burned_subtitles(
                     progress_callback(max(0, min(100, int(event.get("value", 0)))))
                 elif event_type in {"log", "error"} and log_callback:
                     log_callback(str(event.get("message", "")))
+                elif event_type == "backend_selected":
+                    worker_selected_backend = str(event.get("backend", ""))
+                    if log_callback:
+                        log_callback(
+                            "Subtitle inpaint backend: "
+                            f"{worker_selected_backend} on {event.get('gpu', 'unknown')} "
+                            f"({event.get('reason', '')})"
+                        )
 
             return_code = process.wait()
             if return_code != 0:
-                raise RuntimeError(
+                failure_message = (
                     "Subtitle removal failed\n" + "\n".join(output_tail[-8:])
                 )
-            if not Path(output_file).is_file():
-                raise RuntimeError("Subtitle removal did not create the output video")
-            return str(Path(output_file).resolve())
+            elif not Path(output_file).is_file():
+                failure_message = "Subtitle remover did not create the output video"
+            else:
+                _write_backend_record(
+                    output_file,
+                    worker_selected_backend or selected_request,
+                )
+                return str(Path(output_file).resolve())
         finally:
             if process.poll() is None:
                 process.terminate()
+
+    if (
+            selected_request == AUTO_BACKEND
+            and worker_selected_backend == PROPAINTER_BACKEND):
+        if log_callback:
+            log_callback(
+                "ProPainter failed or produced an invalid repair; retrying with STTN"
+            )
+        return remove_burned_subtitles(
+            input_file=input_file,
+            output_file=output_file,
+            rect=rect,
+            duration_ms=duration_ms,
+            progress_callback=progress_callback,
+            log_callback=log_callback,
+            cancel_callback=cancel_callback,
+            inpaint_engine=STTN_BACKEND,
+        )
+    raise RuntimeError(failure_message or "Subtitle removal failed")

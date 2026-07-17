@@ -304,6 +304,22 @@ def test_burned_subtitle_ocr_without_any_rect_keeps_asr(tmp_path, monkeypatch):
     assert task._fuse_burned_subtitles(raw) == raw
 
 
+def test_current_batch_can_skip_burned_subtitle_ocr(monkeypatch):
+    task = object.__new__(TransCreate)
+    task.cfg = SimpleNamespace(burned_subtitle_ocr=False)
+    raw = [{"line": 1, "start_time": 0, "end_time": 1000, "text": "ASR 对白"}]
+
+    def should_not_extract(*args, **kwargs):
+        raise AssertionError("OCR must not run when the current batch skips it")
+
+    monkeypatch.setattr(
+        "videotrans.subtitle_ocr.extract_burned_subtitles",
+        should_not_extract,
+    )
+
+    assert task._fuse_burned_subtitles(raw) == raw
+
+
 def test_dialog_initialization_does_not_block_automatic_seek(tmp_path, monkeypatch):
     from PySide6.QtWidgets import QApplication
     from videotrans.component.subtitle_removal import BatchSubtitleRemovalDialog
@@ -323,3 +339,66 @@ def test_dialog_initialization_does_not_block_automatic_seek(tmp_path, monkeypat
 
     dialog.reject()
     app.processEvents()
+
+
+def test_dialog_can_switch_reference_video_and_skip_batch_ocr(tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QApplication, QDialog
+    from videotrans.component.subtitle_removal import BatchSubtitleRemovalDialog
+
+    first = tmp_path / "01.mp4"
+    second = tmp_path / "02.mp4"
+    first.write_bytes(b"placeholder")
+    second.write_bytes(b"placeholder")
+    monkeypatch.setattr(
+        tools,
+        "get_video_info",
+        lambda path: {
+            "width": 1080 if Path(path).name == first.name else 720,
+            "height": 1920 if Path(path).name == first.name else 1280,
+            "time": 120000,
+        },
+    )
+    monkeypatch.setattr(BatchSubtitleRemovalDialog, "_start_locator", lambda self: None)
+    app = QApplication.instance() or QApplication([])
+    dialog = BatchSubtitleRemovalDialog(
+        input_files=[first.as_posix(), second.as_posix()],
+        initial_normalized_rect=[0.05, 0.68, 0.9, 0.08],
+    )
+
+    assert dialog.current_file_index == 0
+    assert first.name in dialog.file_label.text()
+    assert not dialog.next_video_button.isHidden()
+
+    dialog._show_next_video()
+
+    assert dialog.current_file_index == 1
+    assert Path(dialog.input_file) == second.resolve()
+    assert second.name in dialog.file_label.text()
+
+    dialog._skip_ocr_for_batch()
+
+    assert dialog.skip_ocr is True
+    assert dialog.normalized_rect is None
+    assert dialog.result() == QDialog.DialogCode.Accepted
+    app.processEvents()
+
+
+def test_batch_selector_returns_explicit_skip_result(monkeypatch):
+    from PySide6.QtWidgets import QDialog
+    from videotrans.component import subtitle_removal
+
+    class FakeDialog:
+        skip_ocr = True
+        normalized_rect = None
+
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def exec(self):
+            return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(subtitle_removal, "BatchSubtitleRemovalDialog", FakeDialog)
+
+    assert subtitle_removal.select_batch_subtitle_area(
+        input_files=["01.mp4", "02.mp4"],
+    ) == {"skip_ocr": True}

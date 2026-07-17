@@ -1,7 +1,7 @@
 from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, QSettings, QEvent, QThreadPool, QCoreApplication, Signal
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QMessageBox, QMainWindow, QApplication
+from PySide6.QtWidgets import QMessageBox, QMainWindow, QApplication, QMenu
 import asyncio, sys
 import os
 from videotrans.util import tools
@@ -207,7 +207,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.target_language.currentTextChanged.connect(self.win_action.set_voice_role)
 
         self.proxy.textChanged.connect(self.win_action.change_proxy)
-        self.import_sub.clicked.connect(self.win_action.import_sub_fun)
+        import_sub_menu = QMenu(self.import_sub)
+        import_sub_files = import_sub_menu.addAction(tr("Select subtitle files"))
+        import_sub_folder = import_sub_menu.addAction(tr("Select subtitle folder"))
+        import_sub_files.triggered.connect(self.win_action.import_sub_files)
+        import_sub_folder.triggered.connect(self.win_action.import_sub_folder)
+        self.import_sub.setMenu(import_sub_menu)
 
         self.startbtn.clicked.connect(self.win_action.check_start)
         self.retrybtn.clicked.connect(self.win_action.retry)

@@ -26,26 +26,41 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def has_subtitle_box(result, roi_width: int, roi_height: int) -> bool:
+def subtitle_text_candidates(result, roi_width: int, roi_height: int) -> set[str]:
     payload = result.json if hasattr(result, "json") else result
     if isinstance(payload, dict) and "res" in payload:
         payload = payload["res"]
     if not isinstance(payload, dict):
-        return False
+        return set()
     texts = list(payload.get("rec_texts", []) or [])
     scores = list(payload.get("rec_scores", []) or [])
     boxes = list(payload.get("rec_boxes", []) or [])
+    candidates = set()
     for text, score, box in zip(texts, scores, boxes):
-        chinese_count = sum("\u3400" <= char <= "\u9fff" for char in str(text))
+        text = str(text).strip()
+        chinese_count = sum("\u3400" <= char <= "\u9fff" for char in text)
         if chinese_count < 1 or float(score or 0.0) < 0.85:
             continue
         x1, y1, x2, y2 = [int(value) for value in box]
         width, height = x2 - x1, y2 - y1
         center_x = (x1 + x2) / 2
-        if width >= max(24, roi_width * 0.06) and height >= max(10, roi_height * 0.035):
+        is_horizontal = width >= height * 1.2
+        if (is_horizontal
+                and width >= max(24, roi_width * 0.06)
+                and height >= max(10, roi_height * 0.035)):
             if roi_width * 0.08 <= center_x <= roi_width * 0.92:
-                return True
-    return False
+                normalized = "".join(char for char in text if char.isalnum())
+                if normalized:
+                    candidates.add(normalized)
+    return candidates
+
+
+def has_subtitle_box(result, roi_width: int, roi_height: int) -> bool:
+    return bool(subtitle_text_candidates(result, roi_width, roi_height))
+
+
+def has_stable_subtitle(previous: set[str], current: set[str]) -> bool:
+    return bool(previous & current)
 
 
 def main() -> int:
@@ -76,6 +91,7 @@ def main() -> int:
     sample_frames = max(1, round(fps * max(100, args.sample_ms) / 1000))
     max_frame = min(frame_count, round(fps * max(1000, args.max_ms) / 1000))
     frame_index = 0
+    previous_candidates: set[str] = set()
     try:
         while capture.isOpened() and frame_index < max_frame:
             readable, frame = capture.read()
@@ -94,20 +110,25 @@ def main() -> int:
                         (640, max(1, round(roi.shape[0] * scale))),
                         interpolation=cv2.INTER_AREA,
                     )
+                candidates = set()
                 for result in detector.predict(roi):
-                    if has_subtitle_box(result, roi.shape[1], roi.shape[0]):
-                        frame_output = ""
-                        if args.frame_output:
-                            output_path = Path(args.frame_output).resolve()
-                            output_path.parent.mkdir(parents=True, exist_ok=True)
-                            if cv2.imwrite(str(output_path), frame):
-                                frame_output = str(output_path)
-                        emit(
-                            "found",
-                            time_ms=round(frame_index * 1000 / fps),
-                            frame_file=frame_output,
-                        )
-                        return 0
+                    candidates.update(
+                        subtitle_text_candidates(result, roi.shape[1], roi.shape[0])
+                    )
+                if has_stable_subtitle(previous_candidates, candidates):
+                    frame_output = ""
+                    if args.frame_output:
+                        output_path = Path(args.frame_output).resolve()
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        if cv2.imwrite(str(output_path), frame):
+                            frame_output = str(output_path)
+                    emit(
+                        "found",
+                        time_ms=round(frame_index * 1000 / fps),
+                        frame_file=frame_output,
+                    )
+                    return 0
+                previous_candidates = candidates
             frame_index += 1
     finally:
         capture.release()

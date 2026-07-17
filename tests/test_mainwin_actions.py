@@ -7,6 +7,25 @@ pure logic in isolation without instantiating the class.
 import re
 
 
+def test_saved_subtitle_region_does_not_skip_batch_confirmation():
+    from videotrans import recognition
+    from videotrans.mainwin._actions import _should_prompt_for_ocr_area
+
+    common = {
+        "burned_subtitle_ocr": True,
+        "app_mode": "biaozhun",
+        "first_video": "new-video.mp4",
+        "recogn_type": recognition.FASTER_WHISPER,
+        "source_language_code": "zh-cn",
+    }
+
+    assert _should_prompt_for_ocr_area(**common, initial_rect=None)
+    assert _should_prompt_for_ocr_area(
+        **common,
+        initial_rect=[0.05, 0.68, 0.9, 0.08],
+    )
+
+
 class TestProxyValidation:
     def test_valid_http_proxy(self):
         proxy = "http://127.0.0.1:1080"

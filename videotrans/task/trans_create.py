@@ -19,6 +19,7 @@ from videotrans.translator import run as run_trans, get_audio_code
 from videotrans.tts import run as run_tts, EDGE_TTS, AZURE_TTS, SUPPORT_CLONE
 from videotrans.task.simple_runnable_qt import run_in_threadpool
 from videotrans.util import tools
+from videotrans.util.subtitle_import import normalized_path_key, read_timed_subtitle
 from ..configure import contants
 from ._base import BaseTask
 from videotrans.util.help_ffmpeg import get_video_codec
@@ -65,6 +66,7 @@ class TransCreate(BaseTask):
     cost_duration:float=0.0
     should_recogn2:bool=False
     series_speaker_registered: bool = field(default=False, repr=False)
+    used_imported_subtitles: bool = field(default=False, repr=False)
 
     def __post_init__(self):
         super().__post_init__()
@@ -204,13 +206,20 @@ class TransCreate(BaseTask):
         # OCR/ASR 继续读取原视频，仅最终视觉分支使用消除字幕后的中间视频。
         self._prepare_clean_visual_source()
 
-        # 如果存在字幕文本，则视为原始语言字幕，不再识别
-        if self.cfg.subtitles.strip():
+        # 如果存在逐视频导入字幕，优先使用；单视频文本框仍允许用户修改后覆盖。
+        subtitle_text = self.cfg.subtitles.strip()
+        imported_subtitle = self.cfg.subtitle_files.get(
+            normalized_path_key(self.cfg.name)
+        ) if self.cfg.subtitle_files else None
+        if imported_subtitle and not subtitle_text:
+            subtitle_text = read_timed_subtitle(imported_subtitle)
+        if subtitle_text:
             with open(self.cfg.source_sub, 'w', encoding="utf-8", errors="ignore") as f:
                 txt = re.sub(r':\d+\.\d+', lambda m: m.group().replace('.', ','),
-                             self.cfg.subtitles.strip(), flags=re.I | re.S)
+                             subtitle_text, flags=re.I | re.S)
                 f.write(txt)
             self.should_recogn = False
+            self.used_imported_subtitles = bool(imported_subtitle)
 
         # 分离后的人声仅用于背景声合成和声音克隆，不作为语音识别原料
         self.cfg.vocal = f"{self.cfg.cache_folder}/vocal.wav"
@@ -271,7 +280,22 @@ class TransCreate(BaseTask):
     def recogn(self) -> None:
         _st=time.time()
         if self._exit(): return
-        if not self.should_recogn: return
+        if not self.should_recogn:
+            self.source_srt_list = tools.get_subtitle_from_srt(
+                self.cfg.source_sub, is_file=True
+            )
+            speaker_path = Path(self.cfg.cache_folder + "/speaker.json")
+            if self.used_imported_subtitles:
+                # Imported timestamps may differ from an earlier ASR run; a
+                # stale speaker cache must not be silently reused.
+                speaker_path.unlink(missing_ok=True)
+            elif Path(self.cfg.target_dir + "/speaker.json").exists():
+                shutil.copy2(
+                    self.cfg.target_dir + "/speaker.json",
+                    speaker_path,
+                )
+            self._recogn_succeed()
+            return
         self.precent += 3
         self.signal(text=tr("kaishishibie"))
         if tools.vail_file(self.cfg.source_sub):
@@ -888,8 +912,10 @@ class TransCreate(BaseTask):
             raise VideoTransError("已启用消除原视频字幕，但没有框选字幕区域")
 
         from videotrans.subtitle_removal import (
+            find_subtitle_remover_engine,
             remove_burned_subtitles,
             scale_normalized_rect,
+            strategy_cache_key,
         )
         try:
             rect = scale_normalized_rect(
@@ -905,7 +931,18 @@ class TransCreate(BaseTask):
 
         clean_source = f"{self.cfg.cache_folder}/source-without-burned-subtitles.mp4"
         clean_metadata = Path(f"{clean_source}.json")
+        inpaint_metadata = Path(f"{clean_source}.inpaint.json")
         input_path = Path(self.cfg.name).resolve()
+        removal_engine = find_subtitle_remover_engine(ROOT_DIR)
+        removal_strategy = strategy_cache_key(
+            removal_engine.root if removal_engine else None
+        )
+        try:
+            actual_inpaint_backend = json.loads(
+                inpaint_metadata.read_text(encoding="utf-8")
+            ).get("backend", "")
+        except (OSError, ValueError, json.JSONDecodeError, AttributeError):
+            actual_inpaint_backend = ""
         try:
             input_stat = input_path.stat()
             expected_metadata = {
@@ -914,6 +951,8 @@ class TransCreate(BaseTask):
                 "input_mtime_ns": input_stat.st_mtime_ns,
                 "rect": list(rect),
                 "duration_ms": int(self.video_info["time"]),
+                "inpaint_strategy": removal_strategy,
+                "actual_inpaint_backend": actual_inpaint_backend,
             }
         except OSError:
             expected_metadata = None
@@ -949,6 +988,12 @@ class TransCreate(BaseTask):
                 cancel_callback=self._exit,
             )
             if expected_metadata:
+                try:
+                    expected_metadata["actual_inpaint_backend"] = json.loads(
+                        inpaint_metadata.read_text(encoding="utf-8")
+                    ).get("backend", "")
+                except (OSError, ValueError, json.JSONDecodeError, AttributeError):
+                    pass
                 clean_metadata.write_text(
                     json.dumps(expected_metadata, ensure_ascii=False, indent=2),
                     encoding="utf-8",
@@ -1088,8 +1133,11 @@ class TransCreate(BaseTask):
         return normalized_rect
 
     def _fuse_burned_subtitles(self, raw_subtitles):
+        burned_subtitle_ocr = getattr(self.cfg, "burned_subtitle_ocr", None)
+        if burned_subtitle_ocr is None:
+            burned_subtitle_ocr = settings.get("burned_subtitle_ocr", True)
         if (
-                not settings.get("burned_subtitle_ocr", True)
+                not burned_subtitle_ocr
                 or self.is_audio_trans
                 or self.cfg.recogn_type != FASTER_WHISPER
                 or not self.cfg.detect_language

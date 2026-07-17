@@ -1,6 +1,6 @@
 import os
 from dataclasses import dataclass, asdict, field
-from typing import List, Optional, Union
+from typing import Dict, List, Optional, Union
 
 @dataclass
 class InputFile:
@@ -166,6 +166,8 @@ class TaskCfgVTT(TaskCfgSTT, TaskCfgTTS, TaskCfgSTS):
     subtitle_language: str = None  # 软字幕嵌入语言代码，3位
     app_mode: str = "biaozhun"  # 工作模式 biaohzun tiqu
     subtitles: str = ""  # 已存在的字幕文本，例如预先导入的
+    # 主界面批量导入的逐视频字幕文件，key 为规范化后的原视频绝对路径。
+    subtitle_files: Dict[str, str] = field(default_factory=dict)
     targetdir_mp4: Union[os.PathLike,str]=None  # 最终输出合成后的mp4
     novoice_mp4: Union[os.PathLike,str]=None  # 从原始视频分离出的无声视频
     is_separate: bool = False  # 是否进行人声、背景音分离
@@ -181,6 +183,7 @@ class TaskCfgVTT(TaskCfgSTT, TaskCfgTTS, TaskCfgSTS):
     copysrt_rawvideo: bool = False  # 是否将生成的字幕复制到视频目录下
     loop_backaudio: int = 0  # 循环背景音 或 延长拉伸背景音
     backaudio_volume: float = 0.8  # 背景音量
+    burned_subtitle_ocr: Optional[bool] = None  # 当前批次是否使用硬字幕 OCR，None 表示继承全局设置
     remove_burned_subtitles: bool = False  # 是否在最终视频画面中消除原硬字幕
     subtitle_removal_rect: Optional[list] = None  # 首视频框选区域的归一化坐标
     subtitle_removal_aspect_ratio: float = 0.0  # 首视频宽高比，用于批量安全校验
