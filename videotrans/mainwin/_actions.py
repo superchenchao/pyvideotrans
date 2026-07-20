@@ -482,8 +482,10 @@ class WinAction(WinActionBase):
         # 重置字幕行角色
         app_cfg.line_roles = {}
         self.is_render = False
-        # 倒计时
-        app_cfg.set_countdown(int(float(settings.get('countdown_sec', 1))))
+        # 单视频人工审核倒计时；0 表示跳过全部审核窗口。
+        review_countdown = max(0, int(self.main.review_countdown.value()))
+        settings['countdown_sec'] = review_countdown
+        app_cfg.set_countdown(review_countdown)
 
         # 无视频选择 ，也无导入字幕，无法处理
         if len(self.queue_mp4) < 1:

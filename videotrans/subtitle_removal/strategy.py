@@ -12,11 +12,13 @@ PROPAINTER_BACKEND = "propainter"
 SUPPORTED_BACKENDS = (AUTO_BACKEND, STTN_BACKEND, PROPAINTER_BACKEND)
 
 # ProPainter processes only the subtitle crop, not the full source frame. A
-# 16 GB card has enough headroom for the enforced 240 px crop and 30+ frames;
-# cards below that stay on STTN so the automatic mode remains conservative.
-PROPAINTER_MIN_TOTAL_VRAM_MB = 16 * 1024
+# A nominal 16 GB consumer card reports slightly less than 16384 MiB to
+# nvidia-smi (for example, the RTX 5080 reports about 16303 MiB). Keep the
+# threshold below that reported capacity while retaining the 12 GB free-memory
+# guard, otherwise these cards incorrectly fall back to STTN.
+PROPAINTER_MIN_TOTAL_VRAM_MB = 15 * 1024
 PROPAINTER_MIN_FREE_VRAM_MB = 12 * 1024
-STRATEGY_VERSION = 2
+STRATEGY_VERSION = 3
 
 
 @dataclass(frozen=True)
@@ -40,11 +42,16 @@ def requested_backend() -> str:
 
 
 def propainter_required_files(engine_root: str | Path) -> tuple[Path, ...]:
-    model_dir = Path(engine_root) / "backend" / "models" / "propainter"
+    models_dir = Path(engine_root) / "backend" / "models"
+    model_dir = models_dir / "propainter"
     return (
         model_dir / "ProPainter.pth",
         model_dir / "raft-things.pth",
         model_dir / "recurrent_flow_completion.pth",
+        # ProPainter delegates isolated one-frame intervals to Big-Lama.
+        # Without this file a long run fails after OCR and then repeats the
+        # whole removal pass with STTN.
+        models_dir / "big-lama" / "big-lama.pt",
     )
 
 

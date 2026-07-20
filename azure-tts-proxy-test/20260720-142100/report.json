@@ -1,0 +1,77 @@
+{
+  "created_at": "2026-07-20T14:22:33.865256+08:00",
+  "region_or_endpoint": "westus3",
+  "proxy": "127.0.0.1:7897",
+  "voice": "en-AU-WilliamMultilingualNeural",
+  "text": "This is an Azure speech network speed comparison test.",
+  "attempts": [
+    {
+      "round": 1,
+      "mode": "direct",
+      "elapsed_seconds": 13.258640100015327,
+      "success": false,
+      "output_bytes": 0,
+      "error": "ServiceTimeout: Timeout while synthesizing. Current RTF: 7.03271 (threshold 2), frame interval 3023ms (threshold 3000ms). USP state: ReceivingData. Received audio size: 102920 bytes."
+    },
+    {
+      "round": 1,
+      "mode": "proxy",
+      "elapsed_seconds": 10.129211899999063,
+      "success": false,
+      "output_bytes": 0,
+      "error": "ServiceTimeout: Timeout while synthesizing. Current RTF: 7.47253 (threshold 2), frame interval 3031ms (threshold 3000ms). USP state: ReceivingData. Received audio size: 78816 bytes."
+    },
+    {
+      "round": 2,
+      "mode": "proxy",
+      "elapsed_seconds": 20.956888600019738,
+      "success": true,
+      "output_bytes": 354046,
+      "error": ""
+    },
+    {
+      "round": 2,
+      "mode": "direct",
+      "elapsed_seconds": 3.1975440999958664,
+      "success": true,
+      "output_bytes": 354046,
+      "error": ""
+    },
+    {
+      "round": 3,
+      "mode": "direct",
+      "elapsed_seconds": 19.641885200049728,
+      "success": true,
+      "output_bytes": 354046,
+      "error": ""
+    },
+    {
+      "round": 3,
+      "mode": "proxy",
+      "elapsed_seconds": 24.80233470001258,
+      "success": true,
+      "output_bytes": 354046,
+      "error": ""
+    }
+  ],
+  "summary": {
+    "direct": {
+      "success": 2,
+      "total": 3,
+      "average_seconds": 11.42,
+      "median_seconds": 11.42,
+      "min_seconds": 3.198,
+      "max_seconds": 19.642
+    },
+    "proxy": {
+      "success": 2,
+      "total": 3,
+      "average_seconds": 22.88,
+      "median_seconds": 22.88,
+      "min_seconds": 20.957,
+      "max_seconds": 24.802
+    },
+    "proxy_median_improvement_percent": -100.4
+  },
+  "note": "direct means no explicit SpeechConfig proxy; system-wide/TUN routing can still affect it."
+}

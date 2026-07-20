@@ -2105,8 +2105,8 @@ class TransCreate(BaseTask):
         # --- Nvidia (NVENC) ---
         if hw_type in ['nvenc']:
             vcodec = "h264_nvenc" if codec == '264' else "hevc_nvenc"
-            # nvenc 使用 -cq (Constant Quality) 替代 crf，p4 预设在速度和质量间平衡较好
-            enc_args = ['-cq', _crf, '-preset', PRESET_MAP.get('nvenc').get(_preset, 'p4')]
+            # NVENC 使用质量优先参数；CQ 比 CPU CRF 低 5，避免为速度牺牲画质。
+            enc_args = _nvenc_quality_args(_crf, _preset)
             # 优先硬件解码
             if settings.get('hw_decode'):
                 global_args = ['-hwaccel', 'cuda', '-hwaccel_output_format', 'cuda']
@@ -2177,3 +2177,27 @@ class TransCreate(BaseTask):
             return True
         except subprocess.CalledProcessError as e:
             raise FFmpegError(f"尝试使用硬件执行命令出错[CalledProcessError]:{e.stderr}\n{e.stdout},{e}") from e
+
+def _nvenc_quality_args(crf: int | str, preset: str) -> list[str]:
+    """Prefer GPU encoding without trading away the current CPU output quality."""
+    try:
+        cpu_crf = int(crf)
+    except (TypeError, ValueError):
+        cpu_crf = 23
+    # NVENC CQ and x264 CRF are not directly equivalent. Giving NVENC five
+    # extra quality points plus its highest-quality preset keeps the GPU path
+    # conservative; the trade-off is a somewhat larger output file.
+    nvenc_cq = max(0, min(51, cpu_crf - 5))
+    nvenc_preset = "p5" if preset == "fast" else "p7"
+    return [
+        "-preset", nvenc_preset,
+        "-tune", "hq",
+        "-rc", "vbr",
+        "-cq", str(nvenc_cq),
+        "-b:v", "0",
+        "-multipass", "fullres",
+        "-spatial-aq", "1",
+        "-temporal-aq", "1",
+        "-aq-strength", "8",
+        "-b_ref_mode", "middle",
+    ]

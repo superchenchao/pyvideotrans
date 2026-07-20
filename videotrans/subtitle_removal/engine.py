@@ -52,7 +52,15 @@ def _python_candidates(project_root: Path, engine_root: Path) -> list[Path]:
         project_root / ".venv" / scripts_dir / executable,
         Path(sys.executable),
     ]
-    return [path.resolve() for path in candidates if path is not None]
+    # Do not call Path.resolve() here. On POSIX, a virtual environment's
+    # ``bin/python`` is commonly a symlink to the base interpreter. Resolving
+    # that symlink launches the base interpreter directly and silently drops
+    # the venv's site-packages (for example cv2/PaddleOCR).
+    return [
+        Path(os.path.abspath(os.fspath(path)))
+        for path in candidates
+        if path is not None
+    ]
 
 
 def find_subtitle_remover_engine(project_root: str | Path) -> EngineSpec | None:

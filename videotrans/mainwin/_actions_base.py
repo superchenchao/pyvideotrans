@@ -482,6 +482,7 @@ class WinActionBase:
         self.main.fix_punc.setDisabled(type)
         self.main.enable_diariz.setDisabled(type)
         self.main.nums_diariz.setDisabled(type)
+        self.main.review_countdown.setDisabled(type)
 
         self.main.set_adv_status.setDisabled(type)
         self.main.select_file_type.setDisabled(type)

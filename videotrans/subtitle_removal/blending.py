@@ -42,15 +42,30 @@ def composite_repaired_frames(
     if len(original_frames) != len(repaired_frames):
         raise ValueError("original and repaired frame counts differ")
     alpha = soft_alpha_mask(mask, feather_pixels=feather_pixels)
+    active = alpha[:, :, 0] > 0
+    if not np.any(active):
+        return [np.asarray(frame).copy() for frame in original_frames]
+
+    rows, columns = np.where(active)
+    top, bottom = int(rows.min()), int(rows.max()) + 1
+    left, right = int(columns.min()), int(columns.max()) + 1
+    alpha_roi = alpha[top:bottom, left:right]
+
     output: list[np.ndarray] = []
     for original, repaired in zip(original_frames, repaired_frames):
         if original.shape != repaired.shape or original.shape[:2] != alpha.shape[:2]:
             raise ValueError("frame and mask sizes differ")
-        blended = (
-            repaired.astype(np.float32) * alpha
-            + original.astype(np.float32) * (1.0 - alpha)
+        result = np.asarray(original).copy()
+        original_roi = original[top:bottom, left:right]
+        repaired_roi = repaired[top:bottom, left:right]
+        blended_roi = (
+            repaired_roi.astype(np.float32) * alpha_roi
+            + original_roi.astype(np.float32) * (1.0 - alpha_roi)
         )
-        output.append(np.clip(blended, 0, 255).astype(np.uint8))
+        result[top:bottom, left:right] = np.clip(
+            blended_roi, 0, 255,
+        ).astype(np.uint8)
+        output.append(result)
     return output
 
 

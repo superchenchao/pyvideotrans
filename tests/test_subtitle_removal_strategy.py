@@ -12,6 +12,7 @@ from videotrans.subtitle_removal.strategy import (
     GPUProfile,
     PROPAINTER_BACKEND,
     STTN_BACKEND,
+    propainter_required_files,
     select_inpaint_backend,
 )
 
@@ -30,6 +31,22 @@ def test_auto_selects_propainter_for_4090d_class_gpu():
 
     assert selection.backend == PROPAINTER_BACKEND
     assert selection.propainter_batch_size == 60
+
+
+def test_auto_selects_propainter_for_nominal_16gb_rtx5080():
+    selection = select_inpaint_backend(
+        requested="auto",
+        gpu=GPUProfile(
+            name="NVIDIA GeForce RTX 5080",
+            total_vram_mb=16303,
+            free_vram_mb=14884,
+            cuda_available=True,
+        ),
+        propainter_ready=True,
+    )
+
+    assert selection.backend == PROPAINTER_BACKEND
+    assert selection.propainter_batch_size == 30
 
 
 @pytest.mark.parametrize(
@@ -66,6 +83,12 @@ def test_forced_propainter_requires_models():
         )
 
 
+def test_propainter_requires_big_lama_for_single_frame_fallback(tmp_path):
+    required = propainter_required_files(tmp_path)
+
+    assert tmp_path / "backend/models/big-lama/big-lama.pt" in required
+
+
 def test_soft_composite_preserves_original_outside_mask():
     original = np.full((32, 32, 3), 40, dtype=np.uint8)
     repaired = np.full((32, 32, 3), 200, dtype=np.uint8)
@@ -81,6 +104,39 @@ def test_soft_composite_preserves_original_outside_mask():
     assert np.array_equal(output[15, 15], repaired[15, 15])
     assert 40 < int(output[8, 15, 0]) < 200
     assert alpha[15, 15, 0] == 1.0
+
+
+def test_roi_composite_matches_full_frame_reference_exactly():
+    rng = np.random.default_rng(20260717)
+    original = rng.integers(0, 256, size=(96, 160, 3), dtype=np.uint8)
+    repaired = rng.integers(0, 256, size=(96, 160, 3), dtype=np.uint8)
+    mask = np.zeros((96, 160), dtype=np.uint8)
+    mask[68:82, 24:136] = 255
+    alpha = soft_alpha_mask(mask, feather_pixels=10)
+    expected = np.clip(
+        repaired.astype(np.float32) * alpha
+        + original.astype(np.float32) * (1.0 - alpha),
+        0,
+        255,
+    ).astype(np.uint8)
+
+    actual = composite_repaired_frames(
+        [original], [repaired], mask, feather_pixels=10,
+    )[0]
+
+    assert np.array_equal(actual, expected)
+
+
+def test_empty_mask_returns_an_independent_original_frame():
+    original = np.full((12, 16, 3), 80, dtype=np.uint8)
+    repaired = np.full((12, 16, 3), 180, dtype=np.uint8)
+
+    output = composite_repaired_frames(
+        [original], [repaired], np.zeros((12, 16), dtype=np.uint8),
+    )[0]
+
+    assert np.array_equal(output, original)
+    assert output is not original
 
 
 def test_black_output_guard_detects_known_propainter_failure():

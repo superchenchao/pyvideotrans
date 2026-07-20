@@ -162,7 +162,7 @@ class Worker(QThread):
 
             if not self._exit():
                 trk.recogn2pass()
-            if trk.should_recogn2:
+            if trk.should_recogn2 and float(settings.get('countdown_sec', 0)) > 0:
                 app_cfg.set_countdown(86400)
                 # 等待修改二次识别出的字幕
                 self._post(text=f'{trk.cfg.source_sub}', type="edit_recogn2_subtitle")

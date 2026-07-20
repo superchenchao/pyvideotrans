@@ -28,6 +28,8 @@
     "Processing range": "Processing Range",
     "Remove burned-in subtitles": "Remove Burned-in Subtitles",
     "Remove original video subtitles": "Remove original video subtitles",
+    "Review wait": "Review wait",
+    "Set review wait to 0 to skip manual review windows": "Set to 0 to skip source subtitle, role assignment, dubbing, and second-pass recognition review windows",
     "Select the original subtitle area before starting and remove it from the final video": "Select the original subtitle area before starting and remove it from the final video",
     "Select original subtitle area": "Select original subtitle area",
     "Drag a rectangle around the original subtitles. The same relative area will be reused for this batch.": "Drag a rectangle around the original subtitles. The same relative area will be reused for this batch.",

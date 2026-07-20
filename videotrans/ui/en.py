@@ -379,6 +379,18 @@ class Ui_MainWindow(object):
         self.nums_diariz.setToolTip(tr("Specifying the number of speakers"))
         self.nums_diariz.addItems([tr("No limit"), "2", "3", "4", "5", "6", "7", "8", "9", "10"])
 
+        self.review_countdown_label = QtWidgets.QLabel()
+        self.review_countdown_label.setText(tr("Review wait"))
+        self.review_countdown = QtWidgets.QSpinBox(self.layoutWidget)
+        self.review_countdown.setObjectName("review_countdown")
+        self.review_countdown.setRange(0, 3600)
+        self.review_countdown.setValue(max(0, int(settings.get("countdown_sec", 30))))
+        self.review_countdown.setSuffix(f" {tr('Sec')}")
+        self.review_countdown.setMaximumWidth(100)
+        self.review_countdown.setToolTip(tr(
+            "Set review wait to 0 to skip manual review windows"
+        ))
+
         # 配音
 
         self.label_6 = QtWidgets.QLabel(self.layoutWidget)
@@ -426,6 +438,8 @@ class Ui_MainWindow(object):
         self.dubb_thread_layout.addWidget(self.fix_punc)
         self.dubb_thread_layout.addWidget(self.enable_diariz)
         self.dubb_thread_layout.addWidget(self.nums_diariz)
+        self.dubb_thread_layout.addWidget(self.review_countdown_label)
+        self.dubb_thread_layout.addWidget(self.review_countdown)
         self.dubb_thread_layout.addWidget(self.set_ass)
 
         self.adv_layout_outer = QtWidgets.QVBoxLayout()

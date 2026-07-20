@@ -161,6 +161,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.enable_cuda.setChecked(bool(params.get('is_cuda', False)))
         self.enable_diariz.setChecked(bool(params.get('enable_diariz', False)))
         self.nums_diariz.setCurrentIndex(int(params.get('nums_diariz', 0)))
+        self.review_countdown.setValue(max(0, int(settings.get('countdown_sec', 30))))
+        self.review_countdown.editingFinished.connect(self._save_review_countdown)
         self.is_separate.setChecked(bool(params.get('is_separate', False)))
         self.embed_bgm.setChecked(bool(params.get('embed_bgm', True)))
         self.rephrase.setCurrentIndex(int(params.get('rephrase', 0)))
@@ -420,6 +422,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             return
 
         return winform.get_win(name).openwin()
+
+    def _save_review_countdown(self):
+        settings['countdown_sec'] = max(0, int(self.review_countdown.value()))
+        settings.save()
 
     def restart_app(self):
         # 创建确认对话框
