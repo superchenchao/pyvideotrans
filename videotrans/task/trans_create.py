@@ -263,7 +263,7 @@ class TransCreate(BaseTask):
                 tr('There is no valid audio in the file {} and it cannot be processed. Please play it manually to confirm that there is sound.',
                    self.cfg.name))
 
-        # 在 OCR、字幕消除等逐帧流程之前统一生成 30 FPS、高质量工作视频。
+        # 在 OCR、字幕消除等逐帧流程之前统一生成 25 FPS、高质量工作视频。
         # 原始音轨仍供 ASR/配音使用；3000 kbps 仅在最终导出时应用。
         shared_visual = getattr(self.cfg, "shared_visual_source", None)
         shared_ocr = getattr(self.cfg, "shared_ocr_source", None)
@@ -292,7 +292,7 @@ class TransCreate(BaseTask):
         if self.video_info['video_codec_name'] == 'h264' and self.video_info['color'] == 'yuv420p':
             self.is_copy_video = True
 
-        # 字幕消除读取 30 FPS 工作视频；OCR 读取消除前的同一工作视频。
+        # 字幕消除读取 25 FPS 工作视频；OCR 读取消除前的同一工作视频。
         if not use_shared_visual:
             self._prepare_clean_visual_source()
 
@@ -1050,8 +1050,8 @@ class TransCreate(BaseTask):
         )
         work_source = Path(
             self.cfg.cache_folder,
-            "source-working-api-30fps-6000k-noaudio.mp4"
-            if api_transport else "source-working-30fps.mp4",
+            "source-working-api-25fps-6000k-noaudio.mp4"
+            if api_transport else "source-working-25fps.mp4",
         )
         metadata_path = Path(f"{work_source}.json")
         input_path = Path(self.cfg.name).resolve()
@@ -1095,7 +1095,7 @@ class TransCreate(BaseTask):
             metadata_path.unlink(missing_ok=True)
             stage_name = (
                 "Generating cloud API video" if api_transport
-                else "Generating 30 FPS working video"
+                else "Generating 25 FPS working video"
             )
             self.signal(text=f"{stage_name} 0%")
             last_progress = -10
@@ -1119,7 +1119,7 @@ class TransCreate(BaseTask):
                 )
             except Exception as error:
                 work_source.unlink(missing_ok=True)
-                raise VideoTransError(f"生成 30 FPS 工作视频失败：{error}") from error
+                raise VideoTransError(f"生成 25 FPS 工作视频失败：{error}") from error
 
             generated_info = tools.get_video_info(work_source.as_posix())
             generated_fps = float(generated_info.get("video_fps") or 0)
@@ -1131,7 +1131,7 @@ class TransCreate(BaseTask):
             ):
                 work_source.unlink(missing_ok=True)
                 raise VideoTransError(
-                    "30 FPS 工作视频校验失败："
+                    "25 FPS 工作视频校验失败："
                     f"codec={generated_info.get('video_codec_name')}, "
                     f"size={generated_info.get('width')}x{generated_info.get('height')}, "
                     f"fps={generated_fps}"
@@ -1143,7 +1143,7 @@ class TransCreate(BaseTask):
         else:
             logger.info(
                 "复用%s：%s",
-                "云端 API 传输视频" if api_transport else "30 FPS 高质量工作视频",
+                "云端 API 传输视频" if api_transport else "25 FPS 高质量工作视频",
                 work_source,
             )
 
@@ -2281,7 +2281,7 @@ class TransCreate(BaseTask):
                     tmp_target_mp4_basename,
                 ]
             )
-            logger.debug(f'[最终视频合成]固定 MP4/H.264/30FPS/3000k CBR/AAC:\n{final_args}')
+            logger.debug(f'[最终视频合成]固定 MP4/H.264/25FPS/3000k CBR/AAC:\n{final_args}')
             tools.runffmpeg(
                 final_args,
                 cmd_dir=self.cfg.cache_folder,

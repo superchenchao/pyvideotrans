@@ -245,7 +245,7 @@ def test_cloud_clean_result_checks_metadata_and_full_decode(tmp_path, monkeypatc
             "video_streams": 1,
             "width": 1080,
             "height": 1920,
-            "video_fps": 30,
+            "video_fps": 25,
             "time": 10_000,
         },
     )
@@ -258,7 +258,7 @@ def test_cloud_clean_result_checks_metadata_and_full_decode(tmp_path, monkeypatc
         result.as_posix(), target_width=1080, target_height=1920, duration_ms=10_000
     )
 
-    assert info["video_fps"] == 30
+    assert info["video_fps"] == 25
     assert decode_calls and decode_calls[0][0][-3:] == ["-f", "null", "-"]
     assert decode_calls[0][1]["duration_ms"] == 10_000
 
@@ -272,7 +272,7 @@ def test_cloud_clean_result_rejects_fps_change(tmp_path, monkeypatch):
             "video_streams": 1,
             "width": 1080,
             "height": 1920,
-            "video_fps": 25,
+            "video_fps": 30,
             "time": 10_000,
         },
     )
@@ -285,7 +285,7 @@ def test_cloud_clean_result_rejects_fps_change(tmp_path, monkeypatch):
 
 def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkeypatch):
     source = tmp_path / "source.mp4"
-    work = tmp_path / "source-working-api-30fps-6000k-noaudio.mp4"
+    work = tmp_path / "source-working-api-25fps-6000k-noaudio.mp4"
     source.write_bytes(b"source")
     work.write_bytes(b"work")
     task = object.__new__(TransCreate)
@@ -302,7 +302,7 @@ def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkey
     task.source_display_height = 1920
     task.visual_source = work.as_posix()
     task.ocr_source = work.as_posix()
-    task.visual_work_profile = {"fps": 30, "rate_control": "constrained-6000k"}
+    task.visual_work_profile = {"fps": 25, "rate_control": "constrained-6000k"}
     task.signal = lambda **kwargs: None
     task._exit = lambda: False
     captured = {}
@@ -342,5 +342,5 @@ def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkey
         Path(f"{task.visual_source}.json").read_text(encoding="utf-8")
     )
     assert metadata["subtitle_removal_provider"] == "caca_link"
-    assert metadata["working_video"]["fps"] == 30
+    assert metadata["working_video"]["fps"] == 25
     assert cleanup_calls == [True]

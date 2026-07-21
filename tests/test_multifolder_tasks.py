@@ -6,10 +6,12 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import pytest
 from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QWidget
 
 from videotrans.component.checkable_combo import CheckableComboBox
 import videotrans.component.multifolder_tasks as multifolder_tasks
+from videotrans.configure.excepts import SpeechToTextError
 from videotrans.component.multifolder_tasks import (
     LanguageSpec,
     MultiFolderScheduler,
@@ -20,6 +22,7 @@ from videotrans.component.multifolder_tasks import (
     _discover_videos,
 )
 from videotrans.configure.base import BaseCon
+from videotrans.configure.config import app_cfg
 
 
 def test_target_language_combo_supports_multiple_checked_languages():
@@ -201,6 +204,90 @@ def test_task_signal_handler_does_not_use_global_queue():
     task = BaseCon(signal_handler=received.append)
     task.signal(text="isolated", type="logs")
     assert received == [{"text": "isolated", "type": "logs", "uuid": None}]
+
+
+def test_scheduler_task_ignores_stale_global_stop_uuid():
+    received = []
+    task = BaseCon(signal_handler=received.append)
+    task.cancel_checker = lambda: False
+    task.uuid = "scheduler-episode"
+    app_cfg.stoped_uuid_set.add(task.uuid)
+    try:
+        assert task._exit() is False
+        task.signal(text="still running", type="logs")
+        assert received == [{
+            "text": "still running",
+            "type": "logs",
+            "uuid": "scheduler-episode",
+        }]
+    finally:
+        app_cfg.stoped_uuid_set.discard(task.uuid)
+
+
+def test_scheduler_task_honors_its_own_cancel_state():
+    cancelled = False
+    task = BaseCon()
+    task.cancel_checker = lambda: cancelled
+    task.uuid = "scheduler-episode"
+
+    assert task._exit() is False
+    cancelled = True
+    assert task._exit() is True
+
+
+def test_scheduler_clears_stale_stop_only_while_still_running():
+    scheduler = MultiFolderScheduler([], {})
+    task = SimpleNamespace(uuid="scheduler-episode")
+    app_cfg.stoped_uuid_set.add(task.uuid)
+    try:
+        scheduler._ensure_running(task)
+        assert task.uuid not in app_cfg.stoped_uuid_set
+
+        scheduler._cancelled = True
+        app_cfg.stoped_uuid_set.add(task.uuid)
+        with pytest.raises(InterruptedError, match="任务已停止"):
+            scheduler._ensure_running(task)
+        assert task.uuid in app_cfg.stoped_uuid_set
+    finally:
+        app_cfg.stoped_uuid_set.discard(task.uuid)
+
+
+def test_source_stage_fails_instead_of_opening_review_without_subtitle(
+        tmp_path, monkeypatch):
+    video = tmp_path / "01.mp4"
+    video.write_bytes(b"video")
+    project = ProjectSpec("p1", tmp_path.as_posix(), [video.as_posix()])
+    scheduler = MultiFolderScheduler([project], {})
+    created = []
+
+    class FakeTask:
+        def __init__(self, cfg, signal_handler):
+            self.cfg = cfg
+            self.signal_handler = signal_handler
+            self.uuid = cfg.uuid
+            self.hasend = False
+            created.append(self)
+
+        def prepare(self):
+            Path(self.cfg.target_dir).mkdir(parents=True, exist_ok=True)
+
+        def recogn(self):
+            pass
+
+        def diariz(self):
+            raise AssertionError("缺少原文字幕时不应进入说话人识别")
+
+    monkeypatch.setattr(multifolder_tasks, "TransCreate", FakeTask)
+
+    try:
+        with pytest.raises(SpeechToTextError, match="没有生成原文字幕"):
+            scheduler._source_task(project, video.as_posix(), tmp_path / "work")
+        assert created[0].hasend is True
+        assert created[0].uuid in app_cfg.stoped_uuid_set
+        assert created[0].cancel_checker() is False
+    finally:
+        if created:
+            app_cfg.stoped_uuid_set.discard(created[0].uuid)
 
 
 def test_video_discovery_excludes_generated_output(tmp_path):

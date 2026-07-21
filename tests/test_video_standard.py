@@ -43,10 +43,11 @@ def test_subtitle_rect_maps_through_scale_and_letterbox_padding():
     assert mapped == [0.1, 0.65, 0.8, 0.075]
 
 
-def test_work_video_is_high_quality_30fps_not_delivery_bitrate():
+def test_work_video_is_high_quality_25fps_not_delivery_bitrate():
     args = build_work_video_args("input.mp4", "work.mp4", 1080, 1920)
     video_filter = args[args.index("-vf") + 1]
 
+    assert FINAL_FPS == 25
     assert f"fps={FINAL_FPS}" in video_filter
     assert "scale=1080:1920:force_original_aspect_ratio=decrease" in video_filter
     assert "pad=1080:1920" in video_filter
@@ -56,7 +57,7 @@ def test_work_video_is_high_quality_30fps_not_delivery_bitrate():
     assert "3000k" not in args
 
 
-def test_cloud_api_video_is_30fps_1080p_6000k_and_has_no_audio():
+def test_cloud_api_video_is_25fps_1080p_6000k_and_has_no_audio():
     args = build_api_work_video_args("input.mp4", "api.mp4", 1080, 1920)
     video_filter = args[args.index("-vf") + 1]
 
@@ -117,7 +118,7 @@ def test_prepare_work_visual_source_records_profile_and_updates_pipeline_source(
             "video_codec_name": "h264",
             "width": 1080,
             "height": 1920,
-            "video_fps": 30,
+            "video_fps": 25,
         },
     )
 
@@ -125,9 +126,9 @@ def test_prepare_work_visual_source_records_profile_and_updates_pipeline_source(
 
     assert len(captured) == 1
     assert captured[0][1]["cancel_callback"] == task._exit
-    assert task.visual_source.endswith("source-working-30fps.mp4")
+    assert task.visual_source.endswith("source-working-25fps.mp4")
     assert task.ocr_source == task.visual_source
-    assert task.video_info["video_fps"] == 30
+    assert task.video_info["video_fps"] == 25
     metadata = json.loads(
         Path(f"{task.visual_source}.json").read_text(encoding="utf-8")
     )
@@ -137,7 +138,7 @@ def test_prepare_work_visual_source_records_profile_and_updates_pipeline_source(
 def test_stale_50fps_work_profile_is_not_reused(tmp_path, monkeypatch):
     source = tmp_path / "input.mp4"
     source.write_bytes(b"source")
-    work = tmp_path / "source-working-30fps.mp4"
+    work = tmp_path / "source-working-25fps.mp4"
     work.write_bytes(b"stale-work-video")
     Path(f"{work}.json").write_text(
         json.dumps({"profile": {"fps": 50}}),
@@ -161,7 +162,7 @@ def test_stale_50fps_work_profile_is_not_reused(tmp_path, monkeypatch):
             "video_codec_name": "h264",
             "width": 1920,
             "height": 1080,
-            "video_fps": 30,
+            "video_fps": 25,
         },
     )
 
@@ -169,7 +170,7 @@ def test_stale_50fps_work_profile_is_not_reused(tmp_path, monkeypatch):
 
     assert len(calls) == 1
     metadata = json.loads(Path(f"{work}.json").read_text(encoding="utf-8"))
-    assert metadata["profile"]["fps"] == 30
+    assert metadata["profile"]["fps"] == 25
 
 
 def test_cloud_provider_uses_direct_api_transport_profile(tmp_path, monkeypatch):
@@ -198,7 +199,7 @@ def test_cloud_provider_uses_direct_api_transport_profile(tmp_path, monkeypatch)
             "video_codec_name": "h264",
             "width": 1080,
             "height": 1920,
-            "video_fps": 30,
+            "video_fps": 25,
         },
     )
 
@@ -209,7 +210,7 @@ def test_cloud_provider_uses_direct_api_transport_profile(tmp_path, monkeypatch)
     assert captured[0][captured[0].index("-b:v") + 1] == "6000k"
     assert "-an" in captured[0]
     assert task.visual_source.endswith(
-        "source-working-api-30fps-6000k-noaudio.mp4"
+        "source-working-api-25fps-6000k-noaudio.mp4"
     )
     metadata = json.loads(
         Path(f"{task.visual_source}.json").read_text(encoding="utf-8")
@@ -284,4 +285,4 @@ def test_final_join_command_never_uses_copy_and_enforces_delivery_standard(
     assert final_command[final_command.index("-c:a") + 1] == "aac"
     assert final_command[final_command.index("-b:a") + 1] == "192k"
     assert final_command[final_command.index("-ar") + 1] == "44100"
-    assert "fps=30" in final_command[final_command.index("-vf") + 1]
+    assert "fps=25" in final_command[final_command.index("-vf") + 1]

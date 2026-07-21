@@ -13,7 +13,7 @@ pyVideoTrans 保留原有的本地 STTN / ProPainter，并增加两个用户主�
 
 - MP4 / H.264
 - 横屏 1920×1080，竖屏 1080×1920
-- 30 FPS CFR
+- 25 FPS CFR
 - 约 6000 kbps
 - 不包含音频
 

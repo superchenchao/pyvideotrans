@@ -22,7 +22,7 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
         layout = QtWidgets.QVBoxLayout(self)
 
         note = QtWidgets.QLabel(
-            "云端方式使用同一份无音频 MP4：1080p、30 FPS、约 6000 kbps。\n"
+            "云端方式使用同一份无音频 MP4：1080p、25 FPS、约 6000 kbps。\n"
             "凭据只从环境变量读取，不会写入任务缓存或日志。"
         )
         note.setWordWrap(True)

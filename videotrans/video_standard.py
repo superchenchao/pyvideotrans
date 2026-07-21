@@ -9,7 +9,7 @@ from collections import deque
 from typing import Callable, Sequence
 
 
-FINAL_FPS = 30
+FINAL_FPS = 25
 FINAL_VIDEO_BITRATE = "3000k"
 FINAL_VIDEO_BUFSIZE = "6000k"
 FINAL_AUDIO_BITRATE = "192k"
@@ -266,7 +266,7 @@ def run_work_video_ffmpeg(
             if cancel_callback and cancel_callback():
                 _terminate_process_tree(process)
                 process.wait(timeout=10)
-                raise WorkVideoCancelled("30 FPS working video generation cancelled")
+                raise WorkVideoCancelled("25 FPS working video generation cancelled")
             try:
                 line = progress_lines.get(timeout=0.2)
             except queue.Empty:
@@ -284,7 +284,7 @@ def run_work_video_ffmpeg(
         stderr_thread.join(timeout=1)
         if process.returncode != 0:
             detail = "\n".join(error_tail) or f"ffmpeg exited with code {process.returncode}"
-            raise RuntimeError(f"30 FPS working video generation failed:\n{detail}")
+            raise RuntimeError(f"25 FPS working video generation failed:\n{detail}")
         if progress_callback and last_progress != 100:
             progress_callback(100)
     finally:

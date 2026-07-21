@@ -25,14 +25,17 @@ class BaseCon:
     last_down_time:int=0
     # 独立任务中心可直接接收当前任务事件，避免污染主窗口的全局消息队列。
     signal_handler: Optional[Callable[[dict], None]] = field(default=None, repr=False)
-
-
     def __post_init__(self):
         # 获取代理
         self.proxy_str = self._set_proxy(type='set')
 
     def _exit(self) -> bool:
-        if app_cfg.exit_soft or (self.uuid and self.uuid in app_cfg.stoped_uuid_set):
+        if app_cfg.exit_soft:
+            return True
+        cancel_checker = getattr(self, "cancel_checker", None)
+        if cancel_checker is not None:
+            return bool(cancel_checker())
+        if self.uuid and self.uuid in app_cfg.stoped_uuid_set:
             return True
         return False
     # 所有窗口和任务信息通过队列交互
@@ -43,8 +46,11 @@ class BaseCon:
             return
         if 'uuid' not in kwargs or not kwargs.get('uuid'):
             kwargs['uuid'] = self.uuid
-        # 已停止，则不再发送消息
-        if kwargs.get('uuid') in app_cfg.stoped_uuid_set:
+        # 独立任务由自己的调度器判断停止；普通任务继续使用全局 UUID 集合。
+        if getattr(self, "cancel_checker", None) is not None:
+            if self._exit():
+                return
+        elif kwargs.get('uuid') in app_cfg.stoped_uuid_set:
             return
         if 'type' not in kwargs or not kwargs.get('type'):
             kwargs['type']='logs'

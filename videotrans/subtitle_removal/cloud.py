@@ -164,6 +164,52 @@ def _poll_sleep(seconds: int, cancel_callback: CancelCallback | None) -> None:
         time.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
 
 
+def _query_with_retry(
+        *, client, task_id: str, provider_name: str,
+        state: dict[str, object], state_path: Path,
+        log_callback: LogCallback | None,
+        cancel_callback: CancelCallback | None,
+        max_attempts: int = 6) -> Mapping[str, object]:
+    """Retry transient cloud status-query failures without resubmitting a task."""
+    max_attempts = max(1, int(max_attempts))
+    for attempt in range(1, max_attempts + 1):
+        if _cancelled(cancel_callback):
+            raise CloudSubtitleRemovalCancelled("云端字幕消除已取消")
+        try:
+            result = client.query(task_id)
+            if attempt > 1:
+                state.update({"status": "processing"})
+                state.pop("query_error", None)
+                state.pop("query_retry_attempt", None)
+                write_state(state_path, state)
+                if log_callback:
+                    log_callback(f"{provider_name} 查询连接已恢复，继续等待云端结果")
+            return result
+        except CloudSubtitleRemovalCancelled:
+            raise
+        except Exception as error:
+            state.update({
+                "status": "query_retry",
+                "query_retry_attempt": attempt,
+                "query_error": str(error),
+            })
+            write_state(state_path, state)
+            if attempt >= max_attempts:
+                raise RuntimeError(
+                    f"{provider_name} 查询连续失败 {max_attempts} 次；"
+                    f"云端任务编号 {task_id} 已保留，重新运行可继续查询：{error}"
+                ) from error
+            delay = min(30, 2 ** attempt)
+            if log_callback:
+                log_callback(
+                    f"{provider_name} 查询暂时失败，{delay} 秒后重试 "
+                    f"({attempt}/{max_attempts})：{error}"
+                )
+            _poll_sleep(delay, cancel_callback)
+
+    raise RuntimeError(f"{provider_name} 查询失败")  # pragma: no cover
+
+
 def _download_http(
         url: str, destination: Path, *,
         progress_callback: ProgressCallback | None,
@@ -233,7 +279,7 @@ def remove_burned_subtitles_cloud(
     }
     token = _identity_token(full_identity)
     prefix = f"{oss.prefix}/{provider}/{token}".strip("/")
-    input_key = f"{prefix}/input-30fps-1080p-6000k-noaudio.mp4"
+    input_key = f"{prefix}/input-25fps-1080p-6000k-noaudio.mp4"
     output_key = f"{prefix}/output-clean.mp4"
     state_path = Path(f"{output_file}.cloud.json")
     state = matching_state(state_path, full_identity)
@@ -317,7 +363,15 @@ def remove_burned_subtitles_cloud(
                 state["status"] = "cancelled_local"
                 write_state(state_path, state)
                 raise CloudSubtitleRemovalCancelled("云端字幕消除已取消，远端任务可继续查询")
-            result = client.query(task_id)
+            result = _query_with_retry(
+                client=client,
+                task_id=task_id,
+                provider_name="链接字幕消除 API",
+                state=state,
+                state_path=state_path,
+                log_callback=log_callback,
+                cancel_callback=cancel_callback,
+            )
             status, detail = classify_caca(result)
             state.update({"status": status, "remote_message": detail})
             write_state(state_path, state)
@@ -372,7 +426,15 @@ def remove_burned_subtitles_cloud(
                 raise CloudSubtitleRemovalCancelled(
                     "阿里云 IMS 字幕消除已取消；远端取消结果将在下次运行时继续查询"
                 )
-            result = client.query(job_id)
+            result = _query_with_retry(
+                client=client,
+                task_id=job_id,
+                provider_name="阿里云 IMS",
+                state=state,
+                state_path=state_path,
+                log_callback=log_callback,
+                cancel_callback=cancel_callback,
+            )
             status, detail = classify_ims(result)
             state.update({"status": status, "remote_message": detail})
             write_state(state_path, state)

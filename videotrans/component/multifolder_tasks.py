@@ -39,6 +39,7 @@ from pydub import AudioSegment
 from videotrans import recognition, translator, tts
 from videotrans.configure import contants
 from videotrans.configure.config import ROOT_DIR, app_cfg, logger, settings
+from videotrans.configure.excepts import SpeechToTextError
 from videotrans.task.taskcfg import TaskCfgVTT
 from videotrans.task.trans_create import TransCreate
 from videotrans.util import tools
@@ -216,6 +217,14 @@ class MultiFolderScheduler(QThread):
         if self._cancelled:
             raise InterruptedError("任务已停止")
 
+    def _ensure_running(self, task: Optional[TransCreate] = None) -> None:
+        if self._cancelled:
+            raise InterruptedError("任务已停止")
+        # 任务中心以 _cancelled 为唯一停止源。清掉同一任务上可能残留的
+        # 全局 UUID 状态，避免上一次失败/停止在阶段交界处误伤本次重试。
+        if task and task.uuid:
+            app_cfg.rm_uuid(task.uuid)
+
     def _source_task(self, project: ProjectSpec, video: str, work_root: Path) -> TransCreate:
         episode_key = _task_uuid(video, "source")
         app_cfg.rm_uuid(episode_key)
@@ -248,10 +257,21 @@ class MultiFolderScheduler(QThread):
                 project.project_id, "_source", msg
             ),
         )
+        task.cancel_checker = lambda: self._cancelled
         try:
+            self._ensure_running(task)
             task.prepare()
+            self._ensure_running(task)
             task.recogn()
+            self._ensure_running(task)
+            if not tools.vail_file(task.cfg.source_sub):
+                raise SpeechToTextError(
+                    f"{Path(video).name} 识别结束，但没有生成原文字幕"
+                )
             task.diariz()
+            self._ensure_running(task)
+        except InterruptedError:
+            raise
         except Exception:
             self._end_failed_task(task)
             raise
@@ -303,12 +323,20 @@ class MultiFolderScheduler(QThread):
                 project.project_id, language.code, msg
             ),
         )
+        task.cancel_checker = lambda: self._cancelled
         try:
+            self._ensure_running(task)
             task.prepare()
+            self._ensure_running(task)
             task.recogn()
+            self._ensure_running(task)
             task.trans()
+            self._ensure_running(task)
             if task.should_dubbing:
                 task._prepare_line_roles(tools.get_subtitle_from_srt(task.cfg.source_sub))
+            self._ensure_running(task)
+        except InterruptedError:
+            raise
         except Exception:
             self._end_failed_task(task)
             raise
@@ -404,6 +432,8 @@ class MultiFolderScheduler(QThread):
                                 project, task, "source", video
                         ):
                             self._emit_status(project.project_id, "_source", "待人工校对")
+                    except InterruptedError:
+                        raise
                     except Exception as error:
                         failures += 1
                         self._emit_status(project.project_id, "_source", f"失败：{error}")
@@ -436,6 +466,8 @@ class MultiFolderScheduler(QThread):
                                     project, task, "target", video, language
                             ):
                                 self._emit_status(project.project_id, language.code, "待字幕 / 角色校对")
+                        except InterruptedError:
+                            raise
                         except Exception as error:
                             failures += 1
                             self._emit_status(project.project_id, language.code, f"失败：{error}")
@@ -451,7 +483,9 @@ class MultiFolderScheduler(QThread):
                             continue
                         try:
                             self._emit_status(project.project_id, language.code, f"配音中 · {Path(video).name}")
+                            self._ensure_running(task)
                             task.dubbing()
+                            self._ensure_running(task)
                             for item in task.queue_tts:
                                 item["dubbing_s"] = (
                                     len(AudioSegment.from_file(item["filename"])) / 1000.0
@@ -467,6 +501,8 @@ class MultiFolderScheduler(QThread):
                                     )
                             ):
                                 self._emit_status(project.project_id, language.code, "待配音校对")
+                        except InterruptedError:
+                            raise
                         except Exception as error:
                             failures += 1
                             self._end_failed_task(task)
@@ -484,8 +520,11 @@ class MultiFolderScheduler(QThread):
                             continue
                         try:
                             self._emit_status(project.project_id, language.code, f"对齐中 · {Path(video).name}")
+                            self._ensure_running(task)
                             task.align()
+                            self._ensure_running(task)
                             task.recogn2pass()
+                            self._ensure_running(task)
                             if (
                                     project.manual_review and task.should_recogn2
                                     and self._request_review(
@@ -493,6 +532,8 @@ class MultiFolderScheduler(QThread):
                                     )
                             ):
                                 self._emit_status(project.project_id, language.code, "待二次识别校对")
+                        except InterruptedError:
+                            raise
                         except Exception as error:
                             failures += 1
                             self._end_failed_task(task)
@@ -509,10 +550,14 @@ class MultiFolderScheduler(QThread):
                             continue
                         try:
                             self._emit_status(project.project_id, language.code, f"合成中 · {Path(video).name}")
+                            self._ensure_running(task)
                             task.assembling()
+                            self._ensure_running(task)
                             task.task_done()
                             self._mark_completed(project, video, language)
                             self._emit_status(project.project_id, language.code, "处理完成 ✓")
+                        except InterruptedError:
+                            raise
                         except Exception as error:
                             failures += 1
                             self._end_failed_task(task)

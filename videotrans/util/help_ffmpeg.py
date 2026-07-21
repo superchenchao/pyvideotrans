@@ -316,8 +316,8 @@ def get_video_info(mp4_file, *, video_fps=False, video_scale=False, video_time=F
                mp4_file))
 
     result = {
-        "video_fps": 30,
-        "r_frame_rate": 30,
+        "video_fps": 25,
+        "r_frame_rate": 25,
         "video_codec_name": "",
         "audio_codec_name": "",
         "width": 0,
