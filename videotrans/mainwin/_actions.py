@@ -8,7 +8,7 @@ from typing import Dict, List, Union
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QTextCursor
-from PySide6.QtWidgets import QFileDialog
+from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from videotrans import translator, recognition, tts
 from videotrans.component.progressbar import ClickableProgressBar
@@ -482,10 +482,11 @@ class WinAction(WinActionBase):
         # 重置字幕行角色
         app_cfg.line_roles = {}
         self.is_render = False
-        # 单视频人工审核倒计时；0 表示跳过全部审核窗口。
-        review_countdown = max(0, int(self.main.review_countdown.value()))
-        settings['countdown_sec'] = review_countdown
-        app_cfg.set_countdown(review_countdown)
+        # 新的人工校对是被动任务中心，不再启动旧的自动弹窗/倒计时流程。
+        manual_review = self.main.review_countdown.isChecked()
+        settings['manual_review'] = manual_review
+        settings['countdown_sec'] = 0
+        app_cfg.set_countdown(0)
 
         # 无视频选择 ，也无导入字幕，无法处理
         if len(self.queue_mp4) < 1:
@@ -499,6 +500,20 @@ class WinAction(WinActionBase):
         # 核对代理
         if self.check_proxy() is not True:
             self.main.startbtn.setDisabled(False)
+            return
+        if manual_review:
+            window = self.main._open_multifolder_tasks()
+            window.add_videos(
+                self.queue_mp4,
+                target_language=self.main.target_language.currentText(),
+                subtitle_files=self.imported_subtitle_map,
+            )
+            self.main.startbtn.setDisabled(False)
+            QMessageBox.information(
+                self.main,
+                "已加入任务中心",
+                "人工校对已开启。任务已加入多文件夹任务中心，请确认语言和音色后点击“开始处理”。",
+            )
             return
 
         # 先确定原始和目标语言
@@ -678,7 +693,6 @@ class WinAction(WinActionBase):
                 self.main.startbtn.setDisabled(False)
                 tools.show_error(f"云端字幕消除配置不可用：{error}")
                 return
-            from PySide6.QtWidgets import QMessageBox
             provider_name = self.main.subtitle_removal_provider.currentText()
             reply = QMessageBox.question(
                 self.main,

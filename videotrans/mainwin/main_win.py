@@ -161,8 +161,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.enable_cuda.setChecked(bool(params.get('is_cuda', False)))
         self.enable_diariz.setChecked(bool(params.get('enable_diariz', False)))
         self.nums_diariz.setCurrentIndex(int(params.get('nums_diariz', 0)))
-        self.review_countdown.setValue(max(0, int(settings.get('countdown_sec', 30))))
-        self.review_countdown.editingFinished.connect(self._save_review_countdown)
+        self.review_countdown.setChecked(bool(settings.get('manual_review', True)))
+        self.review_countdown.toggled.connect(self._save_review_countdown)
         self.is_separate.setChecked(bool(params.get('is_separate', False)))
         self.embed_bgm.setChecked(bool(params.get('embed_bgm', True)))
         self.rephrase.setCurrentIndex(int(params.get('rephrase', 0)))
@@ -221,6 +221,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.btn_save_dir.clicked.connect(self.win_action.get_save_dir)
         self.set_adv_status.clicked.connect(self.win_action.toggle_adv)
         self.btn_get_video.clicked.connect(self.win_action.get_mp4)
+        self.multifolder_tasks.clicked.connect(self._open_multifolder_tasks)
         self.listen_btn.clicked.connect(self.win_action.listen_voice_fun)
         from videotrans.component.voice_selector import install_voice_selector
         install_voice_selector(
@@ -433,8 +434,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         return winform.get_win(name).openwin()
 
     def _save_review_countdown(self):
-        settings['countdown_sec'] = max(0, int(self.review_countdown.value()))
+        settings['manual_review'] = self.review_countdown.isChecked()
         settings.save()
+
+    def _open_multifolder_tasks(self):
+        from videotrans.component.multifolder_tasks import MultiFolderTaskWindow
+        window = app_cfg.child_forms.get('multifolder_tasks')
+        if window is None:
+            window = MultiFolderTaskWindow(self)
+            app_cfg.child_forms['multifolder_tasks'] = window
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        return window
 
     def restart_app(self):
         # 创建确认对话框

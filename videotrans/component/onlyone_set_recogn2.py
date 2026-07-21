@@ -15,11 +15,13 @@ class EditRecognResultDialog2(QDialog):
     def __init__(
             self,
             parent=None,
-            target_sub: str = None
+            target_sub: str = None,
+            countdown_enabled: bool = True,
     ):
         super().__init__()
         self.parent = parent
         self.target_sub = target_sub
+        self.countdown_enabled = countdown_enabled
         self.srt_list_dict = tools.get_subtitle_from_srt(self.target_sub)
 
         self.setWindowTitle( tr("Modify secondary recognition results") )
@@ -47,6 +49,8 @@ class EditRecognResultDialog2(QDialog):
         self.stop_button.clicked.connect(self.stop_countdown)
         hstop.addWidget(self.stop_button)
         main_layout.addLayout(hstop)
+        self.prompt_label.setVisible(countdown_enabled)
+        self.stop_button.setVisible(countdown_enabled)
 
         prompt_label2 = QLabel(tr("If you need to delete a line of subtitles, just clear the text in that line"))
         prompt_label2.setAlignment(Qt.AlignCenter)
@@ -189,9 +193,10 @@ class EditRecognResultDialog2(QDialog):
                 QTimer.singleShot(0, lambda: self._load_remaining(100))
             
             # 8. 启动倒计时
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.update_countdown)
-            self.timer.start(1000)
+            if self.countdown_enabled:
+                self.timer = QTimer(self)
+                self.timer.timeout.connect(self.update_countdown)
+                self.timer.start(1000)
             if self.parent:
                 self.parent.activateWindow()
                 

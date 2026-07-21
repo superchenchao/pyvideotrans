@@ -188,3 +188,11 @@ class TaskCfgVTT(TaskCfgSTT, TaskCfgTTS, TaskCfgSTS):
     subtitle_removal_provider: str = "local"  # local / caca_link / aliyun_ims
     subtitle_removal_rect: Optional[list] = None  # 首视频框选区域的归一化坐标
     subtitle_removal_aspect_ratio: float = 0.0  # 首视频宽高比，用于批量安全校验
+    # 多语言任务共享的、与目标语言无关的不可变中间产物。
+    shared_visual_source: Union[os.PathLike, str] = None
+    shared_ocr_source: Union[os.PathLike, str] = None
+    shared_source_wav: Union[os.PathLike, str] = None
+    shared_vocal: Union[os.PathLike, str] = None
+    shared_instrument: Union[os.PathLike, str] = None
+    shared_speaker_file: Union[os.PathLike, str] = None
+    shared_novoice: Union[os.PathLike, str] = None

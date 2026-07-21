@@ -6,7 +6,7 @@ import time
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional,Union
+from typing import Callable, Optional, Union
 
 from videotrans.configure.config import tr, settings, app_cfg, logger, push_queue, TEMP_ROOT
 from videotrans.configure.excepts import VideoTransError
@@ -23,6 +23,8 @@ class BaseCon:
     # 用于其他需要直接代理字符串
     proxy_str: str = ''
     last_down_time:int=0
+    # 独立任务中心可直接接收当前任务事件，避免污染主窗口的全局消息队列。
+    signal_handler: Optional[Callable[[dict], None]] = field(default=None, repr=False)
 
 
     def __post_init__(self):
@@ -46,6 +48,10 @@ class BaseCon:
             return
         if 'type' not in kwargs or not kwargs.get('type'):
             kwargs['type']='logs'
+
+        if self.signal_handler:
+            self.signal_handler(kwargs)
+            return
 
         push_queue(kwargs.get('uuid') or "", SignMsg(**kwargs))
 

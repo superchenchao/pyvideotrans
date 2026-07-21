@@ -421,6 +421,7 @@ class AppSettings:
             "remove_dubb_silence": True,
             "save_segment_audio": False,
             "countdown_sec": 30,
+            "manual_review": True,
             "backaudio_volume": 0.8,
             "loop_backaudio": 1,
             "cuda_com_type": "default",

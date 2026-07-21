@@ -15,11 +15,13 @@ class EditRecognResultDialog(QDialog):
     def __init__(
             self,
             parent=None,
-            source_sub: str = None
+            source_sub: str = None,
+            countdown_enabled: bool = True,
     ):
         super().__init__()
         self.parent = parent
         self.source_sub = source_sub
+        self.countdown_enabled = countdown_enabled
         self.srt_list_dict = tools.get_subtitle_from_srt(self.source_sub)
 
         self.setWindowTitle(tr("zimubianjitishi"))
@@ -47,6 +49,8 @@ class EditRecognResultDialog(QDialog):
         self.stop_button.clicked.connect(self.stop_countdown)
         hstop.addWidget(self.stop_button)
         main_layout.addLayout(hstop)
+        self.prompt_label.setVisible(countdown_enabled)
+        self.stop_button.setVisible(countdown_enabled)
 
         prompt_label2 = QLabel(tr("If you need to delete a line of subtitles, just clear the text in that line"))
         prompt_label2.setAlignment(Qt.AlignCenter)
@@ -194,9 +198,10 @@ class EditRecognResultDialog(QDialog):
                 QTimer.singleShot(0, lambda: self._load_remaining(100))
             
             # 8. 启动倒计时
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.update_countdown)
-            self.timer.start(1000)
+            if self.countdown_enabled:
+                self.timer = QTimer(self)
+                self.timer.timeout.connect(self.update_countdown)
+                self.timer.start(1000)
             if self.parent:
                 self.parent.activateWindow()
                 

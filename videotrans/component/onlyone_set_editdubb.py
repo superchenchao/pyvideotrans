@@ -46,12 +46,14 @@ class EditDubbingResultDialog(QDialog):
             self,
             parent=None,
             language=None,
-            cache_folder: str = None
+            cache_folder: str = None,
+            countdown_enabled: bool = True,
     ):
         super().__init__()
         self.parent = parent
         self.language = language
         self.cache_folder = cache_folder
+        self.countdown_enabled = countdown_enabled
         self.queue_tts = []
         queue_tts_file = Path(f'{cache_folder}/queue_tts.json')
         if queue_tts_file.exists():
@@ -84,6 +86,8 @@ class EditDubbingResultDialog(QDialog):
         self.stop_button.clicked.connect(self.stop_countdown)
         hstop.addWidget(self.stop_button)
         main_layout.addLayout(hstop)
+        self.prompt_label.setVisible(countdown_enabled)
+        self.stop_button.setVisible(countdown_enabled)
 
         # 操作提示
         prompt_label2 = QLabel(tr("Right-click: Menu | << >> : Adjust time")+"\n"+tr('Shortened and Exceeded mean'))
@@ -215,9 +219,10 @@ class EditDubbingResultDialog(QDialog):
             self.table.customContextMenuRequested.connect(self._show_context_menu)
             
             # 9. 启动倒计时
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.update_countdown)
-            self.timer.start(1000)
+            if self.countdown_enabled:
+                self.timer = QTimer(self)
+                self.timer.timeout.connect(self.update_countdown)
+                self.timer.start(1000)
             if self.parent:
                 self.parent.activateWindow()
                 

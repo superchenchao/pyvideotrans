@@ -112,6 +112,7 @@ class SpeakerAssignmentDialog(QDialog):
             series_folder=None,
             series_video_paths=None,
             series_output_dir=None,
+            countdown_enabled: bool = True,
     ):
         super().__init__()
         self.parent = parent
@@ -124,6 +125,7 @@ class SpeakerAssignmentDialog(QDialog):
         self.source_language = source_language
         self.tts_type = tts_type
         self.default_role = default_role
+        self.countdown_enabled = countdown_enabled
         from videotrans.process.series_speakers import voice_scope_key
         self.voice_scope = voice_scope_key(tts_type, target_language)
         self.video_path = video_path
@@ -345,6 +347,8 @@ class SpeakerAssignmentDialog(QDialog):
         self.stop_button.clicked.connect(self.stop_countdown)
         countdown_layout.addWidget(self.stop_button)
         content_layout.addLayout(countdown_layout)
+        self.prompt_label.setVisible(countdown_enabled)
+        self.stop_button.setVisible(countdown_enabled)
 
         # 延迟加载表格
         QTimer.singleShot(10, self.load_table)
@@ -1096,9 +1100,10 @@ class SpeakerAssignmentDialog(QDialog):
                 QTimer.singleShot(0, lambda: self._load_remaining_rows(100))
             
             # 10. 启动倒计时
-            self.timer = QTimer(self)
-            self.timer.timeout.connect(self.update_countdown)
-            self.timer.start(1000)
+            if self.countdown_enabled:
+                self.timer = QTimer(self)
+                self.timer.timeout.connect(self.update_countdown)
+                self.timer.start(1000)
             self._active()
             
         except Exception as e:

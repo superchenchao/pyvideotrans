@@ -242,6 +242,13 @@ class TransCreate(BaseTask):
         self.video_time = self.video_info['time']
         self.visual_source = self.cfg.name
         self.ocr_source = self.cfg.name
+        original_width, original_height = display_dimensions(
+            int(self.video_info.get("width") or 0),
+            int(self.video_info.get("height") or 0),
+            self.video_info.get("rotation", 0),
+        )
+        self.source_display_width = original_width
+        self.source_display_height = original_height
         # 音频时长，毫秒
         audio_stream_len = self.video_info.get('streams_audio', 0)
 
@@ -258,15 +265,36 @@ class TransCreate(BaseTask):
 
         # 在 OCR、字幕消除等逐帧流程之前统一生成 30 FPS、高质量工作视频。
         # 原始音轨仍供 ASR/配音使用；3000 kbps 仅在最终导出时应用。
+        shared_visual = getattr(self.cfg, "shared_visual_source", None)
+        shared_ocr = getattr(self.cfg, "shared_ocr_source", None)
+        use_shared_visual = bool(shared_visual and tools.vail_file(shared_visual))
         if not self.is_audio_trans and self.cfg.app_mode != 'tiqu':
-            self._prepare_work_visual_source()
+            if use_shared_visual:
+                shared_info = tools.get_video_info(shared_visual)
+                self.visual_source = str(shared_visual)
+                self.ocr_source = (
+                    str(shared_ocr)
+                    if shared_ocr and tools.vail_file(shared_ocr)
+                    else str(shared_visual)
+                )
+                self.video_info.update({
+                    key: shared_info.get(key, self.video_info.get(key))
+                    for key in (
+                        "width", "height", "video_fps", "r_frame_rate",
+                        "video_codec_name", "color", "rotation",
+                    )
+                })
+                logger.info("复用多语言共享工作视频：%s", shared_visual)
+            else:
+                self._prepare_work_visual_source()
 
         # 工作视频固定为 H.264/yuv420p，后续拆无声视频可以无损 copy。
         if self.video_info['video_codec_name'] == 'h264' and self.video_info['color'] == 'yuv420p':
             self.is_copy_video = True
 
         # 字幕消除读取 30 FPS 工作视频；OCR 读取消除前的同一工作视频。
-        self._prepare_clean_visual_source()
+        if not use_shared_visual:
+            self._prepare_clean_visual_source()
 
         # 如果存在逐视频导入字幕，优先使用；单视频文本框仍允许用户修改后覆盖。
         subtitle_text = self.cfg.subtitles.strip()
@@ -284,28 +312,51 @@ class TransCreate(BaseTask):
             self.used_imported_subtitles = bool(imported_subtitle)
 
         # 分离后的人声仅用于背景声合成和声音克隆，不作为语音识别原料
-        self.cfg.vocal = f"{self.cfg.cache_folder}/vocal.wav"
+        shared_vocal = getattr(self.cfg, "shared_vocal", None)
+        shared_instrument = getattr(self.cfg, "shared_instrument", None)
+        shared_source_wav = getattr(self.cfg, "shared_source_wav", None)
+        self.cfg.vocal = (
+            str(shared_vocal)
+            if shared_vocal and tools.vail_file(shared_vocal)
+            else f"{self.cfg.cache_folder}/vocal.wav"
+        )
         self.recogn_vocal = f"{self.cfg.cache_folder}/recognition-vocal.wav"
         raw_vocal = f"{self.cfg.target_dir}/vocal.wav"
 
-        if tools.vail_file(raw_vocal):
+        if not tools.vail_file(self.cfg.vocal) and tools.vail_file(raw_vocal):
             shutil.copy2(raw_vocal, self.cfg.vocal)
 
         # 需要背景音分离
         if self.cfg.is_separate:
             raw_instrument = f"{self.cfg.target_dir}/instrument.wav"
-            self.cfg.instrument = f"{self.cfg.cache_folder}/instrument.wav"
+            self.cfg.instrument = (
+                str(shared_instrument)
+                if shared_instrument and tools.vail_file(shared_instrument)
+                else f"{self.cfg.cache_folder}/instrument.wav"
+            )
 
             if tools.vail_file(raw_instrument):
                 shutil.copy2(raw_instrument, self.cfg.instrument)
             self.should_separate = True
 
+        # 默认对齐不改变视频时，多语言任务可安全共享同一份无声视频。
+        shared_novoice = getattr(self.cfg, "shared_novoice", None)
+        if (
+                shared_novoice and tools.vail_file(shared_novoice)
+                and not self.cfg.video_autorate
+        ):
+            self.cfg.novoice_mp4 = str(shared_novoice)
+
         # 将原始视频分离为无声视频
         if not self.is_audio_trans and self.cfg.app_mode != 'tiqu':
-            app_cfg.queue_novice[self.uuid] = 'ing'
-            if not self.is_copy_video:
-                self.signal(text=tr("Video needs transcoded and take a long time.."))
-            run_in_threadpool(self._split_novoice_byraw)
+            if tools.vail_file(self.cfg.novoice_mp4):
+                app_cfg.queue_novice[self.uuid] = 'end'
+                logger.info("复用多语言共享无声视频：%s", self.cfg.novoice_mp4)
+            else:
+                app_cfg.queue_novice[self.uuid] = 'ing'
+                if not self.is_copy_video:
+                    self.signal(text=tr("Video needs transcoded and take a long time.."))
+                run_in_threadpool(self._split_novoice_byraw)
         else:
             app_cfg.queue_novice[self.uuid] = 'end'
 
@@ -326,12 +377,17 @@ class TransCreate(BaseTask):
                     self.should_separate = False
 
         # 第一遍使用增强后的人声定位对白，第二遍再回原音轨校正文案
-        if self.cfg.is_separate:
+        if self.cfg.is_separate and not tools.vail_file(shared_vocal):
             self._prepare_recognition_vocal()
 
         # 语音识别始终使用原始音轨；人声分离结果不会覆盖 source_wav
+        if shared_source_wav and tools.vail_file(shared_source_wav):
+            self.cfg.source_wav = str(shared_source_wav)
         if audio_stream_len > 0 and not tools.vail_file(self.cfg.source_wav):
             self._split_audio_byraw()
+        shared_speaker_file = getattr(self.cfg, "shared_speaker_file", None)
+        if shared_speaker_file and tools.vail_file(shared_speaker_file):
+            shutil.copy2(shared_speaker_file, Path(self.cfg.cache_folder, "speaker.json"))
         # 将分离后人声设为语音克隆参考音频
         if self.cfg.vocal and Path(self.cfg.vocal).exists():
             self.clone_ref = self.cfg.vocal
