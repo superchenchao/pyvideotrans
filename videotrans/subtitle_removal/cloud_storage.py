@@ -23,6 +23,14 @@ class OssConfig:
     endpoint: str
     prefix: str = "pyvideotrans/subtitle-removal"
     signed_url_seconds: int = 12 * 3600
+    transfer_threads: int = 8
+
+    def __post_init__(self) -> None:
+        try:
+            threads = int(float(self.transfer_threads))
+        except (TypeError, ValueError):
+            threads = 8
+        object.__setattr__(self, "transfer_threads", max(1, min(16, threads)))
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, object]) -> "OssConfig":
@@ -34,6 +42,10 @@ class OssConfig:
             signed_hours = float(values.get("subtitle_oss_signed_url_hours", 12))
         except (TypeError, ValueError):
             signed_hours = 12
+        try:
+            transfer_threads = int(float(values.get("subtitle_oss_transfer_threads", 8)))
+        except (TypeError, ValueError):
+            transfer_threads = 8
         return cls(
             bucket=str(values.get("subtitle_oss_bucket", "")).strip(),
             region=region,
@@ -44,7 +56,12 @@ class OssConfig:
                 )
             ).strip().strip("/"),
             signed_url_seconds=max(1800, min(7 * 86400, int(signed_hours * 3600))),
+            transfer_threads=max(1, min(16, transfer_threads)),
         )
+
+    @property
+    def transfer_pool_size(self) -> int:
+        return self.transfer_threads + 2
 
     def validate(self) -> None:
         missing = [
@@ -154,7 +171,7 @@ def upload_file(
     source = Path(local_path).resolve()
     if not source.is_file():
         raise FileNotFoundError(f"待上传视频不存在：{source}")
-    bucket = create_bucket(config, pool_size=4)
+    bucket = create_bucket(config, pool_size=config.transfer_pool_size)
     checkpoint = Path(checkpoint_root).resolve()
     checkpoint.mkdir(parents=True, exist_ok=True)
     if log_callback:
@@ -176,7 +193,7 @@ def upload_file(
                 progress_callback=progress_callback,
                 cancel_callback=cancel_callback,
             ),
-            num_threads=4,
+            num_threads=config.transfer_threads,
         )
     except CloudTransferCancelled:
         raise
@@ -222,13 +239,13 @@ def download_object(
         checkpoint = destination.parent / ".oss-resumable"
         checkpoint.mkdir(parents=True, exist_ok=True)
         oss2.resumable_download(
-            create_bucket(config),
+            create_bucket(config, pool_size=config.transfer_pool_size),
             object_key,
             str(part_path),
             store=oss2.ResumableStore(root=str(checkpoint)),
             multiget_threshold=32 * 1024 * 1024,
             part_size=8 * 1024 * 1024,
-            num_threads=4,
+            num_threads=config.transfer_threads,
             progress_callback=_progress_callback(
                 total_size=int(remote["content_length"]),
                 stage_start=85,

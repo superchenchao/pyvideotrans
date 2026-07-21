@@ -1,4 +1,7 @@
 import json
+import os
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -252,13 +255,6 @@ def test_final_join_command_never_uses_copy_and_enforces_delivery_standard(
     task._get_origin_audio = lambda output: Path(output).write_bytes(b"audio")
     commands = []
 
-    class DummyThread:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def start(self):
-            pass
-
     def fake_runffmpeg(command, *, cmd_dir=None, **kwargs):
         commands.append(command)
         output = Path(command[-1])
@@ -267,7 +263,7 @@ def test_final_join_command_never_uses_copy_and_enforces_delivery_standard(
         output.write_bytes(b"final")
         return True
 
-    monkeypatch.setattr("videotrans.task.trans_create.threading.Thread", DummyThread)
+    monkeypatch.setattr(TransCreate, "_hebing_pro", lambda *args: None)
     monkeypatch.setattr("videotrans.task.trans_create.tools.is_novoice_mp4", lambda *args: None)
     monkeypatch.setattr("videotrans.task.trans_create.tools.get_video_duration", lambda *args: 8000)
     monkeypatch.setattr("videotrans.task.trans_create.tools.get_audio_time", lambda *args: 8000)
@@ -286,3 +282,109 @@ def test_final_join_command_never_uses_copy_and_enforces_delivery_standard(
     assert final_command[final_command.index("-b:a") + 1] == "192k"
     assert final_command[final_command.index("-ar") + 1] == "44100"
     assert "fps=25" in final_command[final_command.index("-vf") + 1]
+
+
+def test_parallel_final_join_uses_shared_novoice_absolute_path(
+        tmp_path, monkeypatch):
+    shared_dir = tmp_path / "shared-cache"
+    shared_dir.mkdir()
+    shared_novoice = shared_dir / "novoice.mp4"
+    shared_novoice.write_bytes(b"shared-video")
+    source = tmp_path / "source.mp4"
+    source.write_bytes(b"source")
+    original_cwd = os.getcwd()
+    barrier = threading.Barrier(2)
+    captured_inputs = []
+    captured_lock = threading.Lock()
+
+    def fake_runffmpeg(command, *, cmd_dir=None, **kwargs):
+        input_value = command[command.index("-i") + 1]
+        input_path = Path(input_value)
+        resolved_input = input_path if input_path.is_absolute() else Path(cmd_dir, input_path)
+        with captured_lock:
+            captured_inputs.append((input_path.is_absolute(), resolved_input.exists()))
+        barrier.wait(timeout=5)
+        output = Path(command[-1])
+        if not output.is_absolute() and cmd_dir:
+            output = Path(cmd_dir, output)
+        output.write_bytes(b"final")
+        return True
+
+    def build_task(language):
+        cache_folder = tmp_path / f"language-cache-{language}"
+        target_dir = tmp_path / f"output-{language}"
+        cache_folder.mkdir()
+        target_dir.mkdir()
+        task = object.__new__(TransCreate)
+        task.cfg = SimpleNamespace(
+            name=source.as_posix(),
+            novoice_mp4=shared_novoice.as_posix(),
+            cache_folder=cache_folder.as_posix(),
+            target_wav_output=(target_dir / "audio.m4a").as_posix(),
+            target_sub=(target_dir / "target.srt").as_posix(),
+            source_sub=(target_dir / "source.srt").as_posix(),
+            targetdir_mp4=(target_dir / "final.mp4").as_posix(),
+            subtitle_type=0,
+            video_autorate=False,
+        )
+        task.video_info = {
+            "streams_audio": 1,
+            "audio_codec_name": "aac",
+            "width": 1080,
+            "height": 1920,
+        }
+        task.should_hebing = True
+        task.should_dubbing = False
+        task.precent = 90
+        task.hasend = False
+        task.uuid = f"parallel-{language}"
+        task.signal = lambda **kwargs: None
+        task._exit = lambda: False
+        task._get_origin_audio = lambda output: Path(output).write_bytes(b"audio")
+        return task
+
+    monkeypatch.setattr(TransCreate, "_hebing_pro", lambda *args: None)
+    monkeypatch.setattr("videotrans.task.trans_create.tools.is_novoice_mp4", lambda *args: None)
+    monkeypatch.setattr("videotrans.task.trans_create.tools.get_video_duration", lambda *args: 8000)
+    monkeypatch.setattr("videotrans.task.trans_create.tools.get_audio_time", lambda *args: 8000)
+    monkeypatch.setattr("videotrans.task.trans_create.tools.runffmpeg", fake_runffmpeg)
+
+    tasks = [build_task("en"), build_task("fr")]
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        list(executor.map(lambda task: task._join_video_audio_srt(), tasks))
+
+    assert captured_inputs == [(True, True), (True, True)]
+    assert os.getcwd() == original_cwd
+    assert shared_novoice.read_bytes() == b"shared-video"
+    assert all(Path(task.cfg.targetdir_mp4).exists() for task in tasks)
+
+
+def test_video_extend_does_not_mutate_shared_novoice(tmp_path, monkeypatch):
+    shared_dir = tmp_path / "shared-cache"
+    cache_dir = tmp_path / "language-cache"
+    shared_dir.mkdir()
+    cache_dir.mkdir()
+    shared_novoice = shared_dir / "novoice.mp4"
+    shared_novoice.write_bytes(b"shared-video")
+    captured = []
+
+    def fake_runffmpeg(command, *, cmd_dir=None, **kwargs):
+        captured.append(command)
+        Path(cmd_dir, command[-1]).write_bytes(b"extended-video")
+        return True
+
+    task = object.__new__(TransCreate)
+    task.cfg = SimpleNamespace(
+        cache_folder=cache_dir.as_posix(),
+        novoice_mp4=shared_novoice.as_posix(),
+    )
+    monkeypatch.setattr("videotrans.task.trans_create.tools.runffmpeg", fake_runffmpeg)
+
+    task._video_extend(1500)
+
+    input_path = Path(captured[0][captured[0].index("-i") + 1])
+    assert input_path.is_absolute()
+    assert input_path == shared_novoice
+    assert shared_novoice.read_bytes() == b"shared-video"
+    assert Path(task.cfg.novoice_mp4) == cache_dir / "final_video_with_freeze_lastend.mp4"
+    assert Path(task.cfg.novoice_mp4).read_bytes() == b"extended-video"

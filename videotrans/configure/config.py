@@ -404,6 +404,7 @@ class AppSettings:
             "subtitle_oss_bucket": "",
             "subtitle_oss_endpoint": "https://oss-cn-shanghai.aliyuncs.com",
             "subtitle_oss_prefix": "pyvideotrans/subtitle-removal",
+            "subtitle_oss_transfer_threads": 8,
             "subtitle_oss_signed_url_hours": 12,
             "subtitle_cloud_poll_seconds": 30,
             "subtitle_cloud_delete_after_download": True,

@@ -2107,7 +2107,7 @@ class TransCreate(BaseTask):
     def _video_extend(self, duration_ms=1000):
         sec = duration_ms / 1000.0
         final_video_path = Path(f'{self.cfg.cache_folder}/final_video_with_freeze_lastend.mp4').as_posix()
-        cmd = ['-y', '-i', os.path.basename(self.cfg.novoice_mp4),
+        cmd = ['-y', '-i', Path(self.cfg.novoice_mp4).resolve().as_posix(),
                '-vf', f'tpad=stop_mode=clone:stop_duration={sec:.3f}',
                '-c:v', 'libx264',
                '-crf', f'{settings.get("crf", 23)}',
@@ -2116,7 +2116,9 @@ class TransCreate(BaseTask):
         try:
             tools.runffmpeg(cmd, force_cpu=True, cmd_dir=self.cfg.cache_folder)
             if Path(final_video_path).exists():
-                shutil.copy2(final_video_path, self.cfg.novoice_mp4)
+                # The original video may be shared by every target language.
+                # Keep extensions task-local instead of mutating that shared file.
+                self.cfg.novoice_mp4 = final_video_path
                 logger.debug(f"视频定格应延长{duration_ms}ms，实际向上取整秒延长{sec}s,操作成功。")
         except Exception as e:
             logger.exception(f"视频定格延长操作失败,跳过 {e}", exc_info=True)
@@ -2195,9 +2197,6 @@ class TransCreate(BaseTask):
         if _video_output_ext!='.mp4':
             subtitle_langcode=translator.get_mkv_code(subtitle_langcode)
 
-        # 字幕嵌入时进入视频目录下
-        os.chdir(self.cfg.cache_folder)
-
         # 末尾对齐
         duration_ms = int(tools.get_video_duration(self.cfg.novoice_mp4))
         duration_s = f'{duration_ms / 1000.0:.6f}'
@@ -2221,8 +2220,10 @@ class TransCreate(BaseTask):
             protxt_basename = os.path.basename(protxt)
             threading.Thread(target=self._hebing_pro, args=(protxt,), daemon=True).start()
 
-            # 无音频视频流
-            novoice_mp4_basename = os.path.basename(self.cfg.novoice_mp4)
+            # The no-audio video can live in the shared source cache, outside
+            # this language task's working directory. Always pass its absolute
+            # path instead of assuming a local ``novoice.mp4`` exists.
+            novoice_mp4_input = Path(self.cfg.novoice_mp4).resolve().as_posix()
             # 需要嵌入的音频
             target_m4a_basename = os.path.basename(target_m4a)
             # 合成后的结果视频
@@ -2236,7 +2237,7 @@ class TransCreate(BaseTask):
 
             cmd1 = [
                 "-i",
-                novoice_mp4_basename,
+                novoice_mp4_input,
                 "-i",
                 target_m4a_basename
             ]
@@ -2289,8 +2290,6 @@ class TransCreate(BaseTask):
             )
         except Exception as e:
             raise VideoTransError(tr('Error in embedding the final step of the subtitle dubbing')+str(e)) from e
-        finally:
-            os.chdir(ROOT_DIR)
 
         # 复制到目标文件夹
         if Path(tmp_target_mp4).exists():

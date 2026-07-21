@@ -1,5 +1,7 @@
 import json
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -8,6 +10,7 @@ from videotrans.subtitle_removal import cloud
 from videotrans.subtitle_removal.aliyun_ims import ImsClient, ImsConfig, classify_status as classify_ims
 from videotrans.subtitle_removal.caca_api import CacaClient, CacaConfig, classify_status as classify_caca
 from videotrans.subtitle_removal.cloud_storage import OssConfig
+from videotrans.subtitle_removal import cloud_storage
 from videotrans.subtitle_removal.cloud_state import write_state
 from videotrans.task.trans_create import validate_cloud_clean_video
 from videotrans.task.trans_create import TransCreate
@@ -40,10 +43,114 @@ def test_oss_config_derives_public_endpoint_and_clamps_signed_url():
         "subtitle_oss_bucket": "private-bucket",
         "subtitle_oss_endpoint": "",
         "subtitle_oss_signed_url_hours": 999,
+        "subtitle_oss_transfer_threads": 999,
     })
 
     assert config.endpoint == "https://oss-cn-beijing.aliyuncs.com"
     assert config.signed_url_seconds == 7 * 86400
+    assert config.transfer_threads == 16
+    assert config.transfer_pool_size == 18
+
+
+def test_oss_config_defaults_to_eight_transfer_threads():
+    config = OssConfig.from_mapping({})
+
+    assert config.transfer_threads == 8
+    assert config.transfer_pool_size == 10
+    assert OssConfig("bucket", "region", "https://endpoint", transfer_threads=0).transfer_threads == 1
+    assert OssConfig("bucket", "region", "https://endpoint", transfer_threads=99).transfer_threads == 16
+
+
+def test_oss_upload_uses_configured_threads_and_larger_pool(tmp_path, monkeypatch):
+    source = tmp_path / "video.mp4"
+    source.write_bytes(b"video-data")
+    captured = {}
+
+    class FakeStore:
+        def __init__(self, *, root):
+            self.root = root
+
+    def fake_resumable_upload(bucket, object_key, filename, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(etag="etag")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "oss2",
+        SimpleNamespace(ResumableStore=FakeStore, resumable_upload=fake_resumable_upload),
+    )
+    monkeypatch.setattr(
+        cloud_storage,
+        "create_bucket",
+        lambda config, *, pool_size=4: captured.update(pool_size=pool_size) or object(),
+    )
+    monkeypatch.setattr(
+        cloud_storage,
+        "head_object",
+        lambda config, object_key: {
+            "content_length": source.stat().st_size,
+            "etag": "etag",
+            "last_modified": None,
+        },
+    )
+    config = OssConfig(
+        "bucket", "cn-shanghai", "https://oss-cn-shanghai.aliyuncs.com",
+        transfer_threads=12,
+    )
+
+    cloud_storage.upload_file(
+        config,
+        source,
+        "input.mp4",
+        checkpoint_root=tmp_path / "checkpoint",
+    )
+
+    assert captured["num_threads"] == 12
+    assert captured["pool_size"] == 14
+
+
+def test_oss_download_uses_configured_threads_and_larger_pool(tmp_path, monkeypatch):
+    destination = tmp_path / "clean.mp4"
+    payload = b"clean-video"
+    captured = {}
+
+    class FakeStore:
+        def __init__(self, *, root):
+            self.root = root
+
+    def fake_resumable_download(bucket, object_key, filename, **kwargs):
+        captured.update(kwargs)
+        Path(filename).write_bytes(payload)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "oss2",
+        SimpleNamespace(ResumableStore=FakeStore, resumable_download=fake_resumable_download),
+    )
+    monkeypatch.setattr(
+        cloud_storage,
+        "create_bucket",
+        lambda config, *, pool_size=4: captured.update(pool_size=pool_size) or object(),
+    )
+    monkeypatch.setattr(
+        cloud_storage,
+        "head_object",
+        lambda config, object_key: {
+            "content_length": len(payload),
+            "etag": "etag",
+            "last_modified": None,
+        },
+    )
+    config = OssConfig(
+        "bucket", "cn-shanghai", "https://oss-cn-shanghai.aliyuncs.com",
+        transfer_threads=8,
+    )
+
+    cloud_storage.download_object(config, "output.mp4", destination)
+
+    assert destination.read_bytes() == payload
+    assert captured["num_threads"] == 8
+    assert captured["pool_size"] == 10
 
 
 def test_caca_submit_uses_signed_video_link_and_safe_default_region(monkeypatch):

@@ -18,7 +18,7 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("云端字幕消除设置")
-        self.resize(620, 520)
+        self.resize(620, 560)
         layout = QtWidgets.QVBoxLayout(self)
 
         note = QtWidgets.QLabel(
@@ -48,6 +48,16 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
             str(settings.get("subtitle_oss_prefix", "pyvideotrans/subtitle-removal"))
         )
         form.addRow("OSS 对象前缀", self.prefix)
+
+        self.transfer_threads = QtWidgets.QSpinBox()
+        self.transfer_threads.setRange(1, 16)
+        self.transfer_threads.setValue(
+            max(1, min(16, _number_setting("subtitle_oss_transfer_threads", 8, int)))
+        )
+        self.transfer_threads.setToolTip(
+            "同时用于 OSS 分片上传和下载；小于 32 MB 时由 SDK 直接传输"
+        )
+        form.addRow("OSS 分片并发", self.transfer_threads)
 
         self.signed_hours = QtWidgets.QDoubleSpinBox()
         self.signed_hours.setRange(0.5, 168)
@@ -147,6 +157,7 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
         settings["subtitle_oss_bucket"] = self.bucket.text().strip()
         settings["subtitle_oss_endpoint"] = endpoint
         settings["subtitle_oss_prefix"] = self.prefix.text().strip().strip("/")
+        settings["subtitle_oss_transfer_threads"] = self.transfer_threads.value()
         settings["subtitle_oss_signed_url_hours"] = self.signed_hours.value()
         settings["subtitle_cloud_poll_seconds"] = self.poll_seconds.value()
         settings["subtitle_cloud_delete_after_download"] = (
