@@ -7,6 +7,7 @@ from types import SimpleNamespace
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QWidget
 
 from videotrans.component.checkable_combo import CheckableComboBox
@@ -21,6 +22,7 @@ from videotrans.component.multifolder_tasks import (
     ReviewCenter,
     ReviewRequest,
     _discover_videos,
+    _source_recognition_limit,
 )
 from videotrans.configure.base import BaseCon
 from videotrans.configure.config import app_cfg
@@ -198,6 +200,28 @@ def test_skipping_language_releases_only_current_stage_for_all_episodes():
     assert scheduler._request_review(
         project, None, "target", "03.mp4", other_language
     ) is True
+
+
+def test_skipping_review_stage_releases_pipeline_continuations():
+    scheduler = MultiFolderScheduler([], {})
+    project = ProjectSpec("p1", "C:/series", [])
+    language = LanguageSpec("English", "en")
+    released = []
+
+    assert scheduler._request_review(
+        project, None, "target", "01.mp4", language,
+        continuation=lambda: released.append("01"),
+    ) is True
+    assert scheduler._request_review(
+        project, None, "target", "02.mp4", language,
+        continuation=lambda: released.append("02"),
+    ) is True
+
+    scheduler.skip_language_stage_reviews("p1", "en", "target")
+
+    assert sorted(released) == ["01", "02"]
+    assert scheduler._pending == {}
+    assert scheduler._review_continuations == {}
 
 
 def test_task_signal_handler_does_not_use_global_queue():
@@ -379,6 +403,274 @@ def test_scheduler_runs_episode_languages_concurrently(tmp_path, monkeypatch):
     assert peak == 4
 
 
+def test_approved_episode_starts_languages_before_other_source_finishes(
+        tmp_path, monkeypatch):
+    folder = tmp_path / "series"
+    folder.mkdir()
+    videos = []
+    for name in ("01.mp4", "02.mp4"):
+        path = folder / name
+        path.write_bytes(b"video")
+        videos.append(path.as_posix())
+    project = ProjectSpec(
+        project_id="p1",
+        folder=folder.as_posix(),
+        videos=videos,
+        manual_review=True,
+        languages=[LanguageSpec("English", "en"), LanguageSpec("French", "fr")],
+    )
+    scheduler = MultiFolderScheduler([project], {})
+    release_second_source = threading.Event()
+    second_source_finished = threading.Event()
+    started_languages = set()
+    both_languages_started = threading.Event()
+    lock = threading.Lock()
+
+    def source_task(_project, video, _work_root):
+        if Path(video).name == "02.mp4":
+            release_second_source.wait(timeout=3)
+            second_source_finished.set()
+        return SimpleNamespace(
+            uuid=f"source-{Path(video).stem}",
+            hasend=False,
+            cfg=SimpleNamespace(),
+        )
+
+    def language_task(_project, language, video, *_args):
+        with lock:
+            started_languages.add((Path(video).name, language.code))
+            if len(started_languages) >= 2:
+                both_languages_started.set()
+        return SimpleNamespace(
+            uuid=f"language-{Path(video).stem}-{language.code}",
+            hasend=False,
+            should_dubbing=False,
+            should_recogn2=False,
+            cfg=SimpleNamespace(),
+        )
+
+    monkeypatch.setattr(scheduler, "_source_task", source_task)
+    monkeypatch.setattr(scheduler, "_language_task", language_task)
+    runner = threading.Thread(target=scheduler.run)
+    runner.start()
+    try:
+        deadline = time.time() + 3
+        request_id = None
+        while time.time() < deadline and not request_id:
+            with scheduler._condition:
+                request_id = next((
+                    rid for rid, request in scheduler._pending.items()
+                    if Path(request.episode_path).name == "01.mp4"
+                    and request.stage == "source"
+                ), None)
+            if not request_id:
+                time.sleep(0.01)
+
+        assert request_id is not None
+        assert second_source_finished.is_set() is False
+        scheduler.approve(request_id)
+
+        assert both_languages_started.wait(timeout=3) is True
+        assert started_languages == {("01.mp4", "en"), ("01.mp4", "fr")}
+        assert second_source_finished.is_set() is False
+    finally:
+        scheduler.cancel()
+        release_second_source.set()
+        runner.join(timeout=5)
+        assert runner.is_alive() is False
+
+
+def test_approved_language_starts_dubbing_while_other_language_waits(
+        tmp_path, monkeypatch):
+    folder = tmp_path / "series"
+    folder.mkdir()
+    video = folder / "01.mp4"
+    video.write_bytes(b"video")
+    project = ProjectSpec(
+        project_id="p1",
+        folder=folder.as_posix(),
+        videos=[video.as_posix()],
+        manual_review=True,
+        languages=[LanguageSpec("English", "en"), LanguageSpec("French", "fr")],
+    )
+    scheduler = MultiFolderScheduler([project], {})
+    dubbing_started = threading.Event()
+    dubbed_languages = []
+
+    monkeypatch.setattr(
+        scheduler,
+        "_source_task",
+        lambda *_args: SimpleNamespace(
+            uuid="source-01", hasend=False, cfg=SimpleNamespace()
+        ),
+    )
+
+    def language_task(_project, language, *_args):
+        return SimpleNamespace(
+            uuid=f"language-{language.code}",
+            hasend=False,
+            should_dubbing=True,
+            should_recogn2=False,
+            cfg=SimpleNamespace(),
+        )
+
+    def dubbing_stage(_project, language, _video, _task):
+        dubbed_languages.append(language.code)
+        dubbing_started.set()
+
+    monkeypatch.setattr(scheduler, "_language_task", language_task)
+    monkeypatch.setattr(scheduler, "_run_dubbing_stage", dubbing_stage)
+    runner = threading.Thread(target=scheduler.run)
+    runner.start()
+    try:
+        deadline = time.time() + 3
+        source_request_id = None
+        while time.time() < deadline and not source_request_id:
+            with scheduler._condition:
+                source_request_id = next((
+                    rid for rid, request in scheduler._pending.items()
+                    if request.stage == "source"
+                ), None)
+            if not source_request_id:
+                time.sleep(0.01)
+        assert source_request_id is not None
+        scheduler.approve(source_request_id)
+
+        target_requests = {}
+        deadline = time.time() + 3
+        while time.time() < deadline and len(target_requests) < 2:
+            with scheduler._condition:
+                target_requests = {
+                    request.language_code: rid
+                    for rid, request in scheduler._pending.items()
+                    if request.stage == "target"
+                }
+            if len(target_requests) < 2:
+                time.sleep(0.01)
+
+        assert set(target_requests) == {"en", "fr"}
+        scheduler.approve(target_requests["en"])
+
+        assert dubbing_started.wait(timeout=3) is True
+        assert dubbed_languages == ["en"]
+        with scheduler._condition:
+            assert target_requests["fr"] in scheduler._pending
+    finally:
+        scheduler.cancel()
+        runner.join(timeout=5)
+        assert runner.is_alive() is False
+
+
+def test_pipeline_keeps_other_languages_running_after_one_translation_fails(
+        tmp_path, monkeypatch):
+    folder = tmp_path / "series"
+    folder.mkdir()
+    video = folder / "01.mp4"
+    video.write_bytes(b"video")
+    project = ProjectSpec(
+        "p1", folder.as_posix(), [video.as_posix()], manual_review=False,
+        languages=[LanguageSpec("English", "en"), LanguageSpec("French", "fr")],
+    )
+    scheduler = MultiFolderScheduler([project], {})
+    completed = []
+
+    monkeypatch.setattr(
+        scheduler,
+        "_source_task",
+        lambda *_args: SimpleNamespace(
+            uuid="source-01", hasend=False, cfg=SimpleNamespace()
+        ),
+    )
+
+    class FakeTask:
+        uuid = "language-fr"
+        hasend = False
+        should_dubbing = False
+        should_recogn2 = False
+
+        def align(self):
+            pass
+
+        def recogn2pass(self):
+            pass
+
+        def assembling(self):
+            pass
+
+        def task_done(self):
+            completed.append("fr")
+
+    def language_task(_project, language, *_args):
+        if language.code == "en":
+            raise RuntimeError("translation failed")
+        return FakeTask()
+
+    monkeypatch.setattr(scheduler, "_language_task", language_task)
+    scheduler.run()
+
+    assert scheduler._pipeline_failures == 1
+    assert completed == ["fr"]
+
+
+def test_pipeline_never_exceeds_translation_concurrency(tmp_path, monkeypatch):
+    folder = tmp_path / "series"
+    folder.mkdir()
+    video = folder / "01.mp4"
+    video.write_bytes(b"video")
+    languages = [LanguageSpec(f"Language {index}", f"l{index}") for index in range(12)]
+    project = ProjectSpec(
+        "p1", folder.as_posix(), [video.as_posix()],
+        manual_review=False, languages=languages,
+    )
+    scheduler = MultiFolderScheduler([project], {})
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    monkeypatch.setattr(
+        scheduler,
+        "_source_task",
+        lambda *_args: SimpleNamespace(
+            uuid="source-01", hasend=False, cfg=SimpleNamespace()
+        ),
+    )
+
+    class FakeTask:
+        hasend = False
+        should_dubbing = False
+        should_recogn2 = False
+
+        def __init__(self, code):
+            self.uuid = f"language-{code}"
+
+        def align(self):
+            pass
+
+        def recogn2pass(self):
+            pass
+
+        def assembling(self):
+            pass
+
+        def task_done(self):
+            pass
+
+    def language_task(_project, language, *_args):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        with lock:
+            active -= 1
+        return FakeTask(language.code)
+
+    monkeypatch.setattr(scheduler, "_language_task", language_task)
+    scheduler.run()
+
+    assert peak == scheduler.concurrency.translation == 8
+
+
 def test_concurrency_plan_uses_configured_upper_bounds(monkeypatch):
     monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
     monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
@@ -391,6 +683,52 @@ def test_concurrency_plan_uses_configured_upper_bounds(monkeypatch):
     assert plan.dubbing == 2
     assert plan.alignment == 2
     assert plan.assembly == 2
+
+
+@pytest.mark.parametrize(
+    ("provider", "setting_name", "setting_value", "expected"),
+    [
+        ("aliyun_ims", "subtitle_ims_concurrency", 5, 5),
+        ("caca_link", "subtitle_caca_concurrency", 8, 8),
+    ],
+)
+def test_concurrency_plan_uses_cloud_task_limit(
+        monkeypatch, provider, setting_name, setting_value, expected):
+    monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
+    monkeypatch.setitem(multifolder_tasks.settings, setting_name, setting_value)
+
+    plan = ConcurrencyPlan.for_machine({
+        "is_cuda": True,
+        "remove_burned_subtitles": True,
+        "subtitle_removal_provider": provider,
+    })
+
+    assert plan.source == expected
+
+
+def test_cloud_source_concurrency_does_not_raise_gpu_recognition_limit(monkeypatch):
+    monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
+    monkeypatch.setitem(multifolder_tasks.settings, "process_max_gpu", 2)
+
+    assert _source_recognition_limit({"is_cuda": True}, 8) == 2
+    assert _source_recognition_limit({"is_cuda": False}, 8) == 8
+
+
+def test_scheduler_uses_project_cloud_removal_when_building_concurrency(monkeypatch):
+    monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
+    monkeypatch.setitem(multifolder_tasks.settings, "subtitle_caca_concurrency", 8)
+    project = ProjectSpec(
+        "p1", "C:/series", [], remove_burned_subtitles=True
+    )
+
+    scheduler = MultiFolderScheduler([project], {
+        "is_cuda": True,
+        "remove_burned_subtitles": False,
+        "subtitle_removal_provider": "caca_link",
+    })
+
+    assert scheduler.base_cfg["remove_burned_subtitles"] is True
+    assert scheduler.concurrency.source == 8
 
 
 def test_completion_cache_is_invalidated_when_language_config_changes(tmp_path):
@@ -432,3 +770,79 @@ def test_review_request_does_not_open_window_automatically():
     center.add_request(request)
     app.processEvents()
     assert center.isVisible() is False
+
+
+def test_review_center_opens_next_request_after_approval(monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    parent = QWidget()
+    center = None
+
+    def approve(request_id):
+        center.remove_request(request_id)
+
+    center = ReviewCenter(
+        parent,
+        approve,
+        lambda _project_id, _language_code, _stage: None,
+    )
+    center.project_filter = "p1"
+    center.language_filter = "_source"
+    loaded = []
+    monkeypatch.setattr(
+        center,
+        "_load_editor",
+        lambda request: loaded.append(request.request_id),
+    )
+    for request_id, episode in (("r1", "01.mp4"), ("r2", "02.mp4")):
+        center.add_request(ReviewRequest(
+            request_id=request_id,
+            project_id="p1",
+            project_name="剧集",
+            episode_path=f"C:/videos/{episode}",
+            language_code="_source",
+            language_name="",
+            stage="source",
+            task=None,
+        ))
+
+    center._approved("r1")
+
+    assert center.list_widget.currentItem().data(Qt.UserRole) == "r2"
+    assert loaded == ["r2"]
+    center.close()
+    parent.close()
+
+
+def test_review_center_closes_after_last_approval():
+    app = QApplication.instance() or QApplication([])
+    parent = QWidget()
+    center = None
+
+    def approve(request_id):
+        center.remove_request(request_id)
+
+    center = ReviewCenter(
+        parent,
+        approve,
+        lambda _project_id, _language_code, _stage: None,
+    )
+    center.project_filter = "p1"
+    center.language_filter = "_source"
+    center.add_request(ReviewRequest(
+        request_id="r1",
+        project_id="p1",
+        project_name="剧集",
+        episode_path="C:/videos/01.mp4",
+        language_code="_source",
+        language_name="",
+        stage="source",
+        task=None,
+    ))
+    center.show()
+    app.processEvents()
+
+    center._approved("r1")
+    app.processEvents()
+
+    assert center.isVisible() is False
+    parent.close()

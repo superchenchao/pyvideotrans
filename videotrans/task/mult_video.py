@@ -7,6 +7,24 @@ from videotrans.task.taskcfg import TaskCfgVTT, InputFile
 from videotrans.task.trans_create import TransCreate
 
 
+def prepare_queue_for(task):
+    """Route cloud removals to provider-specific workers without changing local limits."""
+    cfg = getattr(task, "cfg", None)
+    if getattr(cfg, "remove_burned_subtitles", False):
+        provider = str(
+            getattr(cfg, "subtitle_removal_provider", "local") or "local"
+        ).strip().lower()
+        if provider == "caca_link":
+            return app_cfg.caca_prepare_queue
+        if provider == "aliyun_ims":
+            return app_cfg.ims_prepare_queue
+    return app_cfg.prepare_queue
+
+
+def enqueue_prepare_task(task):
+    prepare_queue_for(task).put_nowait(task)
+
+
 class MultVideo(QThread):
     def __init__(self, *,
                  parent,
@@ -29,7 +47,7 @@ class MultVideo(QThread):
             for it in self.input_file_list:
                 # 压入识别队列开始执行
                 app_cfg.rm_uuid(it['uuid'])
-                app_cfg.prepare_queue.put_nowait(TransCreate(cfg=TaskCfgVTT(**self.cfg | it)))
+                enqueue_prepare_task(TransCreate(cfg=TaskCfgVTT(**self.cfg | it)))
             return
 
         logger.debug(f'批量翻译视频，每批次{self.batch_nums}个')
@@ -39,7 +57,7 @@ class MultVideo(QThread):
             for it in _it_split:
                 app_cfg.rm_uuid(it['uuid'])
                 trk = TransCreate(cfg=TaskCfgVTT(**self.cfg | it))
-                app_cfg.prepare_queue.put_nowait(trk)
+                enqueue_prepare_task(trk)
                 trk_list.append(trk)
 
             while 1:

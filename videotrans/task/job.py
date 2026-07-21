@@ -87,6 +87,16 @@ class WorkerPrepare(BaseWorker):
             app_cfg.taskdone_queue.put_nowait(trk)
 
 
+class WorkerPrepareCaca(WorkerPrepare):
+    def __init__(self):
+        BaseWorker.__init__(self, "PrepareCloudCaca", app_cfg.caca_prepare_queue)
+
+
+class WorkerPrepareIms(WorkerPrepare):
+    def __init__(self):
+        BaseWorker.__init__(self, "PrepareCloudIms", app_cfg.ims_prepare_queue)
+
+
 class WorkerRegcon(BaseWorker):
     def __init__(self):
         super().__init__("SpeechToText", app_cfg.regcon_queue)
@@ -203,6 +213,26 @@ class WorkerTaskDone(BaseWorker):
     def process_task(self, trk):
         trk.task_done()
 
+
+def build_worker_config(task_nums):
+    """Build worker counts while keeping cloud preparation independent of local GPU work."""
+    from videotrans.subtitle_removal import cloud_task_concurrency
+
+    return {
+        WorkerPrepare: task_nums,
+        WorkerPrepareCaca: cloud_task_concurrency("caca_link", settings),
+        WorkerPrepareIms: cloud_task_concurrency("aliyun_ims", settings),
+        WorkerRegcon: task_nums,
+        WorkerDiariz: task_nums,
+        WorkerTrans: 1,
+        WorkerDubb: 1,
+        WorkerRegcon2Pass: 1,
+        WorkerAlign: 1,
+        WorkerAssemb: task_nums,
+        WorkerTaskDone: 1,
+    }
+
+
 def start_thread():
     gpus.getset_gpu()
     task_nums = 1
@@ -220,17 +250,7 @@ def start_thread():
             task_nums = 2 if app_cfg.NVIDIA_GPU_NUMS < 4 else 4
         logger.debug(f'{process_max_gpu=},is_multi_gpus={settings.get("multi_gpus")}')
     logger.debug(f'Concurrent {task_nums=}, process_max_cpu={settings.get("process_max")}')
-    worker_config = {
-        WorkerPrepare: task_nums,  # 准备工作
-        WorkerRegcon: task_nums,  # 语音识别
-        WorkerDiariz: task_nums,
-        WorkerTrans: 1,
-        WorkerDubb: 1,
-        WorkerRegcon2Pass: 1,
-        WorkerAlign: 1,
-        WorkerAssemb: task_nums,
-        WorkerTaskDone: 1,
-    }
+    worker_config = build_worker_config(task_nums)
 
     workers = []
 

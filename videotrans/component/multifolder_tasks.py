@@ -13,7 +13,7 @@ import uuid as uuid_lib
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from PySide6.QtCore import QThread, Qt, Signal
 from PySide6.QtWidgets import (
@@ -117,7 +117,18 @@ class ConcurrencyPlan:
         except (TypeError, ValueError):
             configured_gpu_workers = 1
 
-        if base_cfg.get("is_cuda") and app_cfg.NVIDIA_GPU_NUMS > 0:
+        provider = str(
+            base_cfg.get("subtitle_removal_provider", "local") or "local"
+        ).strip().lower()
+        if base_cfg.get("remove_burned_subtitles") and provider in {
+            "caca_link", "aliyun_ims",
+        }:
+            from videotrans.subtitle_removal import cloud_task_concurrency
+
+            source_workers = min(
+                cpu_count, cloud_task_concurrency(provider, settings)
+            )
+        elif base_cfg.get("is_cuda") and app_cfg.NVIDIA_GPU_NUMS > 0:
             # One extra source worker keeps the serialized subtitle-removal job
             # busy while the configured GPU recognition worker handles the
             # episode that just left it. Cap at four to avoid excessive VRAM.
@@ -181,6 +192,16 @@ def _task_uuid(video: str, suffix: str) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
+def _source_recognition_limit(base_cfg: dict, source_workers: int) -> int:
+    """Keep GPU recognition bounded even when cloud preparation is more concurrent."""
+    if not base_cfg.get("is_cuda") or app_cfg.NVIDIA_GPU_NUMS < 1:
+        return max(1, source_workers)
+    try:
+        return max(1, min(8, int(float(settings.get("process_max_gpu", 1)))))
+    except (TypeError, ValueError):
+        return 1
+
+
 class MultiFolderScheduler(QThread):
     status_changed = Signal(str, str, str)
     review_ready = Signal(object)
@@ -190,12 +211,23 @@ class MultiFolderScheduler(QThread):
         super().__init__(parent)
         self.projects = copy.deepcopy(projects)
         self.base_cfg = copy.deepcopy(base_cfg)
+        if any(project.remove_burned_subtitles for project in self.projects):
+            self.base_cfg["remove_burned_subtitles"] = True
         self.concurrency = ConcurrencyPlan.for_machine(self.base_cfg)
+        self._source_recognition_gate = threading.BoundedSemaphore(
+            _source_recognition_limit(self.base_cfg, self.concurrency.source)
+        )
         self._condition = threading.Condition()
         self._pending: Dict[str, ReviewRequest] = {}
+        self._review_continuations: Dict[str, Callable[[], None]] = {}
         self._cancelled = False
         self._active_uuids = set()
         self._skip_review_stages = set()
+        self._pipeline_pending = 0
+        self._pipeline_failures = 0
+        self._pipeline_executors: Dict[str, ThreadPoolExecutor] = {}
+        self._source_tasks: Dict[tuple, TransCreate] = {}
+        self._language_tasks: Dict[tuple, TransCreate] = {}
 
     def _parallel_map(self, items, max_workers: int, callback):
         """Run one pipeline wave concurrently and stop pending work on cancel."""
@@ -227,6 +259,9 @@ class MultiFolderScheduler(QThread):
     def approve(self, request_id: str) -> None:
         with self._condition:
             self._pending.pop(request_id, None)
+            continuation = self._review_continuations.pop(request_id, None)
+            if continuation and not self._cancelled:
+                continuation()
             self._condition.notify_all()
 
     def cancel(self) -> None:
@@ -235,6 +270,7 @@ class MultiFolderScheduler(QThread):
             app_cfg.current_status = "stop"
             app_cfg.stoped_uuid_set.update(self._active_uuids)
             self._pending.clear()
+            self._review_continuations.clear()
             self._condition.notify_all()
 
     def skip_language_stage_reviews(
@@ -243,6 +279,7 @@ class MultiFolderScheduler(QThread):
         """Skip all episodes for one language, only at the current review stage."""
         with self._condition:
             self._skip_review_stages.add((project_id, language_code, stage))
+            continuations = []
             for request_id, request in list(self._pending.items()):
                 if (
                         request.project_id == project_id
@@ -250,6 +287,12 @@ class MultiFolderScheduler(QThread):
                         and request.stage == stage
                 ):
                     self._pending.pop(request_id, None)
+                    continuation = self._review_continuations.pop(request_id, None)
+                    if continuation:
+                        continuations.append(continuation)
+            if not self._cancelled:
+                for continuation in continuations:
+                    continuation()
             self._condition.notify_all()
 
     def _emit_status(self, project_id: str, key: str, text: str) -> None:
@@ -263,9 +306,11 @@ class MultiFolderScheduler(QThread):
     def _request_review(
             self, project: ProjectSpec, task: TransCreate, stage: str,
             episode_path: str, language: Optional[LanguageSpec] = None,
+            continuation: Optional[Callable[[], None]] = None,
     ) -> bool:
-        if language and (
-                project.project_id, language.code, stage
+        language_code = language.code if language else "_source"
+        if (
+                project.project_id, language_code, stage
         ) in self._skip_review_stages:
             return False
         request = ReviewRequest(
@@ -273,13 +318,15 @@ class MultiFolderScheduler(QThread):
             project_id=project.project_id,
             project_name=Path(project.folder).name,
             episode_path=episode_path,
-            language_code=language.code if language else "_source",
+            language_code=language_code,
             language_name=language.name if language else "",
             stage=stage,
             task=task,
         )
         with self._condition:
             self._pending[request.request_id] = request
+            if continuation:
+                self._review_continuations[request.request_id] = continuation
         self.review_ready.emit(request)
         return True
 
@@ -290,13 +337,23 @@ class MultiFolderScheduler(QThread):
         if self._cancelled:
             raise InterruptedError("任务已停止")
 
+    def _wait_for_pipeline(self) -> None:
+        with self._condition:
+            while (
+                    self._pipeline_pending > 0 or self._pending
+            ) and not self._cancelled:
+                self._condition.wait()
+        if self._cancelled:
+            raise InterruptedError("任务已停止")
+
     def _ensure_running(self, task: Optional[TransCreate] = None) -> None:
         if self._cancelled:
             raise InterruptedError("任务已停止")
         # 任务中心以 _cancelled 为唯一停止源。清掉同一任务上可能残留的
         # 全局 UUID 状态，避免上一次失败/停止在阶段交界处误伤本次重试。
-        if task and task.uuid:
-            app_cfg.rm_uuid(task.uuid)
+        task_uuid = getattr(task, "uuid", None) if task else None
+        if task_uuid:
+            app_cfg.rm_uuid(task_uuid)
 
     def _source_task(self, project: ProjectSpec, video: str, work_root: Path) -> TransCreate:
         episode_key = _task_uuid(video, "source")
@@ -334,14 +391,15 @@ class MultiFolderScheduler(QThread):
         try:
             self._ensure_running(task)
             task.prepare()
-            self._ensure_running(task)
-            task.recogn()
-            self._ensure_running(task)
-            if not tools.vail_file(task.cfg.source_sub):
-                raise SpeechToTextError(
-                    f"{Path(video).name} 识别结束，但没有生成原文字幕"
-                )
-            task.diariz()
+            with self._source_recognition_gate:
+                self._ensure_running(task)
+                task.recogn()
+                self._ensure_running(task)
+                if not tools.vail_file(task.cfg.source_sub):
+                    raise SpeechToTextError(
+                        f"{Path(video).name} 识别结束，但没有生成原文字幕"
+                    )
+                task.diariz()
             self._ensure_running(task)
         except InterruptedError:
             raise
@@ -420,8 +478,9 @@ class MultiFolderScheduler(QThread):
         if not task:
             return
         task.hasend = True
-        if task.uuid:
-            app_cfg.stoped_uuid_set.add(task.uuid)
+        task_uuid = getattr(task, "uuid", None)
+        if task_uuid:
+            app_cfg.stoped_uuid_set.add(task_uuid)
 
     def _completion_identity(
             self, project: ProjectSpec, video: str, language: LanguageSpec,
@@ -485,232 +544,288 @@ class MultiFolderScheduler(QThread):
             "language": language.code,
         })
 
-    def run(self) -> None:
-        source_tasks: Dict[tuple, TransCreate] = {}
-        language_tasks: Dict[tuple, TransCreate] = {}
-        failures = 0
+    def _submit_pipeline(self, stage: str, callback, *args) -> None:
+        """Submit one stage while accounting for dynamically-created work."""
+        with self._condition:
+            if self._cancelled:
+                return
+            executor = self._pipeline_executors[stage]
+            self._pipeline_pending += 1
         try:
-            logger.info("多文件夹并发计划：%s", self.concurrency.summary())
-            # Wave 1: all language-independent work. Every episode becomes
-            # reviewable before the pipeline crosses the source-subtitle gate.
-            source_items = [
-                (project, video, self._work_root(project))
-                for project in self.projects for video in project.videos
-            ]
+            future = executor.submit(callback, *args)
+        except BaseException:
+            with self._condition:
+                self._pipeline_pending -= 1
+                self._condition.notify_all()
+            raise
+        future.add_done_callback(self._pipeline_future_done)
 
-            def run_source(item):
-                project, video, work_root = item
-                self._ensure_running()
-                try:
-                    self._emit_status(
-                        project.project_id, "_source", f"识别中 · {Path(video).name}"
-                    )
-                    task = self._source_task(project, video, work_root)
-                    if project.manual_review and self._request_review(
-                            project, task, "source", video
-                    ):
-                        self._emit_status(project.project_id, "_source", "待人工校对")
-                    return (project.project_id, video), task, 0
-                except InterruptedError:
-                    raise
-                except Exception as error:
-                    self._emit_status(project.project_id, "_source", f"失败：{error}")
-                    logger.exception("多文件夹原文阶段失败", exc_info=True)
-                    return (project.project_id, video), None, 1
+    def _pipeline_future_done(self, future: Future) -> None:
+        try:
+            future.result()
+        except InterruptedError:
+            pass
+        except Exception:
+            with self._condition:
+                self._pipeline_failures += 1
+            logger.exception("多文件夹流水线出现未处理异常", exc_info=True)
+        finally:
+            with self._condition:
+                self._pipeline_pending -= 1
+                self._condition.notify_all()
 
-            for key, task, failed in self._parallel_map(
-                    source_items, self.concurrency.source, run_source
+    def _pipeline_failed(
+            self, project: ProjectSpec, key: str, task: Optional[TransCreate],
+            error: Exception, label: str,
+    ) -> None:
+        if task:
+            self._end_failed_task(task)
+        with self._condition:
+            self._pipeline_failures += 1
+        self._emit_status(project.project_id, key, f"失败：{error}")
+        logger.exception(label, exc_info=True)
+
+    def _run_source_stage(
+            self, project: ProjectSpec, video: str, work_root: Path,
+    ) -> None:
+        self._ensure_running()
+        task = None
+        try:
+            self._emit_status(
+                project.project_id, "_source", f"识别中 · {Path(video).name}"
+            )
+            task = self._source_task(project, video, work_root)
+            with self._condition:
+                self._source_tasks[(project.project_id, video)] = task
+            continuation = lambda: self._schedule_languages(project, video, task)
+            if project.manual_review and self._request_review(
+                    project, task, "source", video, continuation=continuation
             ):
-                failures += failed
-                if task:
-                    source_tasks[key] = task
-            self._wait_for_reviews()
+                self._emit_status(
+                    project.project_id, "_source",
+                    f"待人工校对 · {Path(video).name}",
+                )
+                return
+            continuation()
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, "_source", task, error, "多文件夹原文阶段失败"
+            )
 
-            # Wave 2: every episode/language pair has isolated output and cache,
-            # so all ready pairs can translate concurrently.
-            language_items = []
+    def _schedule_languages(
+            self, project: ProjectSpec, video: str, source_task: TransCreate,
+    ) -> None:
+        self._ensure_running(source_task)
+        output_root = self._output_root(project)
+        work_root = self._work_root(project)
+        for language in project.languages:
+            if self._cancelled:
+                return
+            if self._is_completed(project, video, language):
+                self._emit_status(
+                    project.project_id, language.code,
+                    f"已完成（复用成品）· {Path(video).name}",
+                )
+                continue
+            self._submit_pipeline(
+                "translation", self._run_translation_stage,
+                project, language, video, source_task, output_root, work_root,
+            )
+
+    def _run_translation_stage(
+            self, project: ProjectSpec, language: LanguageSpec, video: str,
+            source_task: TransCreate, output_root: Path, work_root: Path,
+    ) -> None:
+        self._ensure_running(source_task)
+        task = None
+        key = (project.project_id, video, language.code)
+        try:
+            self._emit_status(
+                project.project_id, language.code, f"翻译中 · {Path(video).name}"
+            )
+            task = self._language_task(
+                project, language, video, source_task, output_root, work_root
+            )
+            with self._condition:
+                self._language_tasks[key] = task
+            continuation = lambda: self._schedule_after_translation(
+                project, language, video, task
+            )
+            if project.manual_review and self._request_review(
+                    project, task, "target", video, language,
+                    continuation=continuation,
+            ):
+                self._emit_status(
+                    project.project_id, language.code,
+                    f"待字幕 / 角色校对 · {Path(video).name}",
+                )
+                return
+            continuation()
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, language.code, task, error, "多文件夹翻译阶段失败"
+            )
+
+    def _schedule_after_translation(
+            self, project: ProjectSpec, language: LanguageSpec,
+            video: str, task: TransCreate,
+    ) -> None:
+        self._ensure_running(task)
+        stage = "dubbing" if task.should_dubbing else "alignment"
+        callback = (
+            self._run_dubbing_stage if task.should_dubbing
+            else self._run_alignment_stage
+        )
+        self._submit_pipeline(stage, callback, project, language, video, task)
+
+    def _run_dubbing_stage(
+            self, project: ProjectSpec, language: LanguageSpec,
+            video: str, task: TransCreate,
+    ) -> None:
+        try:
+            self._emit_status(
+                project.project_id, language.code, f"配音中 · {Path(video).name}"
+            )
+            self._ensure_running(task)
+            task.dubbing()
+            self._ensure_running(task)
+            for queue_item in task.queue_tts:
+                queue_item["dubbing_s"] = (
+                    len(AudioSegment.from_file(queue_item["filename"])) / 1000.0
+                    if tools.vail_file(queue_item.get("filename")) else 0.0
+                )
+            Path(task.cfg.cache_folder, "queue_tts.json").write_text(
+                json.dumps(task.queue_tts, ensure_ascii=False), encoding="utf-8"
+            )
+            continuation = lambda: self._submit_pipeline(
+                "alignment", self._run_alignment_stage,
+                project, language, video, task,
+            )
+            if (
+                    project.manual_review and not task.ignore_align
+                    and self._request_review(
+                        project, task, "dubbing", video, language,
+                        continuation=continuation,
+                    )
+            ):
+                self._emit_status(
+                    project.project_id, language.code,
+                    f"待配音校对 · {Path(video).name}",
+                )
+                return
+            continuation()
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, language.code, task, error, "多文件夹配音阶段失败"
+            )
+
+    def _run_alignment_stage(
+            self, project: ProjectSpec, language: LanguageSpec,
+            video: str, task: TransCreate,
+    ) -> None:
+        try:
+            self._emit_status(
+                project.project_id, language.code, f"对齐中 · {Path(video).name}"
+            )
+            self._ensure_running(task)
+            task.align()
+            self._ensure_running(task)
+            task.recogn2pass()
+            self._ensure_running(task)
+            continuation = lambda: self._submit_pipeline(
+                "assembly", self._run_assembly_stage,
+                project, language, video, task,
+            )
+            if (
+                    project.manual_review and task.should_recogn2
+                    and self._request_review(
+                        project, task, "recogn2", video, language,
+                        continuation=continuation,
+                    )
+            ):
+                self._emit_status(
+                    project.project_id, language.code,
+                    f"待二次识别校对 · {Path(video).name}",
+                )
+                return
+            continuation()
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, language.code, task, error, "多文件夹对齐阶段失败"
+            )
+
+    def _run_assembly_stage(
+            self, project: ProjectSpec, language: LanguageSpec,
+            video: str, task: TransCreate,
+    ) -> None:
+        try:
+            self._emit_status(
+                project.project_id, language.code, f"合成中 · {Path(video).name}"
+            )
+            self._ensure_running(task)
+            task.assembling()
+            self._ensure_running(task)
+            task.task_done()
+            self._mark_completed(project, video, language)
+            self._emit_status(
+                project.project_id, language.code, f"处理完成 ✓ · {Path(video).name}"
+            )
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, language.code, task, error, "多文件夹合成阶段失败"
+            )
+
+    def run(self) -> None:
+        self._pipeline_pending = 0
+        self._pipeline_failures = 0
+        self._source_tasks = {}
+        self._language_tasks = {}
+        self._pipeline_executors = {
+            "source": ThreadPoolExecutor(
+                max_workers=self.concurrency.source,
+                thread_name_prefix="pyvt-source",
+            ),
+            "translation": ThreadPoolExecutor(
+                max_workers=self.concurrency.translation,
+                thread_name_prefix="pyvt-translation",
+            ),
+            "dubbing": ThreadPoolExecutor(
+                max_workers=self.concurrency.dubbing,
+                thread_name_prefix="pyvt-dubbing",
+            ),
+            "alignment": ThreadPoolExecutor(
+                max_workers=self.concurrency.alignment,
+                thread_name_prefix="pyvt-alignment",
+            ),
+            "assembly": ThreadPoolExecutor(
+                max_workers=self.concurrency.assembly,
+                thread_name_prefix="pyvt-assembly",
+            ),
+        }
+        try:
+            logger.info("多文件夹流水并发计划：%s", self.concurrency.summary())
             for project in self.projects:
-                output_root = self._output_root(project)
                 work_root = self._work_root(project)
                 for video in project.videos:
-                    source_task = source_tasks.get((project.project_id, video))
-                    if not source_task:
-                        continue
-                    for language in project.languages:
-                        if self._cancelled:
-                            raise InterruptedError("任务已停止")
-                        if self._is_completed(project, video, language):
-                            self._emit_status(project.project_id, language.code, "已完成（复用成品）")
-                            continue
-                        language_items.append((
-                            project, language, video, source_task, output_root, work_root
-                        ))
-
-            def run_language(item):
-                project, language, video, source_task, output_root, work_root = item
-                self._ensure_running()
-                key = (project.project_id, video, language.code)
-                try:
-                    self._emit_status(
-                        project.project_id, language.code, f"翻译中 · {Path(video).name}"
+                    self._submit_pipeline(
+                        "source", self._run_source_stage, project, video, work_root
                     )
-                    task = self._language_task(
-                        project, language, video, source_task, output_root, work_root
-                    )
-                    if project.manual_review and self._request_review(
-                            project, task, "target", video, language
-                    ):
-                        self._emit_status(
-                            project.project_id, language.code, "待字幕 / 角色校对"
-                        )
-                    return key, task, 0
-                except InterruptedError:
-                    raise
-                except Exception as error:
-                    self._emit_status(project.project_id, language.code, f"失败：{error}")
-                    logger.exception("多文件夹翻译阶段失败", exc_info=True)
-                    return key, None, 1
-
-            for key, task, failed in self._parallel_map(
-                    language_items, self.concurrency.translation, run_language
-            ):
-                failures += failed
-                if task:
-                    language_tasks[key] = task
-            self._wait_for_reviews()
-
-            # Wave 3: synthesize every approved language/episode pair.
-            dubbing_items = []
-            for project in self.projects:
-                for video in project.videos:
-                    for language in project.languages:
-                        task = language_tasks.get((project.project_id, video, language.code))
-                        if task and task.should_dubbing:
-                            dubbing_items.append((project, language, video, task))
-
-            def run_dubbing(item):
-                project, language, video, task = item
-                key = (project.project_id, video, language.code)
-                try:
-                    self._emit_status(
-                        project.project_id, language.code, f"配音中 · {Path(video).name}"
-                    )
-                    self._ensure_running(task)
-                    task.dubbing()
-                    self._ensure_running(task)
-                    for queue_item in task.queue_tts:
-                        queue_item["dubbing_s"] = (
-                            len(AudioSegment.from_file(queue_item["filename"])) / 1000.0
-                            if tools.vail_file(queue_item.get("filename")) else 0.0
-                        )
-                    Path(task.cfg.cache_folder, "queue_tts.json").write_text(
-                        json.dumps(task.queue_tts, ensure_ascii=False), encoding="utf-8"
-                    )
-                    if (
-                            project.manual_review and not task.ignore_align
-                            and self._request_review(
-                                project, task, "dubbing", video, language
-                            )
-                    ):
-                        self._emit_status(project.project_id, language.code, "待配音校对")
-                    return key, task, 0
-                except InterruptedError:
-                    raise
-                except Exception as error:
-                    self._end_failed_task(task)
-                    self._emit_status(project.project_id, language.code, f"失败：{error}")
-                    logger.exception("多文件夹配音阶段失败", exc_info=True)
-                    return key, None, 1
-
-            for key, task, failed in self._parallel_map(
-                    dubbing_items, self.concurrency.dubbing, run_dubbing
-            ):
-                failures += failed
-                if not task:
-                    language_tasks.pop(key, None)
-            self._wait_for_reviews()
-
-            # Wave 4: alignment, optional second recognition, then final output.
-            alignment_items = []
-            for project in self.projects:
-                for video in project.videos:
-                    for language in project.languages:
-                        task = language_tasks.get((project.project_id, video, language.code))
-                        if task:
-                            alignment_items.append((project, language, video, task))
-
-            def run_alignment(item):
-                project, language, video, task = item
-                key = (project.project_id, video, language.code)
-                try:
-                    self._emit_status(
-                        project.project_id, language.code, f"对齐中 · {Path(video).name}"
-                    )
-                    self._ensure_running(task)
-                    task.align()
-                    self._ensure_running(task)
-                    task.recogn2pass()
-                    self._ensure_running(task)
-                    if (
-                            project.manual_review and task.should_recogn2
-                            and self._request_review(
-                                project, task, "recogn2", video, language
-                            )
-                    ):
-                        self._emit_status(
-                            project.project_id, language.code, "待二次识别校对"
-                        )
-                    return key, task, 0
-                except InterruptedError:
-                    raise
-                except Exception as error:
-                    self._end_failed_task(task)
-                    self._emit_status(project.project_id, language.code, f"失败：{error}")
-                    logger.exception("多文件夹对齐阶段失败", exc_info=True)
-                    return key, None, 1
-
-            for key, task, failed in self._parallel_map(
-                    alignment_items, self.concurrency.alignment, run_alignment
-            ):
-                failures += failed
-                if not task:
-                    language_tasks.pop(key, None)
-            self._wait_for_reviews()
-
-            assembly_items = []
-            for project in self.projects:
-                for video in project.videos:
-                    for language in project.languages:
-                        task = language_tasks.get((project.project_id, video, language.code))
-                        if task:
-                            assembly_items.append((project, language, video, task))
-
-            def run_assembly(item):
-                project, language, video, task = item
-                try:
-                    self._emit_status(
-                        project.project_id, language.code, f"合成中 · {Path(video).name}"
-                    )
-                    self._ensure_running(task)
-                    task.assembling()
-                    self._ensure_running(task)
-                    task.task_done()
-                    self._mark_completed(project, video, language)
-                    self._emit_status(project.project_id, language.code, "处理完成 ✓")
-                    return 0
-                except InterruptedError:
-                    raise
-                except Exception as error:
-                    self._end_failed_task(task)
-                    self._emit_status(project.project_id, language.code, f"失败：{error}")
-                    logger.exception("多文件夹合成阶段失败", exc_info=True)
-                    return 1
-
-            failures += sum(self._parallel_map(
-                assembly_items, self.concurrency.assembly, run_assembly
-            ))
-
-            message = "全部任务完成" if failures == 0 else f"执行结束，失败 {failures} 项，可点击重试未完成"
+            self._wait_for_pipeline()
+            failures = self._pipeline_failures
+            message = (
+                "全部任务完成" if failures == 0
+                else f"执行结束，失败 {failures} 项，可点击重试未完成"
+            )
             self.run_finished.emit(failures == 0, message)
         except InterruptedError as error:
             self.run_finished.emit(False, str(error))
@@ -718,9 +833,12 @@ class MultiFolderScheduler(QThread):
             logger.exception("多文件夹任务调度器异常", exc_info=True)
             self.run_finished.emit(False, f"任务异常：{error}\n{traceback.format_exc()}")
         finally:
-            for task in source_tasks.values():
+            for executor in self._pipeline_executors.values():
+                executor.shutdown(wait=True, cancel_futures=True)
+            self._pipeline_executors.clear()
+            for task in self._source_tasks.values():
                 task.hasend = True
-            for task in language_tasks.values():
+            for task in self._language_tasks.values():
                 task.hasend = True
             if app_cfg.current_status in ("ing", "stop"):
                 app_cfg.current_status = "end"
@@ -913,6 +1031,10 @@ class ReviewCenter(QDialog):
 
     def _approved(self, request_id: str) -> None:
         self.approve_callback(request_id)
+        if self.list_widget.count():
+            self.list_widget.setCurrentRow(0)
+        else:
+            self.close()
 
     def _skip_current_language(self) -> None:
         request = self.requests.get(self.current_request_id)
@@ -999,7 +1121,10 @@ class MultiFolderTaskWindow(QDialog):
         self.stop_button = QPushButton("停止")
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self._stop)
-        self.summary = QLabel("任务按处理阶段推进；校对开启时不会自动弹窗，也不会自动通过。")
+        self.summary = QLabel(
+            "任务按单集流水推进；一集校对通过后会立即进入下一阶段。"
+            "校对窗口不会自动弹出，也不会自动通过。"
+        )
         toolbar.addWidget(add_folders)
         toolbar.addWidget(self.start_button)
         toolbar.addWidget(self.stop_button)

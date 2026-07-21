@@ -18,7 +18,7 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("云端字幕消除设置")
-        self.resize(620, 560)
+        self.resize(620, 640)
         layout = QtWidgets.QVBoxLayout(self)
 
         note = QtWidgets.QLabel(
@@ -74,6 +74,26 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
         )
         self.poll_seconds.setSuffix(" 秒")
         form.addRow("远端任务轮询间隔", self.poll_seconds)
+
+        self.ims_concurrency = QtWidgets.QSpinBox()
+        self.ims_concurrency.setRange(1, 16)
+        self.ims_concurrency.setValue(
+            max(1, min(16, _number_setting("subtitle_ims_concurrency", 5, int)))
+        )
+        self.ims_concurrency.setToolTip(
+            "同时处理的阿里云 IMS 字幕任务数；保存后重启程序生效"
+        )
+        form.addRow("阿里云字幕任务并发", self.ims_concurrency)
+
+        self.caca_concurrency = QtWidgets.QSpinBox()
+        self.caca_concurrency.setRange(1, 16)
+        self.caca_concurrency.setValue(
+            max(1, min(16, _number_setting("subtitle_caca_concurrency", 8, int)))
+        )
+        self.caca_concurrency.setToolTip(
+            "同时处理的 Caca API 字幕任务数；保存后重启程序生效"
+        )
+        form.addRow("Caca 字幕任务并发", self.caca_concurrency)
 
         self.delete_after_download = QtWidgets.QCheckBox(
             "本地完整校验后删除 OSS 输入/输出临时文件"
@@ -160,6 +180,8 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
         settings["subtitle_oss_transfer_threads"] = self.transfer_threads.value()
         settings["subtitle_oss_signed_url_hours"] = self.signed_hours.value()
         settings["subtitle_cloud_poll_seconds"] = self.poll_seconds.value()
+        settings["subtitle_ims_concurrency"] = self.ims_concurrency.value()
+        settings["subtitle_caca_concurrency"] = self.caca_concurrency.value()
         settings["subtitle_cloud_delete_after_download"] = (
             self.delete_after_download.isChecked()
         )

@@ -41,6 +41,23 @@ def normalize_provider(value: object) -> str:
     return provider if provider in {LOCAL_PROVIDER, *CLOUD_PROVIDERS} else LOCAL_PROVIDER
 
 
+def cloud_task_concurrency(
+        provider: str, settings_values: Mapping[str, object]) -> int:
+    """Return the provider-specific remote task limit used by batch schedulers."""
+    provider = normalize_provider(provider)
+    if provider == CACA_PROVIDER:
+        key, default = "subtitle_caca_concurrency", 8
+    elif provider == ALIYUN_IMS_PROVIDER:
+        key, default = "subtitle_ims_concurrency", 5
+    else:
+        return 1
+    try:
+        value = int(float(settings_values.get(key, default)))
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(16, value))
+
+
 def _setting_enabled(value: object, default: bool = True) -> bool:
     if value is None:
         return default

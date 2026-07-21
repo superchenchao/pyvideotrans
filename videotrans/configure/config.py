@@ -197,6 +197,8 @@ class AppCfg:
 
     # 线程队列
     prepare_queue: Queue = field(default_factory=lambda: Queue(maxsize=0))
+    caca_prepare_queue: Queue = field(default_factory=lambda: Queue(maxsize=0))
+    ims_prepare_queue: Queue = field(default_factory=lambda: Queue(maxsize=0))
     regcon_queue: Queue = field(default_factory=lambda: Queue(maxsize=0))
     diariz_queue: Queue = field(default_factory=lambda: Queue(maxsize=0))
     trans_queue: Queue = field(default_factory=lambda: Queue(maxsize=0))
@@ -408,6 +410,8 @@ class AppSettings:
             "subtitle_oss_signed_url_hours": 12,
             "subtitle_cloud_poll_seconds": 30,
             "subtitle_cloud_delete_after_download": True,
+            "subtitle_caca_concurrency": 8,
+            "subtitle_ims_concurrency": 5,
             "subtitle_caca_base_url": "https://env-00jxh2cj3gfd.dev-hz.cloudbasefunction.cn/http/router",
             "subtitle_caca_mode": "protect",
             "subtitle_caca_timeout_seconds": 60,

@@ -14,6 +14,14 @@ from videotrans.subtitle_removal import cloud_storage
 from videotrans.subtitle_removal.cloud_state import write_state
 from videotrans.task.trans_create import validate_cloud_clean_video
 from videotrans.task.trans_create import TransCreate
+from videotrans.task.job import (
+    WorkerPrepare,
+    WorkerPrepareCaca,
+    WorkerPrepareIms,
+    build_worker_config,
+)
+from videotrans.task.mult_video import prepare_queue_for
+from videotrans.configure.config import app_cfg, settings as app_settings
 
 
 class FakeResponse:
@@ -59,6 +67,51 @@ def test_oss_config_defaults_to_eight_transfer_threads():
     assert config.transfer_pool_size == 10
     assert OssConfig("bucket", "region", "https://endpoint", transfer_threads=0).transfer_threads == 1
     assert OssConfig("bucket", "region", "https://endpoint", transfer_threads=99).transfer_threads == 16
+
+
+def test_cloud_task_concurrency_uses_provider_defaults_and_clamps():
+    assert cloud.cloud_task_concurrency("aliyun_ims", {}) == 5
+    assert cloud.cloud_task_concurrency("caca_link", {}) == 8
+    assert cloud.cloud_task_concurrency("local", {}) == 1
+    assert cloud.cloud_task_concurrency(
+        "aliyun_ims", {"subtitle_ims_concurrency": 99}
+    ) == 16
+    assert cloud.cloud_task_concurrency(
+        "caca_link", {"subtitle_caca_concurrency": 0}
+    ) == 1
+    assert cloud.cloud_task_concurrency(
+        "caca_link", {"subtitle_caca_concurrency": "bad"}
+    ) == 8
+
+
+def test_worker_config_uses_independent_cloud_prepare_limits(monkeypatch):
+    monkeypatch.setitem(app_settings, "subtitle_ims_concurrency", 4)
+    monkeypatch.setitem(app_settings, "subtitle_caca_concurrency", 7)
+
+    worker_config = build_worker_config(2)
+
+    assert worker_config[WorkerPrepare] == 2
+    assert worker_config[WorkerPrepareIms] == 4
+    assert worker_config[WorkerPrepareCaca] == 7
+
+
+@pytest.mark.parametrize(
+    ("enabled", "provider", "expected_queue"),
+    [
+        (True, "aliyun_ims", "ims_prepare_queue"),
+        (True, "caca_link", "caca_prepare_queue"),
+        (True, "local", "prepare_queue"),
+        (False, "aliyun_ims", "prepare_queue"),
+    ],
+)
+def test_batch_prepare_queue_routes_only_cloud_tasks(
+        enabled, provider, expected_queue):
+    task = SimpleNamespace(cfg=SimpleNamespace(
+        remove_burned_subtitles=enabled,
+        subtitle_removal_provider=provider,
+    ))
+
+    assert prepare_queue_for(task) is getattr(app_cfg, expected_queue)
 
 
 def test_oss_upload_uses_configured_threads_and_larger_pool(tmp_path, monkeypatch):
