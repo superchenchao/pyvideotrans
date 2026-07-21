@@ -28,6 +28,8 @@ from .taskcfg import TaskCfgVTT
 from ..configure.excepts import VideoTransError, FFmpegError, SpeechToTextError
 from videotrans.video_standard import (
     FINAL_FPS,
+    api_work_profile,
+    build_api_work_video_args,
     build_work_video_args,
     display_dimensions,
     final_audio_codec_args,
@@ -38,6 +40,44 @@ from videotrans.video_standard import (
     run_work_video_ffmpeg,
     work_profile,
 )
+
+
+def validate_cloud_clean_video(
+        video_file: str, *, target_width: int, target_height: int,
+        duration_ms: int, full_decode: bool = True,
+        cancel_callback=None) -> dict:
+    """Reject incomplete or format-changing cloud results before caching them."""
+    info = tools.get_video_info(video_file)
+    fps = float(info.get("video_fps") or 0)
+    actual_duration = int(info.get("time") or 0)
+    duration_tolerance = max(
+        1000, min(3000, round(max(0, duration_ms) * 0.01))
+    )
+    problems = []
+    if int(info.get("video_streams") or 0) < 1:
+        problems.append("没有视频流")
+    if int(info.get("width") or 0) != target_width or int(info.get("height") or 0) != target_height:
+        problems.append(
+            f"分辨率 {info.get('width')}x{info.get('height')}，预期 {target_width}x{target_height}"
+        )
+    if abs(fps - FINAL_FPS) > 0.01:
+        problems.append(f"帧率 {fps}，预期 {FINAL_FPS}")
+    if duration_ms > 0 and abs(actual_duration - duration_ms) > duration_tolerance:
+        problems.append(
+            f"时长 {actual_duration}ms，预期约 {duration_ms}ms"
+        )
+    if problems:
+        raise VideoTransError("云端字幕消除结果校验失败：" + "；".join(problems))
+
+    # ffprobe only checks container metadata. Decode the entire video once so
+    # a truncated result is never persisted as a reusable clean-video cache.
+    if full_decode:
+        run_work_video_ffmpeg(
+            ["-v", "error", "-i", video_file, "-map", "0:v:0", "-f", "null", "-"],
+            duration_ms=duration_ms,
+            cancel_callback=cancel_callback,
+        )
+    return info
 
 
 @dataclass
@@ -940,8 +980,23 @@ class TransCreate(BaseTask):
         except ValueError as error:
             raise VideoTransError(f"无法确定固定导出方向：{error}") from error
 
-        profile = work_profile(target_width, target_height)
-        work_source = Path(self.cfg.cache_folder, "source-working-30fps.mp4")
+        from videotrans.subtitle_removal import CLOUD_PROVIDERS, normalize_provider
+        removal_provider = normalize_provider(
+            getattr(self.cfg, "subtitle_removal_provider", "local")
+        )
+        api_transport = bool(
+            getattr(self.cfg, "remove_burned_subtitles", False)
+            and removal_provider in CLOUD_PROVIDERS
+        )
+        profile = (
+            api_work_profile(target_width, target_height)
+            if api_transport else work_profile(target_width, target_height)
+        )
+        work_source = Path(
+            self.cfg.cache_folder,
+            "source-working-api-30fps-6000k-noaudio.mp4"
+            if api_transport else "source-working-30fps.mp4",
+        )
         metadata_path = Path(f"{work_source}.json")
         input_path = Path(self.cfg.name).resolve()
         try:
@@ -982,19 +1037,23 @@ class TransCreate(BaseTask):
         if cached_metadata != expected_metadata:
             work_source.unlink(missing_ok=True)
             metadata_path.unlink(missing_ok=True)
-            self.signal(text="Generating 30 FPS working video 0%")
+            stage_name = (
+                "Generating cloud API video" if api_transport
+                else "Generating 30 FPS working video"
+            )
+            self.signal(text=f"{stage_name} 0%")
             last_progress = -10
 
             def report_progress(value):
                 nonlocal last_progress
                 value = int(value)
                 if value - last_progress >= 10 or value == 100:
-                    self.signal(text=f"Generating 30 FPS working video {value}%")
+                    self.signal(text=f"{stage_name} {value}%")
                     last_progress = value
 
             try:
                 run_work_video_ffmpeg(
-                    build_work_video_args(
+                    (build_api_work_video_args if api_transport else build_work_video_args)(
                         input_path.as_posix(), work_source.as_posix(),
                         target_width, target_height,
                     ),
@@ -1026,7 +1085,11 @@ class TransCreate(BaseTask):
                 encoding="utf-8",
             )
         else:
-            logger.info(f"复用 30 FPS 高质量工作视频：{work_source}")
+            logger.info(
+                "复用%s：%s",
+                "云端 API 传输视频" if api_transport else "30 FPS 高质量工作视频",
+                work_source,
+            )
 
         self.visual_source = work_source.as_posix()
         self.ocr_source = work_source.as_posix()
@@ -1049,8 +1112,12 @@ class TransCreate(BaseTask):
             raise VideoTransError("已启用消除原视频字幕，但没有框选字幕区域")
 
         from videotrans.subtitle_removal import (
+            CLOUD_PROVIDERS,
+            cloud_strategy_key,
             find_subtitle_remover_engine,
+            normalize_provider,
             remove_burned_subtitles,
+            remove_burned_subtitles_cloud,
             scale_normalized_rect,
             strategy_cache_key,
         )
@@ -1075,21 +1142,33 @@ class TransCreate(BaseTask):
                 f"视频画面比例与首个视频不一致，无法安全复用字幕区域：{error}"
             ) from error
 
-        clean_source = f"{self.cfg.cache_folder}/source-without-burned-subtitles.mp4"
+        provider = normalize_provider(
+            getattr(self.cfg, "subtitle_removal_provider", "local")
+        )
+        is_cloud = provider in CLOUD_PROVIDERS
+        clean_source = (
+            f"{self.cfg.cache_folder}/source-without-burned-subtitles-{provider}.mp4"
+            if is_cloud else
+            f"{self.cfg.cache_folder}/source-without-burned-subtitles.mp4"
+        )
         clean_metadata = Path(f"{clean_source}.json")
         inpaint_metadata = Path(f"{clean_source}.inpaint.json")
         input_path = Path(self.cfg.name).resolve()
         removal_input = Path(self.visual_source).resolve()
-        removal_engine = find_subtitle_remover_engine(ROOT_DIR)
-        removal_strategy = strategy_cache_key(
-            removal_engine.root if removal_engine else None
-        )
-        try:
-            actual_inpaint_backend = json.loads(
-                inpaint_metadata.read_text(encoding="utf-8")
-            ).get("backend", "")
-        except (OSError, ValueError, json.JSONDecodeError, AttributeError):
-            actual_inpaint_backend = ""
+        if is_cloud:
+            removal_strategy = cloud_strategy_key(provider, settings.to_dict())
+            actual_inpaint_backend = provider
+        else:
+            removal_engine = find_subtitle_remover_engine(ROOT_DIR)
+            removal_strategy = strategy_cache_key(
+                removal_engine.root if removal_engine else None
+            )
+            try:
+                actual_inpaint_backend = json.loads(
+                    inpaint_metadata.read_text(encoding="utf-8")
+                ).get("backend", "")
+            except (OSError, ValueError, json.JSONDecodeError, AttributeError):
+                actual_inpaint_backend = ""
         try:
             input_stat = input_path.stat()
             expected_metadata = {
@@ -1099,6 +1178,7 @@ class TransCreate(BaseTask):
                 "rect": list(rect),
                 "duration_ms": int(self.video_info["time"]),
                 "working_video": getattr(self, "visual_work_profile", {}),
+                "subtitle_removal_provider": provider,
                 "inpaint_strategy": removal_strategy,
                 "actual_inpaint_backend": actual_inpaint_backend,
             }
@@ -1111,9 +1191,20 @@ class TransCreate(BaseTask):
             except (OSError, ValueError, json.JSONDecodeError):
                 cached_metadata = None
             if cached_metadata == expected_metadata:
-                self.visual_source = clean_source
-                logger.info(f"复用已消除原字幕的视频：{clean_source}")
-                return
+                try:
+                    if is_cloud:
+                        validate_cloud_clean_video(
+                            clean_source,
+                            target_width=target_width,
+                            target_height=target_height,
+                            duration_ms=int(self.video_info["time"]),
+                            full_decode=False,
+                        )
+                    self.visual_source = clean_source
+                    logger.info(f"复用已消除原字幕的视频：{clean_source}")
+                    return
+                except Exception as error:
+                    logger.warning("忽略无效的字幕消除缓存 %s：%s", clean_source, error)
 
         self.signal(text="Removing original video subtitles")
         last_progress = -10
@@ -1126,22 +1217,52 @@ class TransCreate(BaseTask):
                 last_progress = value
 
         try:
-            self.visual_source = remove_burned_subtitles(
-                input_file=removal_input.as_posix(),
-                output_file=clean_source,
-                rect=rect,
-                duration_ms=int(self.video_info["time"]),
-                progress_callback=report_progress,
-                log_callback=lambda message: logger.info(f"[subtitle-removal] {message}"),
-                cancel_callback=self._exit,
-            )
+            if is_cloud:
+                input_stat = input_path.stat()
+                self.visual_source = remove_burned_subtitles_cloud(
+                    provider=provider,
+                    input_file=removal_input.as_posix(),
+                    output_file=clean_source,
+                    normalized_rect=mapped_rect,
+                    duration_ms=int(self.video_info["time"]),
+                    identity={
+                        "input_file": input_path.as_posix(),
+                        "input_size": input_stat.st_size,
+                        "input_mtime_ns": input_stat.st_mtime_ns,
+                        "working_video": getattr(self, "visual_work_profile", {}),
+                    },
+                    settings_values=settings.to_dict(),
+                    progress_callback=report_progress,
+                    log_callback=lambda message: logger.info(
+                        "[subtitle-removal-cloud] %s", message
+                    ),
+                    cancel_callback=self._exit,
+                )
+                validate_cloud_clean_video(
+                    self.visual_source,
+                    target_width=target_width,
+                    target_height=target_height,
+                    duration_ms=int(self.video_info["time"]),
+                    cancel_callback=self._exit,
+                )
+            else:
+                self.visual_source = remove_burned_subtitles(
+                    input_file=removal_input.as_posix(),
+                    output_file=clean_source,
+                    rect=rect,
+                    duration_ms=int(self.video_info["time"]),
+                    progress_callback=report_progress,
+                    log_callback=lambda message: logger.info(f"[subtitle-removal] {message}"),
+                    cancel_callback=self._exit,
+                )
             if expected_metadata:
-                try:
-                    expected_metadata["actual_inpaint_backend"] = json.loads(
-                        inpaint_metadata.read_text(encoding="utf-8")
-                    ).get("backend", "")
-                except (OSError, ValueError, json.JSONDecodeError, AttributeError):
-                    pass
+                if not is_cloud:
+                    try:
+                        expected_metadata["actual_inpaint_backend"] = json.loads(
+                            inpaint_metadata.read_text(encoding="utf-8")
+                        ).get("backend", "")
+                    except (OSError, ValueError, json.JSONDecodeError, AttributeError):
+                        pass
                 clean_metadata.write_text(
                     json.dumps(expected_metadata, ensure_ascii=False, indent=2),
                     encoding="utf-8",

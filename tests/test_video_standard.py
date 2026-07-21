@@ -4,11 +4,14 @@ from types import SimpleNamespace
 
 from videotrans.task.trans_create import TransCreate
 from videotrans.video_standard import (
+    API_WORK_VIDEO_BITRATE,
     FINAL_AUDIO_BITRATE,
     FINAL_AUDIO_SAMPLE_RATE,
     FINAL_FPS,
     FINAL_VIDEO_BITRATE,
     FINAL_VIDEO_BUFSIZE,
+    api_work_profile,
+    build_api_work_video_args,
     build_work_video_args,
     display_dimensions,
     final_audio_codec_args,
@@ -51,6 +54,19 @@ def test_work_video_is_high_quality_30fps_not_delivery_bitrate():
     assert args[args.index("-crf") + 1] == "14"
     assert "-b:v" not in args
     assert "3000k" not in args
+
+
+def test_cloud_api_video_is_30fps_1080p_6000k_and_has_no_audio():
+    args = build_api_work_video_args("input.mp4", "api.mp4", 1080, 1920)
+    video_filter = args[args.index("-vf") + 1]
+
+    assert f"fps={FINAL_FPS}" in video_filter
+    assert "scale=1080:1920:force_original_aspect_ratio=decrease" in video_filter
+    assert args[args.index("-b:v") + 1] == API_WORK_VIDEO_BITRATE
+    assert args[args.index("-maxrate") + 1] == API_WORK_VIDEO_BITRATE
+    assert args[args.index("-r") + 1] == str(FINAL_FPS)
+    assert args[args.index("-fps_mode") + 1] == "cfr"
+    assert "-an" in args
 
 
 def test_final_codec_args_enforce_real_x264_cbr_and_fixed_aac():
@@ -154,6 +170,51 @@ def test_stale_50fps_work_profile_is_not_reused(tmp_path, monkeypatch):
     assert len(calls) == 1
     metadata = json.loads(Path(f"{work}.json").read_text(encoding="utf-8"))
     assert metadata["profile"]["fps"] == 30
+
+
+def test_cloud_provider_uses_direct_api_transport_profile(tmp_path, monkeypatch):
+    source = tmp_path / "input.mp4"
+    source.write_bytes(b"source")
+    task = object.__new__(TransCreate)
+    task.cfg = SimpleNamespace(
+        name=source.as_posix(),
+        cache_folder=tmp_path.as_posix(),
+        remove_burned_subtitles=True,
+        subtitle_removal_provider="caca_link",
+    )
+    task.video_info = {"width": 1080, "height": 1920, "time": 2000}
+    task.signal = lambda **kwargs: None
+    task._exit = lambda: False
+    captured = []
+
+    def fake_run(args, **kwargs):
+        captured.append(args)
+        Path(args[-1]).write_bytes(b"api-video")
+
+    monkeypatch.setattr("videotrans.task.trans_create.run_work_video_ffmpeg", fake_run)
+    monkeypatch.setattr(
+        "videotrans.task.trans_create.tools.get_video_info",
+        lambda path: {
+            "video_codec_name": "h264",
+            "width": 1080,
+            "height": 1920,
+            "video_fps": 30,
+        },
+    )
+
+    task._prepare_work_visual_source()
+
+    assert len(captured) == 1
+    assert captured[0][captured[0].index("-i") + 1] == source.as_posix()
+    assert captured[0][captured[0].index("-b:v") + 1] == "6000k"
+    assert "-an" in captured[0]
+    assert task.visual_source.endswith(
+        "source-working-api-30fps-6000k-noaudio.mp4"
+    )
+    metadata = json.loads(
+        Path(f"{task.visual_source}.json").read_text(encoding="utf-8")
+    )
+    assert metadata["profile"] == api_work_profile(1080, 1920)
 
 
 def test_final_join_command_never_uses_copy_and_enforces_delivery_standard(

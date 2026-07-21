@@ -1,0 +1,264 @@
+import json
+from pathlib import Path
+
+import pytest
+
+import videotrans.subtitle_removal as subtitle_removal
+from videotrans.subtitle_removal import cloud
+from videotrans.subtitle_removal.aliyun_ims import ImsClient, ImsConfig, classify_status as classify_ims
+from videotrans.subtitle_removal.caca_api import CacaClient, CacaConfig, classify_status as classify_caca
+from videotrans.subtitle_removal.cloud_storage import OssConfig
+from videotrans.task.trans_create import validate_cloud_clean_video
+from videotrans.task.trans_create import TransCreate
+
+
+class FakeResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.payload
+
+
+class RecordingSession:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def post(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return FakeResponse(self.responses.pop(0))
+
+
+def test_oss_config_derives_public_endpoint_and_clamps_signed_url():
+    config = OssConfig.from_mapping({
+        "subtitle_oss_region": "cn-beijing",
+        "subtitle_oss_bucket": "private-bucket",
+        "subtitle_oss_endpoint": "",
+        "subtitle_oss_signed_url_hours": 999,
+    })
+
+    assert config.endpoint == "https://oss-cn-beijing.aliyuncs.com"
+    assert config.signed_url_seconds == 7 * 86400
+
+
+def test_caca_submit_uses_signed_video_link_and_safe_default_region(monkeypatch):
+    monkeypatch.setenv("PYVIDEOTRANS_CACA_SECRET_ID", "id-value")
+    monkeypatch.setenv("PYVIDEOTRANS_CACA_SECRET_KEY", "key-value")
+    session = RecordingSession([{"isOk": 1, "taskId": "task-1"}])
+    client = CacaClient(CacaConfig(), session=session)
+
+    result = client.submit("https://signed.example/video.mp4?token=hidden", [0.1, 0.7, 0.8, 0.1])
+
+    assert result["taskId"] == "task-1"
+    url, kwargs = session.calls[0]
+    assert url.endswith("/user/pub/cacaLinkPullAsyc")
+    assert kwargs["json"]["video_link"].startswith("https://signed.example/")
+    assert [kwargs["json"][key] for key in ("x1", "y1", "x2", "y2")] == [0, 0, 0, 0]
+    assert kwargs["json"]["secret_id"] == "id-value"
+    assert kwargs["allow_redirects"] is False
+
+
+def test_caca_status_classification():
+    assert classify_caca({"status": "processing"})[0] == "processing"
+    assert classify_caca({"status": "finished", "media": "https://out"}) == (
+        "success", "https://out"
+    )
+    assert classify_caca({"status": "failed", "lastError": "bad"}) == (
+        "failed", "bad"
+    )
+
+
+def test_ims_submit_uses_videodetext_oss_and_premium_model():
+    client = ImsClient(ImsConfig(region="cn-shanghai", quality="premium"), client=object())
+    captured = {}
+
+    def fake_call(action, parameters):
+        captured.update({"action": action, "parameters": parameters})
+        return {"JobId": "job-1"}
+
+    client._call = fake_call
+    result = client.submit(
+        input_oss_uri="oss://bucket/in.mp4",
+        output_oss_uri="oss://bucket/out.mp4",
+        normalized_rect=[0.1, 0.7, 0.8, 0.1],
+        name="test",
+    )
+
+    assert result["JobId"] == "job-1"
+    assert captured["action"] == "SubmitIProductionJob"
+    params = captured["parameters"]
+    assert params["FunctionName"] == "VideoDetext"
+    assert json.loads(params["Input"])["Media"] == "oss://bucket/in.mp4"
+    assert json.loads(params["Output"])["Media"] == "oss://bucket/out.mp4"
+    assert json.loads(params["JobParams"])["LimitRegion"] == [[0.1, 0.7, 0.8, 0.1]]
+    assert params["ModelId"] == "algo-video-detext-new"
+
+
+def test_ims_status_classification():
+    assert classify_ims({"Status": "Queuing"}) == ("processing", "queuing")
+    assert classify_ims({"Status": "Analysing"}) == ("processing", "analysing")
+    assert classify_ims({"Status": "Success"}) == ("success", "success")
+    assert classify_ims({"Status": "Fail", "Message": "bad"}) == ("failed", "bad")
+
+
+def test_cloud_endpoints_require_https(monkeypatch):
+    with pytest.raises(ValueError, match="HTTPS"):
+        OssConfig("bucket", "cn-shanghai", "http://oss.example").validate()
+    monkeypatch.setenv("PYVIDEOTRANS_CACA_SECRET_ID", "id")
+    monkeypatch.setenv("PYVIDEOTRANS_CACA_SECRET_KEY", "key")
+    with pytest.raises(ValueError, match="HTTPS"):
+        CacaClient(CacaConfig(base_url="http://api.example"))
+
+
+def test_ims_rejects_unsupported_region():
+    with pytest.raises(ValueError, match="不支持"):
+        ImsClient(ImsConfig(region="cn-hangzhou"), client=object())
+
+
+def test_unknown_submit_is_not_retried(tmp_path, monkeypatch):
+    source = tmp_path / "api.mp4"
+    source.write_bytes(b"video")
+    output = tmp_path / "clean.mp4"
+    settings = {
+        "subtitle_oss_region": "cn-shanghai",
+        "subtitle_oss_bucket": "bucket",
+        "subtitle_oss_endpoint": "https://oss-cn-shanghai.aliyuncs.com",
+    }
+    submit_calls = []
+
+    class FailingClient:
+        def __init__(self, config):
+            pass
+
+        def submit(self, *args, **kwargs):
+            submit_calls.append(1)
+            raise TimeoutError("network timeout")
+
+    monkeypatch.setattr(cloud, "validate_cloud_configuration", lambda *args: None)
+    monkeypatch.setattr(cloud, "CacaClient", FailingClient)
+    monkeypatch.setattr(cloud, "upload_file", lambda *args, **kwargs: {})
+    monkeypatch.setattr(cloud, "signed_download_url", lambda *args: "https://signed/video")
+
+    kwargs = dict(
+        provider="caca_link",
+        input_file=source.as_posix(),
+        output_file=output.as_posix(),
+        normalized_rect=[0.1, 0.7, 0.8, 0.1],
+        duration_ms=1000,
+        identity={"source": "same"},
+        settings_values=settings,
+    )
+    with pytest.raises(RuntimeError, match="不会自动重提"):
+        cloud.remove_burned_subtitles_cloud(**kwargs)
+    with pytest.raises(RuntimeError, match="不会自动重提"):
+        cloud.remove_burned_subtitles_cloud(**kwargs)
+
+    assert len(submit_calls) == 1
+    state = json.loads(Path(f"{output}.cloud.json").read_text(encoding="utf-8"))
+    assert state["status"] == "submit_unknown"
+
+
+def test_cloud_clean_result_checks_metadata_and_full_decode(tmp_path, monkeypatch):
+    result = tmp_path / "clean.mp4"
+    result.write_bytes(b"video")
+    decode_calls = []
+    monkeypatch.setattr(
+        "videotrans.task.trans_create.tools.get_video_info",
+        lambda path: {
+            "video_streams": 1,
+            "width": 1080,
+            "height": 1920,
+            "video_fps": 30,
+            "time": 10_000,
+        },
+    )
+    monkeypatch.setattr(
+        "videotrans.task.trans_create.run_work_video_ffmpeg",
+        lambda args, **kwargs: decode_calls.append((args, kwargs)) or True,
+    )
+
+    info = validate_cloud_clean_video(
+        result.as_posix(), target_width=1080, target_height=1920, duration_ms=10_000
+    )
+
+    assert info["video_fps"] == 30
+    assert decode_calls and decode_calls[0][0][-3:] == ["-f", "null", "-"]
+    assert decode_calls[0][1]["duration_ms"] == 10_000
+
+
+def test_cloud_clean_result_rejects_fps_change(tmp_path, monkeypatch):
+    result = tmp_path / "clean.mp4"
+    result.write_bytes(b"video")
+    monkeypatch.setattr(
+        "videotrans.task.trans_create.tools.get_video_info",
+        lambda path: {
+            "video_streams": 1,
+            "width": 1080,
+            "height": 1920,
+            "video_fps": 25,
+            "time": 10_000,
+        },
+    )
+
+    with pytest.raises(Exception, match="帧率"):
+        validate_cloud_clean_video(
+            result.as_posix(), target_width=1080, target_height=1920, duration_ms=10_000
+        )
+
+
+def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkeypatch):
+    source = tmp_path / "source.mp4"
+    work = tmp_path / "source-working-api-30fps-6000k-noaudio.mp4"
+    source.write_bytes(b"source")
+    work.write_bytes(b"work")
+    task = object.__new__(TransCreate)
+    task.cfg = type("Cfg", (), {
+        "remove_burned_subtitles": True,
+        "subtitle_removal_rect": [0.1, 0.7, 0.8, 0.1],
+        "subtitle_removal_aspect_ratio": 1080 / 1920,
+        "subtitle_removal_provider": "caca_link",
+        "cache_folder": tmp_path.as_posix(),
+        "name": source.as_posix(),
+    })()
+    task.video_info = {"width": 1080, "height": 1920, "time": 5000}
+    task.source_display_width = 1080
+    task.source_display_height = 1920
+    task.visual_source = work.as_posix()
+    task.ocr_source = work.as_posix()
+    task.visual_work_profile = {"fps": 30, "rate_control": "constrained-6000k"}
+    task.signal = lambda **kwargs: None
+    task._exit = lambda: False
+    captured = {}
+
+    def fake_cloud(**kwargs):
+        captured.update(kwargs)
+        Path(kwargs["output_file"]).write_bytes(b"clean")
+        return kwargs["output_file"]
+
+    monkeypatch.setattr(subtitle_removal, "cloud_strategy_key", lambda *args: {"provider": "caca_link"})
+    monkeypatch.setattr(subtitle_removal, "remove_burned_subtitles_cloud", fake_cloud)
+    monkeypatch.setattr(
+        subtitle_removal,
+        "remove_burned_subtitles",
+        lambda **kwargs: pytest.fail("cloud provider must not call local remover"),
+    )
+    monkeypatch.setattr(
+        "videotrans.task.trans_create.validate_cloud_clean_video",
+        lambda *args, **kwargs: {},
+    )
+
+    task._prepare_clean_visual_source()
+
+    assert task.visual_source.endswith("source-without-burned-subtitles-caca_link.mp4")
+    assert task.ocr_source == work.as_posix()
+    assert captured["input_file"] == work.resolve().as_posix()
+    assert captured["normalized_rect"] == pytest.approx([0.1, 0.7, 0.8, 0.1])
+    metadata = json.loads(
+        Path(f"{task.visual_source}.json").read_text(encoding="utf-8")
+    )
+    assert metadata["subtitle_removal_provider"] == "caca_link"
+    assert metadata["working_video"]["fps"] == 30

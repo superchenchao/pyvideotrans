@@ -143,6 +143,23 @@ class Ui_MainWindow(object):
             tr("Select the original subtitle area before starting and remove it from the final video"))
         self.remove_burned_subtitles.setChecked(settings.get("remove_burned_subtitles", True))
 
+        self.subtitle_removal_provider = QtWidgets.QComboBox()
+        self.subtitle_removal_provider.setObjectName("subtitle_removal_provider")
+        self.subtitle_removal_provider.setMinimumWidth(180)
+        self.subtitle_removal_provider.addItem("本地模型", "local")
+        self.subtitle_removal_provider.addItem("Caca API（OSS 链接）", "caca_link")
+        self.subtitle_removal_provider.addItem("阿里云 IMS", "aliyun_ims")
+        saved_provider = str(settings.get("subtitle_removal_provider", "local"))
+        provider_index = self.subtitle_removal_provider.findData(saved_provider)
+        self.subtitle_removal_provider.setCurrentIndex(max(0, provider_index))
+        self.subtitle_removal_provider.setToolTip(
+            "本地方式保留现有 STTN/ProPainter；云端方式会上传无音频工作视频"
+        )
+
+        self.subtitle_removal_settings = QtWidgets.QPushButton("云端设置")
+        self.subtitle_removal_settings.setObjectName("subtitle_removal_settings")
+        self.subtitle_removal_settings.setToolTip("配置 OSS、链接 API 和阿里云 IMS")
+
         self.horizontalLayout_4.addWidget(self.reglabel)
         self.horizontalLayout_4.addWidget(self.recogn_type)
         self.horizontalLayout_4.addWidget(self.model_name_help)
@@ -151,6 +168,8 @@ class Ui_MainWindow(object):
         self.horizontalLayout_4.addWidget(self.rephrase)
         self.horizontalLayout_4.addWidget(self.recogn2pass)
         self.horizontalLayout_4.addWidget(self.remove_burned_subtitles)
+        self.horizontalLayout_4.addWidget(self.subtitle_removal_provider)
+        self.horizontalLayout_4.addWidget(self.subtitle_removal_settings)
         self.horizontalLayout_4.addStretch()
 
         self.verticalLayout_3.addLayout(self.horizontalLayout_4)

@@ -515,6 +515,9 @@ class WinAction(WinActionBase):
         self.cfg['only_out_mp4'] = self.main.only_out_mp4.isChecked()
         self.cfg['fix_punc'] = self.main.fix_punc.isChecked()
         self.cfg['remove_burned_subtitles'] = self.main.remove_burned_subtitles.isChecked()
+        self.cfg['subtitle_removal_provider'] = (
+            self.main.subtitle_removal_provider.currentData() or 'local'
+        )
 
         # 配音设置
         self.cfg['tts_type'] = self.main.tts_type.currentIndex()
@@ -644,6 +647,7 @@ class WinAction(WinActionBase):
             settings.get("burned_subtitle_ocr", True)
         )
         settings['remove_burned_subtitles'] = self.main.remove_burned_subtitles.isChecked()
+        settings['subtitle_removal_provider'] = self.cfg['subtitle_removal_provider']
 
         initial_rect = None
         saved_rect = settings.get("subtitle_removal_last_rect", "")
@@ -664,15 +668,44 @@ class WinAction(WinActionBase):
             initial_rect=initial_rect,
         ) and len(self.imported_subtitle_map) < len(self.queue_mp4)
         engine = None
-        if should_remove_subtitles or should_prompt_for_ocr_area:
+        removal_provider = self.cfg.get('subtitle_removal_provider', 'local')
+        local_removal = should_remove_subtitles and removal_provider == 'local'
+        if should_remove_subtitles and not local_removal:
+            try:
+                from videotrans.subtitle_removal import validate_cloud_configuration
+                validate_cloud_configuration(removal_provider, settings.to_dict())
+            except Exception as error:
+                self.main.startbtn.setDisabled(False)
+                tools.show_error(f"云端字幕消除配置不可用：{error}")
+                return
+            from PySide6.QtWidgets import QMessageBox
+            provider_name = self.main.subtitle_removal_provider.currentText()
+            reply = QMessageBox.question(
+                self.main,
+                "确认使用云端字幕消除",
+                f"将使用“{provider_name}”处理本批视频。\n\n"
+                "程序会上传 30 FPS、固定 1080p、约 6000 kbps 的无音频视频；"
+                "云端服务可能产生费用，文件会保留在你配置的私有 OSS 中。\n\n"
+                "是否继续？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                self.main.startbtn.setDisabled(False)
+                return
+
+        # Local removal needs every inpainting model. OCR-only region selection
+        # only needs the detector, so a cloud backend must not be blocked by a
+        # missing STTN/ProPainter model.
+        if local_removal or should_prompt_for_ocr_area:
             from videotrans.subtitle_removal import find_subtitle_remover_engine
             engine = find_subtitle_remover_engine(ROOT_DIR)
-            if should_remove_subtitles and not engine:
+            if local_removal and not engine:
                 self.main.startbtn.setDisabled(False)
                 tools.show_error(tr("Subtitle removal engine is not installed"))
                 return
             missing = engine.missing_files("auto") if engine else []
-            if should_remove_subtitles and missing:
+            if local_removal and missing:
                 self.main.startbtn.setDisabled(False)
                 tools.show_error(
                     tr("Subtitle removal model is incomplete")

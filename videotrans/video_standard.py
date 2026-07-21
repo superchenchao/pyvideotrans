@@ -23,6 +23,14 @@ WORK_CRF = 14
 WORK_PRESET = "medium"
 WORK_PROFILE_VERSION = 1
 
+# Cloud subtitle-removal services receive a smaller, video-only transport
+# master.  It is generated directly from the source video so the upload path
+# does not add an unnecessary CRF intermediate generation first.
+API_WORK_VIDEO_BITRATE = "6000k"
+API_WORK_VIDEO_BUFSIZE = "12000k"
+API_WORK_PRESET = "medium"
+API_WORK_PROFILE_VERSION = 1
+
 
 class WorkVideoCancelled(RuntimeError):
     pass
@@ -117,6 +125,23 @@ def work_profile(target_width: int, target_height: int) -> dict[str, object]:
     }
 
 
+def api_work_profile(target_width: int, target_height: int) -> dict[str, object]:
+    return {
+        "version": API_WORK_PROFILE_VERSION,
+        "purpose": "cloud-subtitle-removal",
+        "fps": FINAL_FPS,
+        "width": target_width,
+        "height": target_height,
+        "codec": "libx264",
+        "rate_control": f"constrained-{API_WORK_VIDEO_BITRATE}",
+        "maxrate": API_WORK_VIDEO_BITRATE,
+        "bufsize": API_WORK_VIDEO_BUFSIZE,
+        "preset": API_WORK_PRESET,
+        "pixel_format": "yuv420p",
+        "audio": "none",
+    }
+
+
 def build_work_video_args(
         input_file: str, output_file: str,
         target_width: int, target_height: int) -> list[str]:
@@ -130,6 +155,28 @@ def build_work_video_args(
         "-preset", WORK_PRESET,
         "-crf", str(WORK_CRF),
         "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart",
+        str(output_file),
+    ]
+
+
+def build_api_work_video_args(
+        input_file: str, output_file: str,
+        target_width: int, target_height: int) -> list[str]:
+    return [
+        "-y",
+        "-i", str(input_file),
+        "-map", "0:v:0",
+        "-an",
+        "-vf", fixed_visual_filter(target_width, target_height),
+        "-c:v", "libx264",
+        "-preset", API_WORK_PRESET,
+        "-b:v", API_WORK_VIDEO_BITRATE,
+        "-maxrate", API_WORK_VIDEO_BITRATE,
+        "-bufsize", API_WORK_VIDEO_BUFSIZE,
+        "-pix_fmt", "yuv420p",
+        "-r", str(FINAL_FPS),
+        "-fps_mode", "cfr",
         "-movflags", "+faststart",
         str(output_file),
     ]

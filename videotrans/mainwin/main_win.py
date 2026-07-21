@@ -232,6 +232,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         )
         self.recogn_type.currentIndexChanged.connect(self.win_action.recogn_type_change)
         self.model_name.currentIndexChanged.connect(self.win_action.model_type_change)
+        self.subtitle_removal_settings.clicked.connect(
+            self.open_cloud_subtitle_removal_settings
+        )
 
         self.label.clicked.connect(lambda: tools.open_url(url='https://pyvideotrans.com/proxy'))
 
@@ -358,6 +361,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.uito.emit('end')
         run_in_threadpool(tools.is_connect_hf)
         run_in_threadpool(tools.check_new_version)
+
+    def open_cloud_subtitle_removal_settings(self):
+        from videotrans.component.subtitle_removal_cloud_settings import (
+            open_cloud_subtitle_removal_settings,
+        )
+        open_cloud_subtitle_removal_settings(self)
 
     def _start_workers(self, status):
         if status == 'end':

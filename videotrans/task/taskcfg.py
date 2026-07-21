@@ -185,5 +185,6 @@ class TaskCfgVTT(TaskCfgSTT, TaskCfgTTS, TaskCfgSTS):
     backaudio_volume: float = 0.8  # 背景音量
     burned_subtitle_ocr: Optional[bool] = None  # 当前批次是否使用硬字幕 OCR，None 表示继承全局设置
     remove_burned_subtitles: bool = False  # 是否在最终视频画面中消除原硬字幕
+    subtitle_removal_provider: str = "local"  # local / caca_link / aliyun_ims
     subtitle_removal_rect: Optional[list] = None  # 首视频框选区域的归一化坐标
     subtitle_removal_aspect_ratio: float = 0.0  # 首视频宽高比，用于批量安全校验
