@@ -322,6 +322,7 @@ def get_video_info(mp4_file, *, video_fps=False, video_scale=False, video_time=F
         "audio_codec_name": "",
         "width": 0,
         "height": 0,
+        "rotation": 0,
         "time": 0,
         "streams_len": len(out['streams']),
         "streams_audio": 0,
@@ -365,6 +366,16 @@ def get_video_info(mp4_file, *, video_fps=False, video_scale=False, video_time=F
         result['width'] = int(video_stream.get('width', 0))
         result['height'] = int(video_stream.get('height', 0))
         result['color'] = video_stream.get('pix_fmt', 'yuv420p').lower()
+        rotation = video_stream.get('tags', {}).get('rotate', 0)
+        if not rotation:
+            for side_data in video_stream.get('side_data_list', []):
+                if 'rotation' in side_data:
+                    rotation = side_data.get('rotation', 0)
+                    break
+        try:
+            result['rotation'] = int(round(float(rotation))) % 360
+        except (TypeError, ValueError):
+            result['rotation'] = 0
 
         # FPS 计算逻辑
         def parse_fps(rate_str):

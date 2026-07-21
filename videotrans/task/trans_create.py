@@ -26,6 +26,18 @@ from videotrans.util.help_ffmpeg import get_video_codec
 from videotrans.task._rate import SpeedRate
 from .taskcfg import TaskCfgVTT
 from ..configure.excepts import VideoTransError, FFmpegError, SpeechToTextError
+from videotrans.video_standard import (
+    FINAL_FPS,
+    build_work_video_args,
+    display_dimensions,
+    final_audio_codec_args,
+    final_video_codec_args,
+    fixed_dimensions,
+    fixed_visual_filter,
+    map_normalized_rect_to_canvas,
+    run_work_video_ffmpeg,
+    work_profile,
+)
 
 
 @dataclass
@@ -63,6 +75,10 @@ class TransCreate(BaseTask):
     clone_ref: str = ""
     recogn_vocal: str = ""
     visual_source: str = ""
+    ocr_source: str = ""
+    visual_work_profile: Dict = field(default_factory=dict, repr=False)
+    source_display_width: int = 0
+    source_display_height: int = 0
     cost_duration:float=0.0
     should_recogn2:bool=False
     series_speaker_registered: bool = field(default=False, repr=False)
@@ -185,6 +201,7 @@ class TransCreate(BaseTask):
         # 视频时长，毫秒
         self.video_time = self.video_info['time']
         self.visual_source = self.cfg.name
+        self.ocr_source = self.cfg.name
         # 音频时长，毫秒
         audio_stream_len = self.video_info.get('streams_audio', 0)
 
@@ -199,11 +216,16 @@ class TransCreate(BaseTask):
                 tr('There is no valid audio in the file {} and it cannot be processed. Please play it manually to confirm that there is sound.',
                    self.cfg.name))
 
-        # 如果获得原始视频编码格式是 h264，并且色素 yuv420p, 则直接复制视频流 is_copy_video=True
+        # 在 OCR、字幕消除等逐帧流程之前统一生成 30 FPS、高质量工作视频。
+        # 原始音轨仍供 ASR/配音使用；3000 kbps 仅在最终导出时应用。
+        if not self.is_audio_trans and self.cfg.app_mode != 'tiqu':
+            self._prepare_work_visual_source()
+
+        # 工作视频固定为 H.264/yuv420p，后续拆无声视频可以无损 copy。
         if self.video_info['video_codec_name'] == 'h264' and self.video_info['color'] == 'yuv420p':
             self.is_copy_video = True
 
-        # OCR/ASR 继续读取原视频，仅最终视觉分支使用消除字幕后的中间视频。
+        # 字幕消除读取 30 FPS 工作视频；OCR 读取消除前的同一工作视频。
         self._prepare_clean_visual_source()
 
         # 如果存在逐视频导入字幕，优先使用；单视频文本框仍允许用户修改后覆盖。
@@ -905,6 +927,121 @@ class TransCreate(BaseTask):
                 _name
             ], noextname=self.uuid, cmd_dir=self.cfg.cache_folder, force_cpu=True)
 
+    def _prepare_work_visual_source(self):
+        source_width, source_height = display_dimensions(
+            int(self.video_info.get("width") or 0),
+            int(self.video_info.get("height") or 0),
+            self.video_info.get("rotation", 0),
+        )
+        self.source_display_width = source_width
+        self.source_display_height = source_height
+        try:
+            target_width, target_height = fixed_dimensions(source_width, source_height)
+        except ValueError as error:
+            raise VideoTransError(f"无法确定固定导出方向：{error}") from error
+
+        profile = work_profile(target_width, target_height)
+        work_source = Path(self.cfg.cache_folder, "source-working-30fps.mp4")
+        metadata_path = Path(f"{work_source}.json")
+        input_path = Path(self.cfg.name).resolve()
+        try:
+            input_stat = input_path.stat()
+            expected_metadata = {
+                "input_file": input_path.as_posix(),
+                "input_size": input_stat.st_size,
+                "input_mtime_ns": input_stat.st_mtime_ns,
+                "profile": profile,
+            }
+        except OSError as error:
+            raise VideoTransError(f"读取原视频信息失败：{error}") from error
+
+        cached_metadata = None
+        if tools.vail_file(work_source.as_posix()) and metadata_path.is_file():
+            try:
+                cached_metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+
+        # A non-empty but truncated/corrupt video must not be trusted merely
+        # because its sidecar metadata survived an interrupted prior run.
+        if cached_metadata == expected_metadata:
+            try:
+                cached_info = tools.get_video_info(work_source.as_posix())
+                cached_fps = float(cached_info.get("video_fps") or 0)
+                cache_is_valid = (
+                    cached_info.get("video_codec_name") == "h264"
+                    and int(cached_info.get("width") or 0) == target_width
+                    and int(cached_info.get("height") or 0) == target_height
+                    and abs(cached_fps - FINAL_FPS) <= 0.01
+                )
+            except Exception:
+                cache_is_valid = False
+            if not cache_is_valid:
+                cached_metadata = None
+
+        if cached_metadata != expected_metadata:
+            work_source.unlink(missing_ok=True)
+            metadata_path.unlink(missing_ok=True)
+            self.signal(text="Generating 30 FPS working video 0%")
+            last_progress = -10
+
+            def report_progress(value):
+                nonlocal last_progress
+                value = int(value)
+                if value - last_progress >= 10 or value == 100:
+                    self.signal(text=f"Generating 30 FPS working video {value}%")
+                    last_progress = value
+
+            try:
+                run_work_video_ffmpeg(
+                    build_work_video_args(
+                        input_path.as_posix(), work_source.as_posix(),
+                        target_width, target_height,
+                    ),
+                    duration_ms=int(self.video_info.get("time") or 0),
+                    cancel_callback=self._exit,
+                    progress_callback=report_progress,
+                )
+            except Exception as error:
+                work_source.unlink(missing_ok=True)
+                raise VideoTransError(f"生成 30 FPS 工作视频失败：{error}") from error
+
+            generated_info = tools.get_video_info(work_source.as_posix())
+            generated_fps = float(generated_info.get("video_fps") or 0)
+            if (
+                    generated_info.get("video_codec_name") != "h264"
+                    or int(generated_info.get("width") or 0) != target_width
+                    or int(generated_info.get("height") or 0) != target_height
+                    or abs(generated_fps - FINAL_FPS) > 0.01
+            ):
+                work_source.unlink(missing_ok=True)
+                raise VideoTransError(
+                    "30 FPS 工作视频校验失败："
+                    f"codec={generated_info.get('video_codec_name')}, "
+                    f"size={generated_info.get('width')}x{generated_info.get('height')}, "
+                    f"fps={generated_fps}"
+                )
+            metadata_path.write_text(
+                json.dumps(expected_metadata, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        else:
+            logger.info(f"复用 30 FPS 高质量工作视频：{work_source}")
+
+        self.visual_source = work_source.as_posix()
+        self.ocr_source = work_source.as_posix()
+        self.visual_work_profile = profile
+        # 后续 ROI、硬字幕画布与最终合成都必须以固定工作画布为准。
+        self.video_info.update({
+            "width": target_width,
+            "height": target_height,
+            "video_fps": FINAL_FPS,
+            "r_frame_rate": f"{FINAL_FPS}/1",
+            "video_codec_name": "h264",
+            "color": "yuv420p",
+            "rotation": 0,
+        })
+
     def _prepare_clean_visual_source(self):
         if not self.cfg.remove_burned_subtitles:
             return
@@ -918,11 +1055,20 @@ class TransCreate(BaseTask):
             strategy_cache_key,
         )
         try:
-            rect = scale_normalized_rect(
+            target_width = int(self.video_info["width"])
+            target_height = int(self.video_info["height"])
+            mapped_rect = map_normalized_rect_to_canvas(
                 self.cfg.subtitle_removal_rect,
-                int(self.video_info["width"]),
-                int(self.video_info["height"]),
+                source_width=int(getattr(self, "source_display_width", 0) or target_width),
+                source_height=int(getattr(self, "source_display_height", 0) or target_height),
+                target_width=target_width,
+                target_height=target_height,
                 reference_aspect_ratio=float(self.cfg.subtitle_removal_aspect_ratio or 0.0),
+            )
+            rect = scale_normalized_rect(
+                mapped_rect,
+                target_width,
+                target_height,
             )
         except (TypeError, ValueError) as error:
             raise VideoTransError(
@@ -933,6 +1079,7 @@ class TransCreate(BaseTask):
         clean_metadata = Path(f"{clean_source}.json")
         inpaint_metadata = Path(f"{clean_source}.inpaint.json")
         input_path = Path(self.cfg.name).resolve()
+        removal_input = Path(self.visual_source).resolve()
         removal_engine = find_subtitle_remover_engine(ROOT_DIR)
         removal_strategy = strategy_cache_key(
             removal_engine.root if removal_engine else None
@@ -951,6 +1098,7 @@ class TransCreate(BaseTask):
                 "input_mtime_ns": input_stat.st_mtime_ns,
                 "rect": list(rect),
                 "duration_ms": int(self.video_info["time"]),
+                "working_video": getattr(self, "visual_work_profile", {}),
                 "inpaint_strategy": removal_strategy,
                 "actual_inpaint_backend": actual_inpaint_backend,
             }
@@ -979,7 +1127,7 @@ class TransCreate(BaseTask):
 
         try:
             self.visual_source = remove_burned_subtitles(
-                input_file=self.cfg.name,
+                input_file=removal_input.as_posix(),
                 output_file=clean_source,
                 rect=rect,
                 duration_ms=int(self.video_info["time"]),
@@ -1116,11 +1264,14 @@ class TransCreate(BaseTask):
                     or x + width > 1.000001 or y + height > 1.000001
             ):
                 raise ValueError("字幕区域超出视频画面")
-            from videotrans.subtitle_removal import scale_normalized_rect
-            scale_normalized_rect(
+            target_width = int(self.video_info["width"])
+            target_height = int(self.video_info["height"])
+            normalized_rect = map_normalized_rect_to_canvas(
                 normalized_rect,
-                int(self.video_info["width"]),
-                int(self.video_info["height"]),
+                source_width=int(getattr(self, "source_display_width", 0) or target_width),
+                source_height=int(getattr(self, "source_display_height", 0) or target_height),
+                target_width=target_width,
+                target_height=target_height,
                 reference_aspect_ratio=aspect_ratio,
             )
         except (KeyError, TypeError, ValueError) as error:
@@ -1142,7 +1293,7 @@ class TransCreate(BaseTask):
                 or self.cfg.recogn_type != FASTER_WHISPER
                 or not self.cfg.detect_language
                 or self.cfg.detect_language[:2].lower() != "zh"
-                or not tools.vail_file(self.cfg.name)
+                or not tools.vail_file(getattr(self, "ocr_source", "") or self.cfg.name)
         ):
             return raw_subtitles
 
@@ -1167,7 +1318,7 @@ class TransCreate(BaseTask):
                 return raw_subtitles
 
             ocr_subtitles = extract_burned_subtitles(
-                self.cfg.name,
+                getattr(self, "ocr_source", "") or self.cfg.name,
                 self.cfg.cache_folder,
                 normalized_rect=ocr_rect,
                 progress_callback=report_progress,
@@ -1832,8 +1983,8 @@ class TransCreate(BaseTask):
 
         shutil.copy2(target_m4a, self.cfg.target_wav_output)
         self.precent = min(max(95, self.precent), 98)
-        # 输出视频格式
-        _video_output_ext = settings.get('out_video_ext', '.mp4')
+        # 最终交付固定为 MP4；中间视频仍保持高质量，不提前套用 3000 kbps。
+        _video_output_ext = '.mp4'
         # 处理所需字幕
         subtitles_file, subtitle_langcode = None, None
         if self.cfg.subtitle_type > 0:
@@ -1868,18 +2019,12 @@ class TransCreate(BaseTask):
             protxt_basename = os.path.basename(protxt)
             threading.Thread(target=self._hebing_pro, args=(protxt,), daemon=True).start()
 
-            # 如果需要输出的视频是 264 编码，因开始和中间编码均为264，可以考虑使用copy (如果无硬字幕嵌入的话)
-            is_copy_mode = (str(self.video_codec_num) == '264')
             # 无音频视频流
             novoice_mp4_basename = os.path.basename(self.cfg.novoice_mp4)
             # 需要嵌入的音频
             target_m4a_basename = os.path.basename(target_m4a)
             # 合成后的结果视频
             tmp_target_mp4_basename = os.path.basename(tmp_target_mp4)
-
-            # 获取可用的硬件
-            if not app_cfg.video_codec:
-                app_cfg.video_codec = tools.get_video_codec()
 
             cmd0 = [
                 "-y",
@@ -1893,99 +2038,53 @@ class TransCreate(BaseTask):
                 "-i",
                 target_m4a_basename
             ]
-            enc_qua = ['-crf', f'{settings.get("crf", 23)}', '-preset', settings.get('preset', 'medium')]
+            target_width, target_height = fixed_dimensions(
+                int(self.video_info.get('width') or 0),
+                int(self.video_info.get('height') or 0),
+            )
+            visual_filter = fixed_visual_filter(target_width, target_height)
+            output_args = []
 
-            # 无字幕 或 软字幕
-            if self.cfg.subtitle_type not in [1, 3]:
-                # 软字幕
+            if self.cfg.subtitle_type in [1, 3]:
+                output_args.extend([
+                    '-filter_complex',
+                    f"[0:v]{visual_filter},subtitles=filename='{subtitles_file}'[v_out]",
+                    '-map', '[v_out]',
+                    '-map', '1:a:0',
+                ])
+            else:
                 if self.cfg.subtitle_type in [2, 4]:
-                    cmd1.extend(["-i", subtitles_file])
-                cmd1.extend([
-                    '-map',
-                    '0:v',
-                    '-map',
-                    '1:a'
+                    cmd1.extend(['-i', subtitles_file])
+                output_args.extend([
+                    '-map', '0:v:0',
+                    '-map', '1:a:0',
+                    '-vf', visual_filter,
                 ])
                 if self.cfg.subtitle_type in [2, 4]:
-                    cmd1.extend(['-map', '2:s'])
-
-                cmd1.extend([
-                    "-c:v",
-                    f"libx{self.video_codec_num}",
-                    "-c:a",
-                    "copy",
-                ])
-                if self.cfg.subtitle_type in [2, 4]:
-                    cmd1.extend([
-                        "-c:s",
-                        "mov_text" if _video_output_ext == '.mp4' else 'srt',
-                        "-metadata:s:s:0",
-                        f"language={subtitle_langcode}"
+                    output_args.extend([
+                        '-map', '2:s:0',
+                        '-c:s', 'mov_text',
+                        '-metadata:s:s:0', f'language={subtitle_langcode}',
                     ])
 
-                cmd2 = [
-                    "-movflags",
-                    "+faststart",
+            final_args = (
+                cmd0
+                + cmd1
+                + output_args
+                + final_video_codec_args()
+                + final_audio_codec_args()
+                + [
+                    '-movflags', '+faststart',
+                    '-t', str(duration_s),
+                    tmp_target_mp4_basename,
                 ]
-                if self.cfg.video_autorate:
-                    cmd2.extend(["-fps_mode", "vfr"])
-
-                cmd2.extend(["-t", str(duration_s), tmp_target_mp4_basename])
-                if is_copy_mode:
-                    cmd1[cmd1.index('-c:v') + 1] = 'copy'
-                    logger.debug(f'[最终视频合成]copy模式，无需重新编码:\n{cmd0 + cmd1 + cmd2}')
-                    tools.runffmpeg(cmd0 + cmd1 + cmd2, cmd_dir=self.cfg.cache_folder, force_cpu=True)
-                elif app_cfg.video_codec.startswith('libx') or settings.get('force_lib'):
-                    # 不支持硬件编码的就无需尝试硬件了
-                    logger.debug(f'[最终视频合成]不支持硬件编码或指定了强制软编解码:\n{cmd0 + cmd1 + cmd2}')
-                    tools.runffmpeg(cmd0 + cmd1 + enc_qua + cmd2, cmd_dir=self.cfg.cache_folder, force_cpu=True)
-                else:
-                    # 尝试使用硬件编解码
-                    hw_decode_args, _, vcodec, enc_args = self._get_hard_cfg()
-                    cmd1[cmd1.index('-c:v') + 1] = vcodec
-                    # 如果硬件处理失败，回退软编
-                    try:
-                        self._subprocess(cmd0 + hw_decode_args + cmd1 + enc_args + cmd2)
-                    except Exception as e:
-                        cmd1[cmd1.index('-c:v') + 1] = f'libx{self.video_codec_num}'
-                        logger.exception(f'硬件处理视频合成失败，回退软编 {e}', exc_info=True)
-                        tools.runffmpeg(cmd0 + cmd1 + enc_qua + cmd2, cmd_dir=self.cfg.cache_folder, force_cpu=True)
-
-            # 硬字幕
-            else:
-                cmd1.append('-filter_complex')
-                subtitle_filter = [f"[0:v]subtitles=filename='{subtitles_file}'[v_out]"]
-                cmd2 = [
-                    "-map",
-                    "[v_out]",
-                    "-map",
-                    "1:a",
-                    "-c:v",
-                    f'libx{self.video_codec_num}',
-                    '-c:a',
-                    'copy',
-                ]
-                cmd3 = ["-movflags", "+faststart"]
-
-                if self.cfg.video_autorate:
-                    cmd3.extend(["-fps_mode", "vfr"])
-
-                cmd3.extend(["-t", str(duration_s), tmp_target_mp4_basename])
-                if app_cfg.video_codec.startswith('libx') or settings.get('force_lib'):
-                    logger.debug(f'[最终视频合成]不支持硬件编解码或指定了强制软编解码:\n{cmd0 + cmd1 + cmd2}')
-                    tools.runffmpeg(cmd0 + cmd1 + subtitle_filter + cmd2 + enc_qua + cmd3,
-                                    cmd_dir=self.cfg.cache_folder, force_cpu=True)
-                else:
-                    # 如果硬件处理失败，回退软编
-                    try:
-                        hw_decode_args, vf_string, vcodec, enc_args = self._get_hard_cfg(subtitles_file)
-                        cmd2[cmd2.index('-c:v') + 1] = vcodec
-                        self._subprocess(cmd0 + hw_decode_args + cmd1 + [vf_string] + cmd2 + enc_args + cmd3)
-                    except Exception as e:
-                        cmd2[cmd2.index('-c:v') + 1] = f'libx{self.video_codec_num}'
-                        logger.exception(f'硬件处理视频合成失败，回退软编 {e}', exc_info=True)
-                        tools.runffmpeg(cmd0 + cmd1 + subtitle_filter + cmd2 + enc_qua + cmd3,
-                                        cmd_dir=self.cfg.cache_folder, force_cpu=True)
+            )
+            logger.debug(f'[最终视频合成]固定 MP4/H.264/30FPS/3000k CBR/AAC:\n{final_args}')
+            tools.runffmpeg(
+                final_args,
+                cmd_dir=self.cfg.cache_folder,
+                force_cpu=True,
+            )
         except Exception as e:
             raise VideoTransError(tr('Error in embedding the final step of the subtitle dubbing')+str(e)) from e
         finally:

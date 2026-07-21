@@ -152,6 +152,12 @@ def remove_burned_subtitles(
                 event_type = event.get("type")
                 if event_type == "progress" and progress_callback:
                     progress_callback(max(0, min(100, int(event.get("value", 0)))))
+                elif event_type == "started" and log_callback:
+                    log_callback(
+                        "Subtitle removal input: "
+                        f"{event.get('fps', 'unknown')} FPS, "
+                        f"{event.get('frames', 'unknown')} frames"
+                    )
                 elif event_type in {"log", "error"} and log_callback:
                     log_callback(str(event.get("message", "")))
                 elif event_type == "backend_selected":

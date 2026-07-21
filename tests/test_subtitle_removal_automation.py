@@ -46,6 +46,7 @@ def test_prepare_clean_visual_source_uses_scaled_batch_rect(tmp_path, monkeypatc
     )
     task.video_info = {"width": 720, "height": 1280, "time": 120000}
     task.visual_source = task.cfg.name
+    task.visual_work_profile = {"fps": 30, "width": 1080, "height": 1920}
     task.signal = lambda **kwargs: None
     task._exit = lambda: False
     calls = []
@@ -63,6 +64,10 @@ def test_prepare_clean_visual_source_uses_scaled_batch_rect(tmp_path, monkeypatc
     assert calls[0]["rect"] == (72, 800, 576, 120)
     assert calls[0]["duration_ms"] == 120000
     assert task.visual_source.endswith("source-without-burned-subtitles.mp4")
+    metadata = json.loads(
+        Path(f"{task.visual_source}.json").read_text(encoding="utf-8")
+    )
+    assert metadata["working_video"]["fps"] == 30
 
 
 def test_changed_batch_rect_does_not_reuse_stale_clean_video(tmp_path, monkeypatch):
@@ -137,9 +142,11 @@ def test_final_visual_split_uses_cleaned_video(tmp_path, monkeypatch):
     assert calls[0][calls[0].index("-i") + 1] == task.visual_source
 
 
-def test_burned_subtitle_ocr_keeps_reading_original_video(tmp_path, monkeypatch):
+def test_burned_subtitle_ocr_reads_30fps_work_video_before_inpainting(tmp_path, monkeypatch):
     original = tmp_path / "original.mp4"
     original.write_bytes(b"video")
+    work_video = tmp_path / "source-working-30fps.mp4"
+    work_video.write_bytes(b"30fps-video")
     task = object.__new__(TransCreate)
     task.cfg = SimpleNamespace(
         name=original.as_posix(),
@@ -151,6 +158,7 @@ def test_burned_subtitle_ocr_keeps_reading_original_video(tmp_path, monkeypatch)
     )
     task.video_info = {"width": 1080, "height": 1920}
     task.visual_source = (tmp_path / "cleaned.mp4").as_posix()
+    task.ocr_source = work_video.as_posix()
     task.is_audio_trans = False
     task.signal = lambda **kwargs: None
     task._exit = lambda: False
@@ -171,7 +179,7 @@ def test_burned_subtitle_ocr_keeps_reading_original_video(tmp_path, monkeypatch)
 
     assert task._fuse_burned_subtitles(raw) == raw
     assert captured == [(
-        original.as_posix(),
+        work_video.as_posix(),
         [0.1, 0.625, 0.8, 0.09375],
     )]
 
