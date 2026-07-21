@@ -13,6 +13,7 @@ from videotrans.component.checkable_combo import CheckableComboBox
 import videotrans.component.multifolder_tasks as multifolder_tasks
 from videotrans.configure.excepts import SpeechToTextError
 from videotrans.component.multifolder_tasks import (
+    ConcurrencyPlan,
     LanguageSpec,
     MultiFolderScheduler,
     MultiFolderTaskWindow,
@@ -310,7 +311,7 @@ def test_output_isolated_by_project_and_language(tmp_path):
     assert root / "en" != root / "fr"
 
 
-def test_scheduler_runs_all_languages_episode_major(tmp_path, monkeypatch):
+def test_scheduler_runs_episode_languages_concurrently(tmp_path, monkeypatch):
     folder = tmp_path / "series"
     folder.mkdir()
     videos = []
@@ -330,6 +331,9 @@ def test_scheduler_runs_all_languages_episode_major(tmp_path, monkeypatch):
     )
     scheduler = MultiFolderScheduler([project], {})
     order = []
+    active = 0
+    peak = 0
+    lock = threading.Lock()
 
     class FakeTask:
         should_dubbing = False
@@ -352,19 +356,41 @@ def test_scheduler_runs_all_languages_episode_major(tmp_path, monkeypatch):
         return SimpleNamespace(hasend=False, cfg=SimpleNamespace())
 
     def language_task(_project, language, video, *_args):
-        order.append((Path(video).name, language.code))
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.05)
+        with lock:
+            order.append((Path(video).name, language.code))
+            active -= 1
         return FakeTask()
 
     monkeypatch.setattr(scheduler, "_source_task", source_task)
     monkeypatch.setattr(scheduler, "_language_task", language_task)
     scheduler.run()
 
-    assert order == [
+    assert set(order) == {
         ("01.mp4", "en"),
         ("01.mp4", "fr"),
         ("02.mp4", "en"),
         ("02.mp4", "fr"),
-    ]
+    }
+    assert peak == 4
+
+
+def test_concurrency_plan_uses_configured_upper_bounds(monkeypatch):
+    monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
+    monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
+    monkeypatch.setitem(multifolder_tasks.settings, "process_max_gpu", 2)
+
+    plan = ConcurrencyPlan.for_machine({"is_cuda": True})
+
+    assert plan.source == 3
+    assert plan.translation == 8
+    assert plan.dubbing == 2
+    assert plan.alignment == 2
+    assert plan.assembly == 2
 
 
 def test_completion_cache_is_invalidated_when_language_config_changes(tmp_path):
