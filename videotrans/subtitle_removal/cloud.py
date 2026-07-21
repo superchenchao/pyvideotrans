@@ -10,10 +10,11 @@ import requests
 
 from .aliyun_ims import ImsClient, ImsConfig, classify_status as classify_ims
 from .caca_api import CacaClient, CacaConfig, classify_status as classify_caca
-from .cloud_state import matching_state, write_state
+from .cloud_state import matching_state, read_state, write_state
 from .cloud_storage import (
     CloudTransferCancelled,
     OssConfig,
+    delete_object,
     download_object,
     head_object,
     signed_download_url,
@@ -38,6 +39,14 @@ class CloudSubtitleRemovalCancelled(RuntimeError):
 def normalize_provider(value: object) -> str:
     provider = str(value or LOCAL_PROVIDER).strip().lower()
     return provider if provider in {LOCAL_PROVIDER, *CLOUD_PROVIDERS} else LOCAL_PROVIDER
+
+
+def _setting_enabled(value: object, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off", ""}
+    return bool(value)
 
 
 def validate_cloud_configuration(
@@ -72,6 +81,68 @@ def cloud_strategy_key(provider: str, values: Mapping[str, object]) -> dict[str,
     elif provider == ALIYUN_IMS_PROVIDER:
         base["quality"] = ImsConfig.from_mapping(values).quality
     return base
+
+
+def cleanup_cloud_objects(
+        *, provider: str, output_file: str,
+        settings_values: Mapping[str, object],
+        log_callback: LogCallback | None = None) -> dict[str, object]:
+    """Best-effort cleanup after the local result is fully validated and cached."""
+    if not _setting_enabled(
+            settings_values.get("subtitle_cloud_delete_after_download"), True
+    ):
+        return {"status": "cleanup_disabled"}
+
+    provider = normalize_provider(provider)
+    if provider not in CLOUD_PROVIDERS:
+        return {"status": "not_cloud"}
+    state_path = Path(f"{output_file}.cloud.json")
+    state = read_state(state_path)
+    if not state:
+        return {"status": "state_missing"}
+
+    object_keys = [str(state.get("input_object_key", "")).strip()]
+    if provider == ALIYUN_IMS_PROVIDER:
+        object_keys.append(str(state.get("output_object_key", "")).strip())
+    object_keys = [key for key in object_keys if key]
+    deleted = set(str(key) for key in state.get("deleted_object_keys", []) if key)
+    oss = OssConfig.from_mapping(settings_values)
+    failures = []
+    for object_key in object_keys:
+        if object_key in deleted:
+            continue
+        last_error = None
+        for attempt in range(1, 4):
+            try:
+                delete_object(oss, object_key)
+                deleted.add(object_key)
+                last_error = None
+                if log_callback:
+                    log_callback(f"已删除 OSS 临时对象：{object_key}")
+                break
+            except Exception as error:
+                last_error = error
+                if attempt < 3:
+                    if log_callback:
+                        log_callback(
+                            f"OSS 临时对象删除失败，正在重试 "
+                            f"({attempt}/3)：{object_key}"
+                        )
+                    time.sleep(0.5 * attempt)
+        if last_error is not None:
+            failures.append(str(last_error))
+            if log_callback:
+                log_callback(str(last_error))
+
+    state["deleted_object_keys"] = sorted(deleted)
+    state["cleanup_errors"] = failures
+    state["status"] = "cleanup_pending" if failures else "cleanup_complete"
+    write_state(state_path, state)
+    return {
+        "status": state["status"],
+        "deleted_object_keys": sorted(deleted),
+        "errors": failures,
+    }
 
 
 def _identity_token(identity: Mapping[str, object]) -> str:
@@ -166,6 +237,13 @@ def remove_burned_subtitles_cloud(
     output_key = f"{prefix}/output-clean.mp4"
     state_path = Path(f"{output_file}.cloud.json")
     state = matching_state(state_path, full_identity)
+    if (
+            state.get("status") == "cleanup_complete"
+            and not Path(output_file).is_file()
+    ):
+        # The local cache was removed after its OSS objects had been cleaned.
+        # A new run must submit a new task instead of querying a deleted output.
+        state = {}
     if not state:
         state = {
             "identity": full_identity,

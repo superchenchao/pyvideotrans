@@ -204,6 +204,9 @@ class WinAction(WinActionBase):
         self.main.voice_role.clear()
         self.main.current_rolelist = _role_list
         self.main.voice_role.addItems(self.main.current_rolelist)
+        self.main.voice_role.setCurrentText(
+            tools.default_voice_role(_role_list)
+        )
 
     # 语言选择变化时
     def set_voice_role(self, t):
@@ -236,6 +239,9 @@ class WinAction(WinActionBase):
         _role_list = tools.role_menu(tts_type, role_language)
         self.main.current_rolelist = _role_list
         self.main.voice_role.addItems(_role_list)
+        self.main.voice_role.setCurrentText(
+            tools.default_voice_role(_role_list, preferred=role)
+        )
 
     def _set_import_subtitle_status(self):
         button = getattr(self.main, 'import_sub', None)
@@ -474,6 +480,14 @@ class WinAction(WinActionBase):
     def check_start(self):
         # 已在执行中，则停止
         if app_cfg.current_status == 'ing':
+            task_window = app_cfg.child_forms.get('multifolder_tasks')
+            if (
+                    task_window is not None
+                    and task_window.scheduler
+                    and task_window.scheduler.isRunning()
+            ):
+                task_window._stop()
+                return
             self.update_status('stop')
             return
         self.main.startbtn.setDisabled(True)
@@ -484,6 +498,10 @@ class WinAction(WinActionBase):
         self.is_render = False
         # 新的人工校对是被动任务中心，不再启动旧的自动弹窗/倒计时流程。
         manual_review = self.main.review_countdown.isChecked()
+        target_languages = self.main.target_language.checkedTexts()
+        selected_folders = {
+            Path(video).resolve().parent.as_posix() for video in self.queue_mp4
+        }
         settings['manual_review'] = manual_review
         settings['countdown_sec'] = 0
         app_cfg.set_countdown(0)
@@ -501,19 +519,49 @@ class WinAction(WinActionBase):
         if self.check_proxy() is not True:
             self.main.startbtn.setDisabled(False)
             return
-        if manual_review:
-            window = self.main._open_multifolder_tasks()
-            window.add_videos(
+        if self.main.app_mode == "biaozhun" and len(target_languages) == 1:
+            target_code = translator.get_code(show_text=target_languages[0])
+            roles = tools.role_menu(self.main.tts_type.currentIndex(), target_code)
+            default_voice = tools.default_voice_role(
+                roles, preferred=self.main.voice_role.currentText()
+            )
+            self.main.voice_role.setCurrentText(default_voice)
+            if default_voice == "No":
+                self.main.startbtn.setDisabled(False)
+                QMessageBox.warning(
+                    self.main,
+                    "没有可用配音音色",
+                    "当前配音渠道没有该目标语言的可用音色，请更换配音渠道或完成音色配置。",
+                )
+                return
+        if manual_review or len(target_languages) > 1 or len(selected_folders) > 1:
+            if not target_languages:
+                self.main.startbtn.setDisabled(False)
+                QMessageBox.warning(
+                    self.main,
+                    "请选择目标语言",
+                    "请先在“目标语言”下拉框中至少勾选一种语言。",
+                )
+                return
+            window = self.main._get_multifolder_tasks_window()
+            added = window.add_videos(
                 self.queue_mp4,
                 target_language=self.main.target_language.currentText(),
+                target_languages=target_languages,
                 subtitle_files=self.imported_subtitle_map,
+                manual_review=manual_review,
+                replace=True,
             )
             self.main.startbtn.setDisabled(False)
-            QMessageBox.information(
-                self.main,
-                "已加入任务中心",
-                "人工校对已开启。任务已加入多文件夹任务中心，请确认语言和音色后点击“开始处理”。",
-            )
+            if not added:
+                return
+            if len(selected_folders) > 1:
+                window.show()
+                window.raise_()
+                window.activateWindow()
+            else:
+                window.hide()
+            QTimer.singleShot(0, window.start_processing)
             return
 
         # 先确定原始和目标语言
@@ -699,7 +747,8 @@ class WinAction(WinActionBase):
                 "确认使用云端字幕消除",
                 f"将使用“{provider_name}”处理本批视频。\n\n"
                 "程序会上传 30 FPS、固定 1080p、约 6000 kbps 的无音频视频；"
-                "云端服务可能产生费用，文件会保留在你配置的私有 OSS 中。\n\n"
+                "云端服务可能产生费用。启用自动清理时，只有本地结果完整校验后"
+                "才会删除 OSS 临时文件。\n\n"
                 "是否继续？",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,

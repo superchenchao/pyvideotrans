@@ -65,6 +65,17 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
         self.poll_seconds.setSuffix(" 秒")
         form.addRow("远端任务轮询间隔", self.poll_seconds)
 
+        self.delete_after_download = QtWidgets.QCheckBox(
+            "本地完整校验后删除 OSS 输入/输出临时文件"
+        )
+        self.delete_after_download.setChecked(
+            bool(settings.get("subtitle_cloud_delete_after_download", True))
+        )
+        self.delete_after_download.setToolTip(
+            "IMS 删除 OSS 输入和输出；Caca 只删除 OSS 输入，接口方结果不受控制"
+        )
+        form.addRow("自动清理 OSS", self.delete_after_download)
+
         self.caca_base_url = QtWidgets.QLineEdit(
             str(settings.get("subtitle_caca_base_url", ""))
         )
@@ -138,6 +149,9 @@ class CloudSubtitleRemovalSettingsDialog(QtWidgets.QDialog):
         settings["subtitle_oss_prefix"] = self.prefix.text().strip().strip("/")
         settings["subtitle_oss_signed_url_hours"] = self.signed_hours.value()
         settings["subtitle_cloud_poll_seconds"] = self.poll_seconds.value()
+        settings["subtitle_cloud_delete_after_download"] = (
+            self.delete_after_download.isChecked()
+        )
         settings["subtitle_caca_base_url"] = self.caca_base_url.text().strip().rstrip("/")
         settings["subtitle_caca_mode"] = self.caca_mode.currentData()
         settings["subtitle_caca_send_region"] = self.caca_send_region.isChecked()

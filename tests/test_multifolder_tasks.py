@@ -6,17 +6,146 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtWidgets import QApplication, QWidget
+from PySide6.QtWidgets import QApplication, QCheckBox, QComboBox, QWidget
 
+from videotrans.component.checkable_combo import CheckableComboBox
+import videotrans.component.multifolder_tasks as multifolder_tasks
 from videotrans.component.multifolder_tasks import (
     LanguageSpec,
     MultiFolderScheduler,
+    MultiFolderTaskWindow,
     ProjectSpec,
     ReviewCenter,
     ReviewRequest,
     _discover_videos,
 )
 from videotrans.configure.base import BaseCon
+
+
+def test_target_language_combo_supports_multiple_checked_languages():
+    app = QApplication.instance() or QApplication([])
+    combo = CheckableComboBox()
+    combo.addItems(["-", "English", "French", "German"])
+
+    combo.setCheckedTexts(["English", "French", "German"])
+
+    assert combo.checkedTexts() == ["English", "French", "German"]
+    assert combo.currentText() == "English"
+    assert combo.displayText() == "English、French +1"
+    combo.setCurrentText("French")
+    assert combo.checkedTexts() == ["French"]
+    assert combo.displayText() == "French"
+    app.processEvents()
+
+
+def test_default_voice_enables_dubbing_when_channel_has_a_real_voice():
+    assert multifolder_tasks.tools.default_voice_role(
+        ["No", "Auto Voice", "Second Voice"]
+    ) == "Auto Voice"
+    assert multifolder_tasks.tools.default_voice_role(
+        ["No", "Auto Voice", "Second Voice"], preferred="Second Voice"
+    ) == "Second Voice"
+    assert multifolder_tasks.tools.default_voice_role(["No", "", "-"]) == "No"
+
+
+def test_imported_multilanguage_project_is_expanded_and_visible(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(multifolder_tasks, "STATE_FILE", tmp_path / "tasks.json")
+    monkeypatch.setattr(
+        multifolder_tasks.tools,
+        "role_menu",
+        lambda *_args: ["No", "Auto Voice"],
+    )
+
+    main = QWidget()
+    main.review_countdown = QCheckBox()
+    main.review_countdown.setChecked(True)
+    main.tts_type = QComboBox()
+    main.tts_type.addItem("Azure-TTS")
+    main.voice_role = QComboBox()
+    main.voice_role.addItem("No")
+    main.target_dir = ""
+    video = tmp_path / "剧集" / "01.mp4"
+    video.parent.mkdir()
+    video.write_bytes(b"video")
+
+    window = MultiFolderTaskWindow(main)
+    assert window.add_videos(
+        [video.as_posix()],
+        target_language="英语",
+        target_languages=["英语", "法语"],
+        manual_review=True,
+        replace=True,
+    ) is True
+
+    parent = window.tree.topLevelItem(0)
+    assert parent.isExpanded() is True
+    assert [parent.child(index).text(0) for index in range(parent.childCount())] == [
+        "原文识别",
+        "英语",
+        "法语",
+    ]
+    assert [language.voice for language in window.projects[0].languages] == [
+        "Auto Voice",
+        "Auto Voice",
+    ]
+    assert window.summary.text() == (
+        "已加入 1 个视频；目标语言：英语、法语。"
+        "即将自动开始处理。"
+    )
+    window.close()
+    main.close()
+    app.processEvents()
+
+
+def test_each_folder_gets_its_own_subtitle_area_selection(tmp_path, monkeypatch):
+    from videotrans.component import subtitle_removal
+
+    projects = []
+    for index, name in enumerate(("第一部剧", "第二部剧"), start=1):
+        folder = tmp_path / name
+        folder.mkdir()
+        video = folder / "01.mp4"
+        video.write_bytes(b"video")
+        projects.append(ProjectSpec(f"p{index}", folder.as_posix(), [video.as_posix()]))
+
+    selections = []
+
+    def select_area(**kwargs):
+        selections.append(kwargs)
+        return {
+            "skip_ocr": False,
+            "normalized_rect": [0.1, 0.7, 0.8, 0.1],
+            "reference_aspect_ratio": 9 / 16,
+        }
+
+    monkeypatch.setattr(subtitle_removal, "select_batch_subtitle_area", select_area)
+    monkeypatch.setattr(multifolder_tasks.settings, "save", lambda: None)
+    monkeypatch.setitem(multifolder_tasks.settings, "subtitle_removal_last_rect", "")
+    monkeypatch.setitem(multifolder_tasks.settings, "subtitle_removal_last_aspect_ratio", 0.0)
+    fake_window = SimpleNamespace(
+        main=None,
+        _save_projects=lambda: None,
+    )
+
+    assert MultiFolderTaskWindow._prepare_subtitle_removal(
+        fake_window,
+        projects,
+        {
+            "remove_burned_subtitles": False,
+            "subtitle_removal_provider": "local",
+            "burned_subtitle_ocr": True,
+            "recogn_type": multifolder_tasks.recognition.FASTER_WHISPER,
+            "source_language_code": "zh-cn",
+        },
+    ) is True
+
+    assert [call["title"] for call in selections] == [
+        "框选字幕区域（1/2）· 第一部剧",
+        "框选字幕区域（2/2）· 第二部剧",
+    ]
+    assert all(project.burned_subtitle_ocr for project in projects)
+    assert all(project.subtitle_removal_rect == [0.1, 0.7, 0.8, 0.1] for project in projects)
 
 
 def test_manual_review_gate_waits_until_explicit_approval():
@@ -39,6 +168,32 @@ def test_manual_review_gate_waits_until_explicit_approval():
     scheduler.approve("review-1")
     thread.join(timeout=1)
     assert finished.is_set() is True
+
+
+def test_skipping_language_releases_only_current_stage_for_all_episodes():
+    scheduler = MultiFolderScheduler([], {})
+    project = ProjectSpec("p1", "C:/series", [])
+    language = LanguageSpec("English", "en")
+    other_language = LanguageSpec("French", "fr")
+    requests = [
+        ReviewRequest("r1", "p1", "series", "01.mp4", "en", "English", "target", None),
+        ReviewRequest("r2", "p1", "series", "02.mp4", "en", "English", "target", None),
+        ReviewRequest("r3", "p1", "series", "01.mp4", "fr", "French", "target", None),
+    ]
+    scheduler._pending = {request.request_id: request for request in requests}
+
+    scheduler.skip_language_stage_reviews("p1", "en", "target")
+
+    assert set(scheduler._pending) == {"r3"}
+    assert scheduler._request_review(
+        project, None, "target", "03.mp4", language
+    ) is False
+    assert scheduler._request_review(
+        project, None, "dubbing", "03.mp4", language
+    ) is True
+    assert scheduler._request_review(
+        project, None, "target", "03.mp4", other_language
+    ) is True
 
 
 def test_task_signal_handler_does_not_use_global_queue():
@@ -146,7 +301,11 @@ def test_completion_cache_is_invalidated_when_language_config_changes(tmp_path):
 def test_review_request_does_not_open_window_automatically():
     app = QApplication.instance() or QApplication([])
     parent = QWidget()
-    center = ReviewCenter(parent, lambda _request_id: None)
+    center = ReviewCenter(
+        parent,
+        lambda _request_id: None,
+        lambda _project_id, _language_code, _stage: None,
+    )
     request = ReviewRequest(
         request_id="r1",
         project_id="p1",

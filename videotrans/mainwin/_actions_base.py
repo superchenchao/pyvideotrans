@@ -143,13 +143,13 @@ class WinActionBase:
         if defaulelang == 'zh':
             self.main.proxy.show()
 
-        # 配音角色
+        # 配音渠道仍由用户选择；具体音色改为内部自动默认，并在任务中心按语言调整。
         self.main.tts_text.show()
         self.main.tts_type.show()
         self.main.tts_type.setDisabled(False)
-        self.main.label_4.show()
-        self.main.voice_role.show()
-        self.main.listen_btn.show()
+        self.main.label_4.hide()
+        self.main.voice_role.hide()
+        self.main.listen_btn.hide()
         self.main.volume_label.show()
         self.main.volume_rate.show()
         self.main.volume_rate.setDisabled(False)

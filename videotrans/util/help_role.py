@@ -449,6 +449,16 @@ def get_clone_role(set_p=False):
     return False
 
 
+# 从渠道返回的角色中选择默认配音音色。`No` 只表示关闭配音，不能作为自动默认值。
+def default_voice_role(roles, preferred=None) -> str:
+    normalized = [str(role).strip() for role in (roles or [])]
+    usable = [role for role in normalized if role not in {'', '-', 'No'}]
+    preferred = str(preferred or '').strip()
+    if preferred in usable:
+        return preferred
+    return usable[0] if usable else 'No'
+
+
 # 根据渠道返回角色列表 供下拉菜单使用
 def role_menu(tts_type, langcode=None) -> List:
     from videotrans import tts

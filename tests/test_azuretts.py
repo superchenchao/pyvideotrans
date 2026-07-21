@@ -1,7 +1,107 @@
+import re
+import xml.etree.ElementTree as ET
+
 import pytest
 from tenacity import RetryError
 
 from videotrans.tts import _azuretts
+
+
+SSML_NAMESPACE = "http://www.w3.org/2001/10/synthesis"
+
+
+def test_build_azure_ssml_is_compact_and_preserves_configuration():
+    text = 'Hello  世界, "Azure"!'
+    ssml = _azuretts.build_azure_ssml(
+        language="zh-CN",
+        voice_name="zh-CN-YunjianNeural",
+        rate="+18%",
+        pitch="-6Hz",
+        volume="+9%",
+        text=text,
+    )
+
+    assert "\n" not in ssml
+    assert re.search(r">\s+<", ssml) is None
+
+    root = ET.fromstring(ssml)
+    voice = root.find(f"{{{SSML_NAMESPACE}}}voice")
+    prosodies = root.findall(f".//{{{SSML_NAMESPACE}}}prosody")
+
+    assert root.attrib["{http://www.w3.org/XML/1998/namespace}lang"] == "zh-CN"
+    assert voice is not None
+    assert voice.attrib["name"] == "zh-CN-YunjianNeural"
+    assert len(prosodies) == 2
+    assert [prosody.attrib for prosody in prosodies] == [
+        {"rate": "+18%", "pitch": "-6Hz", "volume": "+9%"},
+        {"rate": "+18%", "pitch": "-6Hz", "volume": "+9%"},
+    ]
+    assert prosodies[1].text == text
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "'single' and \"double\" quotes",
+        "A & B < C > D",
+        "中文  and English",
+        "第一行  保留空格\nSecond line  keeps spaces",
+    ],
+)
+def test_build_azure_ssml_preserves_subtitle_text_semantics(text):
+    ssml = _azuretts.build_azure_ssml(
+        language="en-US",
+        voice_name="en-US-TestNeural",
+        rate="+0%",
+        pitch="+0Hz",
+        volume="+0%",
+        text=text,
+    )
+
+    root = ET.fromstring(ssml)
+    prosodies = root.findall(f".//{{{SSML_NAMESPACE}}}prosody")
+
+    assert (prosodies[1].text or "") == text
+    assert root.text is None
+    assert root[0].text is None
+    assert prosodies[0].text is None
+
+
+def test_build_azure_ssml_does_not_double_escape_existing_xml_entities():
+    ssml = _azuretts.build_azure_ssml(
+        language="en-US",
+        voice_name="en-US-TestNeural",
+        rate="+0%",
+        pitch="+0Hz",
+        volume="+0%",
+        text=(
+            "A &amp; B &lt; C &gt; D &quot;Q&quot; "
+            "&apos;S&apos; &#33; &#x3F;"
+        ),
+    )
+
+    assert "&amp;amp;" not in ssml
+    assert "&amp;lt;" not in ssml
+    assert "&amp;gt;" not in ssml
+    root = ET.fromstring(ssml)
+    prosodies = root.findall(f".//{{{SSML_NAMESPACE}}}prosody")
+    assert prosodies[1].text == 'A & B < C > D "Q" \'S\' ! ?'
+
+
+def test_build_azure_ssml_keeps_invalid_numeric_entity_as_literal_text():
+    ssml = _azuretts.build_azure_ssml(
+        language="en-US",
+        voice_name="en-US-TestNeural",
+        rate="+0%",
+        pitch="+0Hz",
+        volume="+0%",
+        text="Invalid XML entities: &#0; and &#xD800;",
+    )
+
+    root = ET.fromstring(ssml)
+    prosodies = root.findall(f".//{{{SSML_NAMESPACE}}}prosody")
+    assert prosodies[1].text == "Invalid XML entities: &#0; and &#xD800;"
 
 
 def test_create_speech_config_uses_region(monkeypatch):

@@ -245,3 +245,14 @@ def download_object(
         raise RuntimeError("OSS 结果下载后大小校验失败")
     part_path.replace(destination)
     return destination
+
+
+def delete_object(config: OssConfig, object_key: str) -> None:
+    """Delete one verified temporary object; callers decide retry policy."""
+    try:
+        result = create_bucket(config).delete_object(object_key)
+    except Exception as error:
+        raise RuntimeError(f"OSS 临时对象删除失败：{object_key}：{error}") from error
+    status = int(getattr(result, "status", 204) or 204)
+    if status not in {200, 202, 204}:
+        raise RuntimeError(f"OSS 临时对象删除失败：{object_key}：HTTP {status}")

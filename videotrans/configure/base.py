@@ -226,7 +226,9 @@ class BaseCon:
         device_index = 0
         status_dict={"is_end":False}
         try:
-            Path(logs_file).touch()
+            logs_path = Path(logs_file)
+            logs_path.parent.mkdir(parents=True, exist_ok=True)
+            logs_path.touch()
             threading.Thread(target=self._signal_of_process, args=(logs_file,status_dict), daemon=True).start()
             # 再次判断cuda是否有效，防止预先获取失败
             if is_cuda:

@@ -39,6 +39,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         super().__init__(parent)
         self.resize(width, height)
         self.setupUi(self)
+        # 配音默认开启并自动选择音色；主界面不再展示单语言音色控件。
+        self.label_4.hide()
+        self.voice_role.hide()
+        self.listen_btn.hide()
 
         self.worker_threads = []
         self.width = width
@@ -100,6 +104,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         _tts_type = int(params.get('tts_type', 0))
         _recogn_type = int(params.get('recogn_type', 0))
         _target_language = params.get('target_language')
+        _target_languages = settings.get('target_languages', [])
+        if not isinstance(_target_languages, list):
+            _target_languages = []
+        _target_languages = [
+            name for name in _target_languages if name in self.languagename
+        ]
+        if _target_languages:
+            self.target_language.setCheckedTexts(_target_languages)
+            _target_language = self.target_language.currentText()
         _source_language = params.get('source_language')
         _subtitle_type = int(params.get('subtitle_type', 0))
         _output_srt = int(params.get('output_srt', 0))
@@ -183,10 +196,12 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.current_rolelist = _rolelist
         logger.debug(f'上次缓存的角色:{_role},字幕嵌入类型:{_subtitle_type},发音语言:{_source_language},目标语言:{_target_language}，目标语言代码:{_langcode},模型:{_model_name},TTS渠道[{_tts_type}]')
         if _langcode:
-            # 如果存在上次缓存角色
-            self.target_language.setCurrentText(_target_language)
-            if _role in _rolelist:
-                self.voice_role.setCurrentText(_role)
+            # 角色控件仅作为内部兼容值；默认选择真实音色以开启配音。
+            if not _target_languages:
+                self.target_language.setCurrentText(_target_language)
+            self.voice_role.setCurrentText(
+                tools.default_voice_role(_rolelist, preferred=_role)
+            )
         self._bind_signal()
 
     def _bind_signal(self):
@@ -207,6 +222,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.subtitle_type.currentIndexChanged.connect(self.win_action.set_subtitle_type)
         self.voice_role.currentTextChanged.connect(self.win_action.show_listen_btn)
         self.target_language.currentTextChanged.connect(self.win_action.set_voice_role)
+        self.target_language.checkedTextsChanged.connect(self._save_target_languages)
 
         self.proxy.textChanged.connect(self.win_action.change_proxy)
         import_sub_menu = QMenu(self.import_sub)
@@ -350,7 +366,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         # 自动根据 目标语言+配音渠道 更新配音角色列表
         self.win_action.tts_type_change(self.tts_type.currentIndex())
         _role = params.get('voice_role') or 'No'
-        if _role in self.current_rolelist:
+        if _role not in ('', '-', 'No') and _role in self.current_rolelist:
             self.voice_role.setCurrentText(_role)
 
         # 预先加载 配音/语音转录/字幕翻译窗口 等常用功能面板，
@@ -437,12 +453,27 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         settings['manual_review'] = self.review_countdown.isChecked()
         settings.save()
 
-    def _open_multifolder_tasks(self):
+    def _save_target_languages(self, languages):
+        settings['target_languages'] = list(languages)
+        settings.save()
+
+    def _get_multifolder_tasks_window(self):
         from videotrans.component.multifolder_tasks import MultiFolderTaskWindow
         window = app_cfg.child_forms.get('multifolder_tasks')
         if window is None:
             window = MultiFolderTaskWindow(self)
             app_cfg.child_forms['multifolder_tasks'] = window
+        return window
+
+    def _open_multifolder_tasks(self):
+        window = self._get_multifolder_tasks_window()
+        pending_projects = {
+            request.project_id
+            for request in window.review_center.requests.values()
+        }
+        if len(pending_projects) == 1:
+            window.review_center.open_for(next(iter(pending_projects)), "*")
+            return window
         window.show()
         window.raise_()
         window.activateWindow()

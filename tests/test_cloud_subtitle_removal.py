@@ -8,6 +8,7 @@ from videotrans.subtitle_removal import cloud
 from videotrans.subtitle_removal.aliyun_ims import ImsClient, ImsConfig, classify_status as classify_ims
 from videotrans.subtitle_removal.caca_api import CacaClient, CacaConfig, classify_status as classify_caca
 from videotrans.subtitle_removal.cloud_storage import OssConfig
+from videotrans.subtitle_removal.cloud_state import write_state
 from videotrans.task.trans_create import validate_cloud_clean_video
 from videotrans.task.trans_create import TransCreate
 
@@ -162,6 +163,78 @@ def test_unknown_submit_is_not_retried(tmp_path, monkeypatch):
     assert state["status"] == "submit_unknown"
 
 
+@pytest.mark.parametrize(
+    ("provider", "expected_keys"),
+    [
+        ("caca_link", ["prefix/input.mp4"]),
+        ("aliyun_ims", ["prefix/input.mp4", "prefix/output.mp4"]),
+    ],
+)
+def test_cleanup_deletes_only_owned_oss_objects(
+        tmp_path, monkeypatch, provider, expected_keys):
+    output = tmp_path / "clean.mp4"
+    output.write_bytes(b"verified-local-result")
+    write_state(
+        f"{output}.cloud.json",
+        {
+            "status": "downloaded",
+            "input_object_key": "prefix/input.mp4",
+            "output_object_key": "prefix/output.mp4",
+        },
+    )
+    deleted = []
+    monkeypatch.setattr(cloud, "delete_object", lambda config, key: deleted.append(key))
+
+    result = cloud.cleanup_cloud_objects(
+        provider=provider,
+        output_file=output.as_posix(),
+        settings_values={
+            "subtitle_cloud_delete_after_download": True,
+            "subtitle_oss_region": "cn-shanghai",
+            "subtitle_oss_bucket": "bucket",
+            "subtitle_oss_endpoint": "https://oss-cn-shanghai.aliyuncs.com",
+        },
+    )
+
+    assert deleted == expected_keys
+    assert result["status"] == "cleanup_complete"
+    state = json.loads(Path(f"{output}.cloud.json").read_text(encoding="utf-8"))
+    assert state["deleted_object_keys"] == expected_keys
+
+
+def test_cleanup_failure_keeps_local_result_and_records_retry(tmp_path, monkeypatch):
+    output = tmp_path / "clean.mp4"
+    output.write_bytes(b"verified-local-result")
+    write_state(
+        f"{output}.cloud.json",
+        {"status": "downloaded", "input_object_key": "prefix/input.mp4"},
+    )
+    attempts = []
+
+    def fail_delete(*args):
+        attempts.append(args)
+        raise RuntimeError("denied")
+
+    monkeypatch.setattr(cloud, "delete_object", fail_delete)
+    monkeypatch.setattr(cloud.time, "sleep", lambda _seconds: None)
+
+    result = cloud.cleanup_cloud_objects(
+        provider="caca_link",
+        output_file=output.as_posix(),
+        settings_values={
+            "subtitle_cloud_delete_after_download": True,
+            "subtitle_oss_region": "cn-shanghai",
+            "subtitle_oss_bucket": "bucket",
+            "subtitle_oss_endpoint": "https://oss-cn-shanghai.aliyuncs.com",
+        },
+    )
+
+    assert output.read_bytes() == b"verified-local-result"
+    assert len(attempts) == 3
+    assert result["status"] == "cleanup_pending"
+    assert "denied" in result["errors"][0]
+
+
 def test_cloud_clean_result_checks_metadata_and_full_decode(tmp_path, monkeypatch):
     result = tmp_path / "clean.mp4"
     result.write_bytes(b"video")
@@ -233,6 +306,7 @@ def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkey
     task.signal = lambda **kwargs: None
     task._exit = lambda: False
     captured = {}
+    cleanup_calls = []
 
     def fake_cloud(**kwargs):
         captured.update(kwargs)
@@ -250,6 +324,13 @@ def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkey
         "videotrans.task.trans_create.validate_cloud_clean_video",
         lambda *args, **kwargs: {},
     )
+    monkeypatch.setattr(
+        subtitle_removal,
+        "cleanup_cloud_objects",
+        lambda **kwargs: cleanup_calls.append(
+            Path(f"{kwargs['output_file']}.json").is_file()
+        ) or {"status": "cleanup_complete"},
+    )
 
     task._prepare_clean_visual_source()
 
@@ -262,3 +343,4 @@ def test_transcreate_routes_cloud_provider_without_local_engine(tmp_path, monkey
     )
     assert metadata["subtitle_removal_provider"] == "caca_link"
     assert metadata["working_video"]["fps"] == 30
+    assert cleanup_calls == [True]

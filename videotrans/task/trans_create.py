@@ -1169,6 +1169,7 @@ class TransCreate(BaseTask):
 
         from videotrans.subtitle_removal import (
             CLOUD_PROVIDERS,
+            cleanup_cloud_objects,
             cloud_strategy_key,
             find_subtitle_remover_engine,
             normalize_provider,
@@ -1257,6 +1258,18 @@ class TransCreate(BaseTask):
                             full_decode=False,
                         )
                     self.visual_source = clean_source
+                    if is_cloud:
+                        try:
+                            cleanup_cloud_objects(
+                                provider=provider,
+                                output_file=clean_source,
+                                settings_values=settings.to_dict(),
+                                log_callback=lambda message: logger.info(
+                                    "[subtitle-removal-cloud] %s", message
+                                ),
+                            )
+                        except Exception as error:
+                            logger.warning("OSS 临时文件清理将在下次重试：%s", error)
                     logger.info(f"复用已消除原字幕的视频：{clean_source}")
                     return
                 except Exception as error:
@@ -1323,6 +1336,18 @@ class TransCreate(BaseTask):
                     json.dumps(expected_metadata, ensure_ascii=False, indent=2),
                     encoding="utf-8",
                 )
+                if is_cloud:
+                    try:
+                        cleanup_cloud_objects(
+                            provider=provider,
+                            output_file=clean_source,
+                            settings_values=settings.to_dict(),
+                            log_callback=lambda message: logger.info(
+                                "[subtitle-removal-cloud] %s", message
+                            ),
+                        )
+                    except Exception as error:
+                        logger.warning("OSS 临时文件清理将在下次重试：%s", error)
         except Exception as error:
             raise VideoTransError(f"消除原视频字幕失败：{error}") from error
 

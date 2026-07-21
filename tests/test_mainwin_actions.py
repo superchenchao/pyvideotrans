@@ -7,6 +7,98 @@ pure logic in isolation without instantiating the class.
 import re
 
 
+def test_single_folder_manual_review_starts_without_showing_task_center(
+        tmp_path, monkeypatch):
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtWidgets import QApplication
+    from videotrans.configure.config import app_cfg
+    from videotrans.mainwin._actions import WinAction
+    from videotrans.util import tools
+
+    app = QApplication.instance() or QApplication([])
+    video = tmp_path / "一部剧" / "01.mp4"
+    video.parent.mkdir()
+    video.write_bytes(b"video")
+
+    class Value:
+        def __init__(self, value):
+            self.value = value
+
+        def isChecked(self):
+            return bool(self.value)
+
+        def currentIndex(self):
+            return int(self.value)
+
+        def currentText(self):
+            return str(self.value)
+
+        def setCurrentText(self, value):
+            self.value = value
+
+        def checkedTexts(self):
+            return ["英语"]
+
+    class Button:
+        def setDisabled(self, _disabled):
+            pass
+
+    class TaskWindow:
+        def __init__(self):
+            self.shown = False
+            self.hidden = False
+            self.started = False
+
+        def add_videos(self, *_args, **_kwargs):
+            return True
+
+        def show(self):
+            self.shown = True
+
+        def hide(self):
+            self.hidden = True
+
+        def raise_(self):
+            pass
+
+        def activateWindow(self):
+            pass
+
+        def start_processing(self):
+            self.started = True
+
+    task_window = TaskWindow()
+
+    class Main:
+        startbtn = Button()
+        review_countdown = Value(True)
+        target_language = Value("英语")
+        tts_type = Value(0)
+        voice_role = Value("Auto Voice")
+        app_mode = "biaozhun"
+
+        @staticmethod
+        def _get_multifolder_tasks_window():
+            return task_window
+
+    action = WinAction(Main())
+    action.queue_mp4 = [video.as_posix()]
+    action.imported_subtitle_map = {}
+    action._refresh_imported_subtitle_matches = lambda **_kwargs: True
+    action.check_proxy = lambda: True
+    monkeypatch.setattr(tools, "role_menu", lambda *_args: ["No", "Auto Voice"])
+    app_cfg.current_status = "end"
+
+    action.check_start()
+    app.processEvents()
+
+    assert task_window.hidden is True
+    assert task_window.shown is False
+    assert task_window.started is True
+
+
 def test_saved_subtitle_region_does_not_skip_batch_confirmation():
     from videotrans import recognition
     from videotrans.mainwin._actions import _should_prompt_for_ocr_area

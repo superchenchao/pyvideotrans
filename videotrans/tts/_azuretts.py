@@ -1,10 +1,12 @@
 import logging
+import re
 import time
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Union, List, Dict
+from xml.sax.saxutils import escape
 import azure.cognitiveservices.speech as speechsdk
 from azure.core.exceptions import ResourceExistsError, ClientAuthenticationError, ResourceNotFoundError
 from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_not_exception_type, before_log, after_log
@@ -12,6 +14,53 @@ from videotrans.configure.config import params, logger, settings
 from videotrans.configure.excepts import NO_RETRY_EXCEPT, StopRetry, StopTask
 from videotrans.tts._base import BaseTTS
 from videotrans.util import tools
+
+
+_ESCAPED_XML_ENTITY_RE = re.compile(
+    r"&amp;(?P<entity>(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)"
+)
+
+
+def _restore_valid_xml_entity(match: re.Match) -> str:
+    entity = match.group("entity")
+    if not entity.startswith("#"):
+        return f"&{entity}"
+
+    base = 16 if entity.startswith("#x") else 10
+    digits = entity[2:-1] if base == 16 else entity[1:-1]
+    codepoint = int(digits, base)
+    valid = (
+        codepoint in {0x9, 0xA, 0xD}
+        or 0x20 <= codepoint <= 0xD7FF
+        or 0xE000 <= codepoint <= 0xFFFD
+        or 0x10000 <= codepoint <= 0x10FFFF
+    )
+    return f"&{entity}" if valid else match.group(0)
+
+
+def escape_azure_ssml_text(text: str) -> str:
+    """Escape subtitle text without double-escaping existing XML entities."""
+    escaped = escape(text)
+    return _ESCAPED_XML_ENTITY_RE.sub(_restore_valid_xml_entity, escaped)
+
+
+def build_azure_ssml(
+        *, language: str, voice_name: str, rate: str, pitch: str,
+        volume: str, text: str) -> str:
+    """Build compact SSML while preserving the existing nested prosody tags."""
+    escaped_text = escape_azure_ssml_text(text)
+    inner_prosody = (
+        f"<prosody rate='{rate}' pitch='{pitch}' volume='{volume}'>"
+        f"{escaped_text}</prosody>"
+    )
+    return (
+        f"<speak version='1.0' xml:lang='{language}' "
+        "xmlns='http://www.w3.org/2001/10/synthesis' "
+        "xmlns:mstts='http://www.w3.org/2001/mstts'>"
+        f"<voice name='{voice_name}'>"
+        f'<prosody rate="{rate}" pitch=\'{pitch}\' volume=\'{volume}\'>'
+        f"{inner_prosody}</prosody></voice></speak>"
+    )
 
 
 def create_speech_config(subscription: str, region_or_endpoint: str):
@@ -210,17 +259,15 @@ class AzureTTS(BaseTTS):
 
             audio_config = speechsdk.audio.AudioOutputConfig(use_default_speaker=True, filename=filename)
             speech_synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
-            text_xml = f"<prosody rate='{self.rate}' pitch='{self.pitch}' volume='{self.volume}'>{data_item['text']}</prosody>"
             voice_name = resolve_voice_name(self.language, data_item['role'])
-            ssml = """<speak version='1.0' xml:lang='{}' xmlns='http://www.w3.org/2001/10/synthesis' xmlns:mstts='http://www.w3.org/2001/mstts'>
-                                    <voice name='{}'>
-                                        <prosody rate="{}" pitch='{}'  volume='{}'>
-                                        {}
-                                        </prosody>
-                                    </voice>
-                                    </speak>""".format(self.language, voice_name, self.rate, self.pitch,
-                                                       self.volume,
-                                                       text_xml)
+            ssml = build_azure_ssml(
+                language=self.language,
+                voice_name=voice_name,
+                rate=self.rate,
+                pitch=self.pitch,
+                volume=self.volume,
+                text=data_item['text'],
+            )
             logger.debug(f'{ssml=}')
             speech_synthesis_result = speech_synthesizer.speak_ssml_async(ssml).get()
             if speech_synthesis_result.reason == speechsdk.ResultReason.SynthesizingAudioCompleted:

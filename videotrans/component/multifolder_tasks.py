@@ -46,6 +46,12 @@ from videotrans.util.subtitle_import import normalized_path_key
 
 
 STATE_FILE = Path(ROOT_DIR, "videotrans", "multifolder_tasks.json")
+REVIEW_STAGE_NAMES = {
+    "source": "原文字幕",
+    "target": "字幕 / 角色",
+    "dubbing": "配音",
+    "recogn2": "二次识别",
+}
 
 
 @dataclass
@@ -53,6 +59,7 @@ class LanguageSpec:
     name: str
     code: str
     voice: str = "No"
+    voice_auto_initialized: bool = False
 
 
 @dataclass
@@ -62,6 +69,7 @@ class ProjectSpec:
     videos: List[str]
     manual_review: bool = True
     languages: List[LanguageSpec] = field(default_factory=list)
+    burned_subtitle_ocr: bool = False
     remove_burned_subtitles: bool = False
     subtitle_removal_rect: Optional[list] = None
     subtitle_removal_aspect_ratio: float = 0.0
@@ -82,14 +90,8 @@ class ReviewRequest:
 
     @property
     def title(self) -> str:
-        stage_names = {
-            "source": "原文字幕",
-            "target": "译文 / 角色",
-            "dubbing": "配音",
-            "recogn2": "二次识别",
-        }
         language = f" · {self.language_name}" if self.language_name else ""
-        return f"{Path(self.episode_path).name}{language} · {stage_names[self.stage]}"
+        return f"{Path(self.episode_path).name}{language} · {REVIEW_STAGE_NAMES[self.stage]}"
 
 
 def _atomic_write_json(path: Path, value) -> None:
@@ -146,6 +148,7 @@ class MultiFolderScheduler(QThread):
         self._pending: Dict[str, ReviewRequest] = {}
         self._cancelled = False
         self._active_uuids = set()
+        self._skip_review_stages = set()
 
     def approve(self, request_id: str) -> None:
         with self._condition:
@@ -160,6 +163,21 @@ class MultiFolderScheduler(QThread):
             self._pending.clear()
             self._condition.notify_all()
 
+    def skip_language_stage_reviews(
+            self, project_id: str, language_code: str, stage: str,
+    ) -> None:
+        """Skip all episodes for one language, only at the current review stage."""
+        with self._condition:
+            self._skip_review_stages.add((project_id, language_code, stage))
+            for request_id, request in list(self._pending.items()):
+                if (
+                        request.project_id == project_id
+                        and request.language_code == language_code
+                        and request.stage == stage
+                ):
+                    self._pending.pop(request_id, None)
+            self._condition.notify_all()
+
     def _emit_status(self, project_id: str, key: str, text: str) -> None:
         self.status_changed.emit(project_id, key, text)
 
@@ -171,7 +189,11 @@ class MultiFolderScheduler(QThread):
     def _request_review(
             self, project: ProjectSpec, task: TransCreate, stage: str,
             episode_path: str, language: Optional[LanguageSpec] = None,
-    ) -> None:
+    ) -> bool:
+        if language and (
+                project.project_id, language.code, stage
+        ) in self._skip_review_stages:
+            return False
         request = ReviewRequest(
             request_id=uuid_lib.uuid4().hex,
             project_id=project.project_id,
@@ -185,6 +207,7 @@ class MultiFolderScheduler(QThread):
         with self._condition:
             self._pending[request.request_id] = request
         self.review_ready.emit(request)
+        return True
 
     def _wait_for_reviews(self) -> None:
         with self._condition:
@@ -210,6 +233,7 @@ class MultiFolderScheduler(QThread):
             "only_out_mp4": False,
             "cache_folder": (work_root / "shared-cache" / episode_key).as_posix(),
             "series_video_paths": project.videos,
+            "burned_subtitle_ocr": project.burned_subtitle_ocr,
             "remove_burned_subtitles": project.remove_burned_subtitles,
             "subtitle_removal_rect": project.subtitle_removal_rect,
             "subtitle_removal_aspect_ratio": project.subtitle_removal_aspect_ratio,
@@ -376,8 +400,9 @@ class MultiFolderScheduler(QThread):
                         self._emit_status(project.project_id, "_source", f"识别中 · {Path(video).name}")
                         task = self._source_task(project, video, work_root)
                         source_tasks[(project.project_id, video)] = task
-                        if project.manual_review:
-                            self._request_review(project, task, "source", video)
+                        if project.manual_review and self._request_review(
+                                project, task, "source", video
+                        ):
                             self._emit_status(project.project_id, "_source", "待人工校对")
                     except Exception as error:
                         failures += 1
@@ -407,8 +432,9 @@ class MultiFolderScheduler(QThread):
                                 output_root, work_root,
                             )
                             language_tasks[(project.project_id, video, language.code)] = task
-                            if project.manual_review:
-                                self._request_review(project, task, "target", video, language)
+                            if project.manual_review and self._request_review(
+                                    project, task, "target", video, language
+                            ):
                                 self._emit_status(project.project_id, language.code, "待字幕 / 角色校对")
                         except Exception as error:
                             failures += 1
@@ -434,8 +460,12 @@ class MultiFolderScheduler(QThread):
                             Path(task.cfg.cache_folder, "queue_tts.json").write_text(
                                 json.dumps(task.queue_tts, ensure_ascii=False), encoding="utf-8"
                             )
-                            if project.manual_review and not task.ignore_align:
-                                self._request_review(project, task, "dubbing", video, language)
+                            if (
+                                    project.manual_review and not task.ignore_align
+                                    and self._request_review(
+                                        project, task, "dubbing", video, language
+                                    )
+                            ):
                                 self._emit_status(project.project_id, language.code, "待配音校对")
                         except Exception as error:
                             failures += 1
@@ -456,8 +486,12 @@ class MultiFolderScheduler(QThread):
                             self._emit_status(project.project_id, language.code, f"对齐中 · {Path(video).name}")
                             task.align()
                             task.recogn2pass()
-                            if project.manual_review and task.should_recogn2:
-                                self._request_review(project, task, "recogn2", video, language)
+                            if (
+                                    project.manual_review and task.should_recogn2
+                                    and self._request_review(
+                                        project, task, "recogn2", video, language
+                                    )
+                            ):
                                 self._emit_status(project.project_id, language.code, "待二次识别校对")
                         except Exception as error:
                             failures += 1
@@ -513,10 +547,11 @@ class MultiFolderScheduler(QThread):
 
 
 class ReviewCenter(QDialog):
-    def __init__(self, parent, approve_callback):
+    def __init__(self, parent, approve_callback, skip_language_callback):
         super().__init__(parent)
         self.main = parent
         self.approve_callback = approve_callback
+        self.skip_language_callback = skip_language_callback
         self.requests: Dict[str, ReviewRequest] = {}
         self.current_request_id: Optional[str] = None
         self.current_editor = None
@@ -526,8 +561,15 @@ class ReviewCenter(QDialog):
         self.resize(1250, 800)
 
         layout = QVBoxLayout(self)
+        top_bar = QHBoxLayout()
         self.info = QLabel("选择左侧待校对视频。保存并继续即代表通过；没有倒计时。")
-        layout.addWidget(self.info)
+        self.skip_language_button = QPushButton("本语种当前阶段全部跳过")
+        self.skip_language_button.setVisible(False)
+        self.skip_language_button.clicked.connect(self._skip_current_language)
+        top_bar.addWidget(self.info)
+        top_bar.addStretch()
+        top_bar.addWidget(self.skip_language_button)
+        layout.addLayout(top_bar)
         splitter = QSplitter()
         self.list_widget = QListWidget()
         self.list_widget.setMinimumWidth(300)
@@ -617,6 +659,7 @@ class ReviewCenter(QDialog):
             self.current_editor.deleteLater()
         self.current_editor = None
         self.current_request_id = None
+        self.skip_language_button.hide()
         self.placeholder.show()
 
     def _load_editor(self, request: ReviewRequest) -> None:
@@ -665,6 +708,7 @@ class ReviewCenter(QDialog):
             )
         self.current_request_id = request.request_id
         self.current_editor = editor
+        self.skip_language_button.setVisible(request.language_code != "_source")
         for button in editor.findChildren(QPushButton):
             if "终止" in button.text() or button.text() == "Terminate this mission":
                 button.setText("关闭校对（任务继续等待）")
@@ -678,6 +722,23 @@ class ReviewCenter(QDialog):
 
     def _approved(self, request_id: str) -> None:
         self.approve_callback(request_id)
+
+    def _skip_current_language(self) -> None:
+        request = self.requests.get(self.current_request_id)
+        if not request or request.language_code == "_source":
+            return
+        reply = QMessageBox.question(
+            self,
+            "跳过当前阶段全部校对",
+            f"“{request.language_name}”全部集的“{REVIEW_STAGE_NAMES[request.stage]}”"
+            "校对都会直接通过。\n\n后续校对阶段仍会正常暂停，是否继续？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self.skip_language_callback(
+                request.project_id, request.language_code, request.stage
+            )
 
     def _editor_closed_without_approval(self) -> None:
         self._clear_editor()
@@ -732,7 +793,9 @@ class MultiFolderTaskWindow(QDialog):
         self.scheduler: Optional[MultiFolderScheduler] = None
         self.review_counts: Dict[tuple, int] = {}
         self.items: Dict[tuple, QTreeWidgetItem] = {}
-        self.review_center = ReviewCenter(main, self._approve_request)
+        self.review_center = ReviewCenter(
+            main, self._approve_request, self._skip_language_stage_reviews
+        )
 
         self.setWindowTitle("多文件夹 · 多语言任务中心")
         self.resize(1150, 720)
@@ -756,14 +819,13 @@ class MultiFolderTaskWindow(QDialog):
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["文件夹 / 语言", "视频", "配音音色", "人工校对", "状态", "操作"])
         self.tree.setRootIsDecorated(True)
-        self.tree.setAlternatingRowColors(True)
         self.tree.header().setStretchLastSection(False)
-        self.tree.header().resizeSection(0, 320)
-        self.tree.header().resizeSection(1, 90)
-        self.tree.header().resizeSection(2, 250)
-        self.tree.header().resizeSection(3, 100)
-        self.tree.header().resizeSection(4, 220)
-        self.tree.header().resizeSection(5, 150)
+        self.tree.header().resizeSection(0, 260)
+        self.tree.header().resizeSection(1, 65)
+        self.tree.header().resizeSection(2, 230)
+        self.tree.header().resizeSection(3, 75)
+        self.tree.header().resizeSection(4, 160)
+        self.tree.header().resizeSection(5, 190)
         layout.addWidget(self.tree)
         self._render()
 
@@ -784,9 +846,18 @@ class MultiFolderTaskWindow(QDialog):
     def _save_projects(self) -> None:
         _atomic_write_json(STATE_FILE, [asdict(project) for project in self.projects])
 
+    def _update_main_entry_button(self) -> None:
+        pending = len(self.review_center.requests)
+        button = getattr(self.main, "multifolder_tasks", None)
+        if button is not None:
+            button.setText(
+                f"待校对（{pending}）" if pending else "任务 / 校对"
+            )
+
     def _render(self) -> None:
         self.tree.clear()
         self.items.clear()
+        voice_config_changed = False
         for project in self.projects:
             parent = QTreeWidgetItem([
                 Path(project.folder).name,
@@ -800,7 +871,6 @@ class MultiFolderTaskWindow(QDialog):
                 0,
                 f"输入：{project.folder}\n输出：{MultiFolderScheduler._output_root(project)}",
             )
-            parent.setExpanded(True)
             self.tree.addTopLevelItem(parent)
             review_switch = QCheckBox("开启")
             review_switch.setChecked(project.manual_review)
@@ -816,6 +886,7 @@ class MultiFolderTaskWindow(QDialog):
                 lambda _=False, pid=project.project_id: self._choose_languages(pid)
             )
             remove_project = QPushButton("删除")
+            remove_project.setMinimumWidth(52)
             remove_project.clicked.connect(
                 lambda _=False, pid=project.project_id: self._remove_project(pid)
             )
@@ -836,6 +907,12 @@ class MultiFolderTaskWindow(QDialog):
                 roles = tools.role_menu(self.main.tts_type.currentIndex(), language.code)
                 if "No" not in roles:
                     roles.insert(0, "No")
+                if not language.voice_auto_initialized or language.voice not in roles:
+                    language.voice = tools.default_voice_role(
+                        roles, preferred=language.voice
+                    )
+                    language.voice_auto_initialized = True
+                    voice_config_changed = True
                 voice.addItems(roles)
                 voice.setCurrentText(language.voice if language.voice in roles else "No")
                 language.voice = voice.currentText()
@@ -844,16 +921,39 @@ class MultiFolderTaskWindow(QDialog):
                 )
                 self.tree.setItemWidget(child, 2, voice)
                 self._set_review_button(project, child, language.code)
+            parent.setExpanded(True)
+        self.tree.expandAll()
+        if voice_config_changed:
+            self._save_projects()
 
     def _set_review_button(self, project, item, language_code) -> None:
         count = self.review_counts.get((project.project_id, language_code), 0)
+        action_widget = QWidget()
+        action_layout = QHBoxLayout(action_widget)
+        action_layout.setContentsMargins(0, 0, 0, 0)
         button = QPushButton(f"校对{f' ({count})' if count else ''}")
         button.setEnabled(count > 0)
         button.clicked.connect(
             lambda _=False, pid=project.project_id, code=language_code:
             self.review_center.open_for(pid, code)
         )
-        self.tree.setItemWidget(item, 5, button)
+        action_layout.addWidget(button)
+        if language_code != "_source":
+            pending_stages = {
+                request.stage for request in self.review_center.requests.values()
+                if request.project_id == project.project_id
+                and request.language_code == language_code
+            }
+            stage = next(iter(pending_stages), None)
+            skip_button = QPushButton("本阶段全跳")
+            skip_button.setToolTip("只跳过该语种全部集的当前校对阶段；后续阶段仍会暂停")
+            skip_button.setEnabled(bool(stage and project.manual_review))
+            skip_button.clicked.connect(
+                lambda _=False, pid=project.project_id, code=language_code, current_stage=stage:
+                self._confirm_skip_language_stage_reviews(pid, code, current_stage)
+            )
+            action_layout.addWidget(skip_button)
+        self.tree.setItemWidget(item, 5, action_widget)
 
     def _project(self, project_id: str) -> ProjectSpec:
         return next(project for project in self.projects if project.project_id == project_id)
@@ -881,6 +981,7 @@ class MultiFolderTaskWindow(QDialog):
                 widget.blockSignals(False)
             return
         language.voice = voice
+        language.voice_auto_initialized = True
         self._save_projects()
 
     def _add_folders(self) -> None:
@@ -915,22 +1016,42 @@ class MultiFolderTaskWindow(QDialog):
             added += 1
         self._save_projects()
         self._render()
+        if added:
+            self.summary.setText(
+                f"已添加 {added} 个文件夹；请为每个文件夹添加目标语言并确认音色。"
+            )
         if not added:
             QMessageBox.information(self, "没有新增", "所选文件夹重复，或没有支持的音视频文件。")
 
     def add_videos(
             self, videos: List[str], target_language: str = "",
+            target_languages: Optional[List[str]] = None,
             subtitle_files: Optional[Dict[str, str]] = None,
-    ) -> None:
+            manual_review: Optional[bool] = None,
+            replace: bool = False,
+    ) -> bool:
         """Import the existing main-window selection without starting it."""
         if self.scheduler and self.scheduler.isRunning():
             QMessageBox.information(self, "任务运行中", "当前选择未加入，请等待完成或停止后重试。")
-            return
+            return False
+        if replace:
+            for request_id in list(self.review_center.requests):
+                self.review_center.remove_request(request_id)
+            self.projects = []
+            self.review_counts.clear()
+            self.scheduler = None
         grouped: Dict[str, List[str]] = {}
         for value in videos:
             path = Path(value).resolve()
             grouped.setdefault(path.parent.as_posix(), []).append(path.as_posix())
-        target_code = translator.get_code(show_text=target_language)
+        language_names = list(dict.fromkeys(
+            name for name in (target_languages or [target_language])
+            if name and name != "-"
+        ))
+        review_enabled = (
+            self.main.review_countdown.isChecked()
+            if manual_review is None else bool(manual_review)
+        )
         for folder, grouped_videos in grouped.items():
             resolved_videos = sorted(set(grouped_videos), key=str.casefold)
             project = next(
@@ -942,7 +1063,7 @@ class MultiFolderTaskWindow(QDialog):
                     project_id=uuid_lib.uuid4().hex[:12],
                     folder=folder,
                     videos=resolved_videos,
-                    manual_review=True,
+                    manual_review=review_enabled,
                     output_dir=self.main.target_dir or "",
                 )
                 self.projects.append(project)
@@ -950,7 +1071,7 @@ class MultiFolderTaskWindow(QDialog):
                 project.videos = sorted(
                     set(project.videos) | set(resolved_videos), key=str.casefold
                 )
-                project.manual_review = True
+                project.manual_review = review_enabled
                 if self.main.target_dir:
                     project.output_dir = self.main.target_dir
             for video in resolved_videos:
@@ -958,14 +1079,44 @@ class MultiFolderTaskWindow(QDialog):
                 subtitle = (subtitle_files or {}).get(key)
                 if subtitle:
                     project.subtitle_files[key] = subtitle
-            if target_code and target_code != "-" and not any(
-                    language.code == target_code for language in project.languages
-            ):
-                project.languages.append(LanguageSpec(
-                    name=target_language, code=target_code, voice="No"
+            existing_languages = {
+                language.code: language for language in project.languages
+            }
+            selected_languages = []
+            for language_name in language_names:
+                target_code = translator.get_code(show_text=language_name)
+                if not target_code:
+                    continue
+                existing_language = existing_languages.get(target_code)
+                if existing_language:
+                    selected_languages.append(existing_language)
+                    continue
+                roles = tools.role_menu(
+                    self.main.tts_type.currentIndex(), target_code
+                )
+                preferred_voice = None
+                if language_name == target_language:
+                    preferred_voice = self.main.voice_role.currentText()
+                default_voice = tools.default_voice_role(
+                    roles, preferred=preferred_voice
+                )
+                selected_languages.append(LanguageSpec(
+                    name=language_name,
+                    code=target_code,
+                    voice=default_voice,
+                    voice_auto_initialized=True,
                 ))
+            project.languages = selected_languages
         self._save_projects()
         self._render()
+        total_videos = sum(len(values) for values in grouped.values())
+        language_text = "、".join(language_names)
+        self.summary.setText(
+            f"已加入 {total_videos} 个视频；目标语言：{language_text}。"
+            "即将自动开始处理。"
+        )
+        self._update_main_entry_button()
+        return bool(grouped and language_names)
 
     def _choose_languages(self, project_id: str) -> None:
         if self.scheduler and self.scheduler.isRunning():
@@ -980,10 +1131,19 @@ class MultiFolderTaskWindow(QDialog):
         if picker.exec() != QDialog.Accepted:
             return
         existing = {language.code: language for language in project.languages}
-        project.languages = [
-            existing.get(code, LanguageSpec(name=name, code=code, voice="No"))
-            for name, code in picker.selected()
-        ]
+        project.languages = []
+        for name, code in picker.selected():
+            language = existing.get(code)
+            if language is None:
+                language = LanguageSpec(
+                    name=name,
+                    code=code,
+                    voice=tools.default_voice_role(
+                        tools.role_menu(self.main.tts_type.currentIndex(), code)
+                    ),
+                    voice_auto_initialized=True,
+                )
+            project.languages.append(language)
         self._save_projects()
         self._render()
 
@@ -1048,6 +1208,10 @@ class MultiFolderTaskWindow(QDialog):
             "backaudio_volume": float(self.main.bgmvolume.text() or 0.8),
         }
 
+    def start_processing(self) -> None:
+        """Start an imported selection without requiring a second UI click."""
+        self._start()
+
     def _start(self) -> None:
         if self.scheduler and self.scheduler.isRunning():
             return
@@ -1074,6 +1238,23 @@ class MultiFolderTaskWindow(QDialog):
             return
         if recognition.is_input_api(recogn_type=base_cfg["recogn_type"]) is not True:
             return
+        missing_voice_languages = []
+        for project in runnable:
+            for language in project.languages:
+                roles = tools.role_menu(base_cfg["tts_type"], language.code)
+                if tools.default_voice_role(roles) == "No":
+                    missing_voice_languages.append(
+                        f"{Path(project.folder).name} / {language.name}"
+                    )
+        if missing_voice_languages:
+            QMessageBox.warning(
+                self,
+                "没有可用配音音色",
+                "以下目标语言无法从当前配音渠道自动选择音色：\n"
+                + "\n".join(missing_voice_languages)
+                + "\n\n请更换配音渠道或完成该渠道的音色配置。",
+            )
+            return
         if any(
                 language.voice not in ("", "-", "No")
                 for project in runnable for language in project.languages
@@ -1099,19 +1280,18 @@ class MultiFolderTaskWindow(QDialog):
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.summary.setText("运行中")
-        app_cfg.current_status = "ing"
+        self.main.win_action.update_status("ing")
         self.scheduler.start()
+        for project in runnable:
+            for language in project.languages:
+                item = self.items.get((project.project_id, language.code))
+                if item:
+                    self._set_review_button(project, item, language.code)
 
     def _prepare_subtitle_removal(self, projects: List[ProjectSpec], base_cfg: dict) -> bool:
-        enabled = bool(base_cfg.get("remove_burned_subtitles"))
-        for project in projects:
-            project.remove_burned_subtitles = False
-        if not enabled:
-            self._save_projects()
-            return True
-
+        removal_enabled = bool(base_cfg.get("remove_burned_subtitles"))
         provider = base_cfg.get("subtitle_removal_provider", "local")
-        if provider != "local":
+        if removal_enabled and provider != "local":
             reply = QMessageBox.question(
                 self,
                 "确认使用云端字幕消除",
@@ -1123,30 +1303,63 @@ class MultiFolderTaskWindow(QDialog):
                 return False
 
         from videotrans.component.subtitle_removal import select_batch_subtitle_area
-        for project in projects:
+        initial_rect = None
+        saved_rect = settings.get("subtitle_removal_last_rect", "")
+        if saved_rect:
+            try:
+                candidate = json.loads(saved_rect) if isinstance(saved_rect, str) else saved_rect
+                if isinstance(candidate, list) and len(candidate) == 4:
+                    initial_rect = candidate
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
+
+        project_count = len(projects)
+        for index, project in enumerate(projects, start=1):
             videos = [
                 path for path in project.videos
                 if Path(path).suffix.lower().lstrip(".") in contants.VIDEO_EXTS
             ]
             if not videos:
                 continue
+            needs_ocr = bool(
+                base_cfg.get("burned_subtitle_ocr")
+                and base_cfg.get("recogn_type") == recognition.FASTER_WHISPER
+                and str(base_cfg.get("source_language_code", "")).lower().startswith("zh")
+                and any(not _subtitle_for_video(project, video) for video in videos)
+            )
+            project.burned_subtitle_ocr = needs_ocr
+            project.remove_burned_subtitles = removal_enabled
+            if not removal_enabled and not needs_ocr:
+                project.subtitle_removal_rect = None
+                project.subtitle_removal_aspect_ratio = 0.0
+                continue
             selection = select_batch_subtitle_area(
                 input_file=videos[0],
                 input_files=videos,
-                initial_normalized_rect=project.subtitle_removal_rect,
-                parent=self,
+                initial_normalized_rect=project.subtitle_removal_rect or initial_rect,
+                parent=self.main,
+                title=(
+                    f"框选字幕区域（{index}/{project_count}）· "
+                    f"{Path(project.folder).name}"
+                ),
             )
             if selection is None:
                 return False
             if selection.get("skip_ocr"):
+                project.burned_subtitle_ocr = False
                 project.remove_burned_subtitles = False
                 project.subtitle_removal_rect = None
                 project.subtitle_removal_aspect_ratio = 0.0
             else:
-                project.remove_burned_subtitles = True
                 project.subtitle_removal_rect = selection["normalized_rect"]
                 project.subtitle_removal_aspect_ratio = selection["reference_aspect_ratio"]
+                initial_rect = selection["normalized_rect"]
+                settings["subtitle_removal_last_rect"] = json.dumps(initial_rect)
+                settings["subtitle_removal_last_aspect_ratio"] = selection[
+                    "reference_aspect_ratio"
+                ]
         self._save_projects()
+        settings.save()
         return True
 
     def _stop(self) -> None:
@@ -1167,6 +1380,7 @@ class MultiFolderTaskWindow(QDialog):
         item = self.items.get(key)
         if item:
             self._set_review_button(project, item, request.language_code)
+        self._update_main_entry_button()
 
     def _approve_request(self, request_id: str) -> None:
         request = self.review_center.requests.get(request_id)
@@ -1175,12 +1389,55 @@ class MultiFolderTaskWindow(QDialog):
         key = (request.project_id, request.language_code)
         self.review_counts[key] = max(0, self.review_counts.get(key, 1) - 1)
         self.review_center.remove_request(request_id)
+        self._update_main_entry_button()
         project = self._project(request.project_id)
         item = self.items.get(key)
         if item:
             self._set_review_button(project, item, request.language_code)
             item.setText(4, "已通过，等待继续")
         self.scheduler.approve(request_id)
+
+    def _confirm_skip_language_stage_reviews(
+            self, project_id: str, language_code: str, stage: Optional[str],
+    ) -> None:
+        if not stage:
+            return
+        project = self._project(project_id)
+        language = next(
+            language for language in project.languages
+            if language.code == language_code
+        )
+        reply = QMessageBox.question(
+            self,
+            "跳过当前阶段全部校对",
+            f"“{language.name}”全部集的“{REVIEW_STAGE_NAMES[stage]}”"
+            "校对都会直接通过。\n\n后续校对阶段仍会正常暂停，是否继续？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._skip_language_stage_reviews(project_id, language_code, stage)
+
+    def _skip_language_stage_reviews(
+            self, project_id: str, language_code: str, stage: str,
+    ) -> None:
+        if not self.scheduler:
+            return
+        self.scheduler.skip_language_stage_reviews(project_id, language_code, stage)
+        for request_id, request in list(self.review_center.requests.items()):
+            if (
+                    request.project_id == project_id
+                    and request.language_code == language_code
+                    and request.stage == stage
+            ):
+                self.review_center.remove_request(request_id)
+        self._update_main_entry_button()
+        key = (project_id, language_code)
+        self.review_counts[key] = 0
+        item = self.items.get(key)
+        if item:
+            item.setText(4, f"已跳过全部集的{REVIEW_STAGE_NAMES[stage]}校对")
+            self._set_review_button(self._project(project_id), item, language_code)
 
     def _run_finished(self, succeed: bool, message: str) -> None:
         if self.scheduler and self.scheduler._cancelled:
@@ -1192,6 +1449,13 @@ class MultiFolderTaskWindow(QDialog):
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
         self.summary.setText(message.splitlines()[0])
+        self.main.win_action.update_status("end" if succeed else "stop")
+        for project in self.projects:
+            for language in project.languages:
+                item = self.items.get((project.project_id, language.code))
+                if item:
+                    self._set_review_button(project, item, language.code)
+        self._update_main_entry_button()
         if not self.review_center.requests:
             QMessageBox.information(self, "任务结束", message.splitlines()[0])
 

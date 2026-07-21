@@ -818,13 +818,15 @@ class BatchSubtitleRemovalDialog(QDialog):
 def select_batch_subtitle_area(
         *, input_file: str | None = None, input_files: list[str] | None = None,
         initial_normalized_rect: list[float] | None = None,
-        parent=None) -> dict | None:
+        parent=None, title: str | None = None) -> dict | None:
     dialog = BatchSubtitleRemovalDialog(
         input_file=input_file,
         input_files=input_files,
         initial_normalized_rect=initial_normalized_rect,
         parent=parent,
     )
+    if title:
+        dialog.setWindowTitle(title)
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
     if dialog.skip_ocr:

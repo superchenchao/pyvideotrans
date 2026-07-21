@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QSizePolicy, QApplication
 
 from videotrans.component.controlobj import TextGetdir
+from videotrans.component.checkable_combo import CheckableComboBox
 from videotrans.configure.config import tr, settings
 
 
@@ -65,9 +66,9 @@ class Ui_MainWindow(object):
         self.select_file_type.setToolTip(
             tr("Multiple files can be selected by default, check the box to select folders"))
 
-        self.multifolder_tasks = QtWidgets.QPushButton("多文件夹任务")
+        self.multifolder_tasks = QtWidgets.QPushButton("任务 / 校对")
         self.multifolder_tasks.setMinimumHeight(30)
-        self.multifolder_tasks.setToolTip("按文件夹添加剧集，并为每个文件夹配置多个目标语言")
+        self.multifolder_tasks.setToolTip("查看多剧任务进度，或打开当前待校对项目")
 
         self.horizontalLayout_6.addWidget(self.btn_get_video)
         self.horizontalLayout_6.addWidget(self.select_file_type)
@@ -210,9 +211,9 @@ class Ui_MainWindow(object):
         self.label_3.setObjectName("label_3")
         self.label_3.setStyleSheet("""background-color:transparent""")
         #self.label_3.setMinimumWidth(_channel_label)
-        self.target_language = QtWidgets.QComboBox(self.layoutWidget)
+        self.target_language = CheckableComboBox(self.layoutWidget)
         self.target_language.setObjectName("target_language")
-        self.target_language.setMinimumWidth(130)
+        self.target_language.setMinimumWidth(220)
 
         self.aisendsrt = QtWidgets.QCheckBox()
         self.aisendsrt.setText(tr("Send SRT"))
