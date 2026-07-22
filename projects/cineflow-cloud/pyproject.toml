@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cineflow-cloud"
-version = "0.5.0"
-description = "Standalone cloud video translation orchestration with a soft five-minute performance target."
+version = "0.6.0"
+description = "Standalone cloud video translation, OSS ingest, and subtitle removal with a soft five-minute performance target."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
@@ -35,6 +35,9 @@ dev = [
 
 [project.scripts]
 cineflow = "cineflow.api:run"
+cineflow-upload = "cineflow.upload_client:main"
+cineflow-upload-worker = "cineflow.upload_worker:run"
+cineflow-subtitle-worker = "cineflow.subtitle_worker:run"
 cineflow-asr-worker = "cineflow.asr_worker:run"
 cineflow-media-worker = "cineflow.media_worker:run"
 cineflow-speaker-worker = "cineflow.speaker_worker:run"
