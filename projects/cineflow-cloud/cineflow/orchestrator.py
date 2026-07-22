@@ -95,7 +95,10 @@ class PipelineOrchestrator:
                 event_type="accepted",
                 stage="accepted",
                 progress=0,
-                message=("job accepted; 300 seconds is an optimization target, not a hard timeout"),
+                message=(
+                    "job accepted; 300 seconds is an optimization target, "
+                    "not a hard timeout"
+                ),
                 data={
                     "predicted_seconds": record.predicted_seconds,
                     "target_seconds": record.target_seconds,
@@ -118,7 +121,11 @@ class PipelineOrchestrator:
         record.current_stage = name
         await self.events.publish(
             record.job_id,
-            JobEvent(event_type="stage_started", stage=name, progress=record.progress),
+            JobEvent(
+                event_type="stage_started",
+                stage=name,
+                progress=record.progress,
+            ),
         )
         started = time.monotonic()
         try:
@@ -168,7 +175,8 @@ class PipelineOrchestrator:
                     stage=name,
                     progress=record.progress,
                     message=(
-                        f"{name} completed after its target checkpoint; the job continues normally"
+                        f"{name} completed after its target checkpoint; "
+                        "the job continues normally"
                     ),
                     data={"total_elapsed_seconds": round(timer.elapsed, 3)},
                 ),
@@ -187,8 +195,42 @@ class PipelineOrchestrator:
             # Retrieve exceptions so the event loop never reports an orphaned task.
             await asyncio.gather(*finished, return_exceptions=True)
 
+    async def _report_timing_overflow(
+        self,
+        record: JobRecord,
+        dubbing: DubbingArtifact,
+    ) -> None:
+        overflow = [clip for clip in dubbing.clips if not clip.within_target]
+        if not overflow:
+            return
+        line_ids = [clip.line_id for clip in overflow]
+        max_overflow = max(clip.timing_overflow_ms for clip in overflow)
+        record.warnings.append(
+            f"azure tts timing overflow remains on {len(overflow)} line(s); "
+            f"maximum overflow is {max_overflow}ms"
+        )
+        await self.events.publish(
+            record.job_id,
+            JobEvent(
+                event_type="timing_warning",
+                stage="azure_tts",
+                progress=record.progress,
+                message=(
+                    "Azure prosody fitting reached its configured limit; "
+                    "audio is preserved and final assembly continues"
+                ),
+                data={
+                    "line_ids": line_ids,
+                    "max_overflow_ms": max_overflow,
+                },
+            ),
+        )
+
     async def _run(self, record: JobRecord) -> None:
-        timer = TargetTimer(record.target_seconds, started=record.accepted_at_monotonic)
+        timer = TargetTimer(
+            record.target_seconds,
+            started=record.accepted_at_monotonic,
+        )
         tasks: set[asyncio.Task[object]] = set()
         slot_acquired = False
 
@@ -272,7 +314,9 @@ class PipelineOrchestrator:
                     evidence = await speaker_task
                     decisions = fuse_speakers(transcript.lines, evidence)
                 except Exception as exc:
-                    record.warnings.append(f"speaker fusion degraded to one Azure voice: {exc}")
+                    record.warnings.append(
+                        f"speaker fusion degraded to one Azure voice: {exc}"
+                    )
                     decisions = self._single_voice_decisions(transcript.lines)
             else:
                 speaker_task.cancel()
@@ -286,15 +330,24 @@ class PipelineOrchestrator:
                 timer,
                 "azure_tts",
                 self.TTS_TARGET,
-                self.providers.synthesize(record.request, translated, decisions),
+                self.providers.synthesize(
+                    record.request,
+                    translated,
+                    decisions,
+                ),
             )
             record.progress = 78
+            await self._report_timing_overflow(record, dubbing)
 
             try:
                 media = await media_task
             except Exception as exc:
-                record.warnings.append(f"media preparation failed; upstream video retained: {exc}")
-                fallback_video = record.request.clean_video_url or record.request.input_url
+                record.warnings.append(
+                    f"media preparation failed; upstream video retained: {exc}"
+                )
+                fallback_video = (
+                    record.request.clean_video_url or record.request.input_url
+                )
                 media = MediaArtifacts(
                     video_url=str(fallback_video),
                     source_audio_url=(
@@ -310,16 +363,29 @@ class PipelineOrchestrator:
                 timer,
                 "assemble",
                 self.ASSEMBLY_TARGET,
-                self.providers.assemble(record.request, media, translated, dubbing),
+                self.providers.assemble(
+                    record.request,
+                    media,
+                    translated,
+                    dubbing,
+                ),
             )
             record.result = result
             record.progress = 100
             record.current_stage = "done"
             quality_degraded = any(
-                warning.startswith(("speaker fusion", "media preparation"))
+                warning.startswith(
+                    (
+                        "speaker fusion",
+                        "media preparation",
+                        "azure tts timing",
+                    )
+                )
                 for warning in record.warnings
             )
-            record.state = JobState.DEGRADED if quality_degraded else JobState.SUCCEEDED
+            record.state = (
+                JobState.DEGRADED if quality_degraded else JobState.SUCCEEDED
+            )
         except Exception as exc:
             record.state = JobState.FAILED
             record.error = str(exc)
