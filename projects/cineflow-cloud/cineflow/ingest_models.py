@@ -48,7 +48,7 @@ class UploadSession(BaseModel):
     bucket: str
     object_key: str
     canonical_url: str
-    credentials: UploadCredentials
+    credentials: UploadCredentials | None = None
     size_bytes: int
     content_type: str
     sha256: str = ""
