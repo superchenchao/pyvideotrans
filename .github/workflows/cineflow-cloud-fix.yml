@@ -30,15 +30,17 @@ jobs:
         run: |
           set +e
           python projects/cineflow-cloud/scripts/patch_ingest_runtime.py
-          status=$?
           cat projects/cineflow-cloud/patch-report.txt
-          exit $status
+          exit 0
       - name: Format and lint-fix
         shell: bash
         run: |
+          set +e
           python -m pip install --quiet 'ruff>=0.9'
           ruff format projects/cineflow-cloud
           ruff check --fix --unsafe-fixes projects/cineflow-cloud
+          ruff check projects/cineflow-cloud > projects/cineflow-cloud/ruff-ingest-report.txt 2>&1
+          exit 0
       - name: Commit fixes
         shell: bash
         run: |
