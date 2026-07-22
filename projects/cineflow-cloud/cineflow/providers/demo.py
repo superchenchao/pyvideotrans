@@ -27,6 +27,7 @@ class DemoProviders:
         return [
             ProviderHealth(name="media", healthy=True, warm=True),
             ProviderHealth(name="asr", healthy=True, warm=True),
+            ProviderHealth(name="caption", healthy=True, warm=True),
             ProviderHealth(name="speaker", healthy=True, warm=True),
             ProviderHealth(name="deepseek", healthy=True, warm=True),
             ProviderHealth(name="azure_tts", healthy=True, warm=True),
@@ -49,10 +50,64 @@ class DemoProviders:
         step = max(1000, duration_ms // 3)
         return Transcript(
             language=request.source_language,
+            provider="demo_cloud_asr",
             lines=[
-                SubtitleLine(line_id=1, start_ms=0, end_ms=step, text="你好。"),
-                SubtitleLine(line_id=2, start_ms=step, end_ms=step * 2, text="你是谁？"),
-                SubtitleLine(line_id=3, start_ms=step * 2, end_ms=duration_ms, text="我是池沐雪。"),
+                SubtitleLine(
+                    line_id=1,
+                    start_ms=0,
+                    end_ms=step,
+                    text="你好。",
+                    speaker_id="spk1",
+                    source="asr",
+                ),
+                SubtitleLine(
+                    line_id=2,
+                    start_ms=step,
+                    end_ms=step * 2,
+                    text="你是谁？",
+                    speaker_id="spk2",
+                    source="asr",
+                ),
+                SubtitleLine(
+                    line_id=3,
+                    start_ms=step * 2,
+                    end_ms=duration_ms,
+                    text="我是池沐雪。",
+                    speaker_id="spk1",
+                    source="asr",
+                ),
+            ],
+        )
+
+    async def extract_visual_subtitles(self, request: JobRequest) -> Transcript:
+        await self._sleep(25)
+        duration_ms = int(request.probe.duration_seconds * 1000)
+        step = max(1000, duration_ms // 3)
+        return Transcript(
+            language=request.source_language,
+            provider="demo_cloud_ocr",
+            lines=[
+                SubtitleLine(
+                    line_id=1,
+                    start_ms=0,
+                    end_ms=step,
+                    text="你好。",
+                    source="ocr",
+                ),
+                SubtitleLine(
+                    line_id=2,
+                    start_ms=step,
+                    end_ms=step * 2,
+                    text="你是谁？",
+                    source="ocr",
+                ),
+                SubtitleLine(
+                    line_id=3,
+                    start_ms=step * 2,
+                    end_ms=duration_ms,
+                    text="我是池沐雪。",
+                    source="ocr",
+                ),
             ],
         )
 
