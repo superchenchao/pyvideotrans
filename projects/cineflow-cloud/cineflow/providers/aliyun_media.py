@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
@@ -121,7 +122,11 @@ def _pack_dialogue_audio_tracks(
     track_ends: list[int] = []
     for start_ms, end_ms, item in scheduled:
         target = next(
-            (index for index, previous_end in enumerate(track_ends) if previous_end <= start_ms),
+            (
+                index
+                for index, previous_end in enumerate(track_ends)
+                if previous_end <= start_ms
+            ),
             None,
         )
         if target is None:
@@ -169,7 +174,9 @@ def build_assembly_timeline(
                     {
                         "MediaURL": background_url,
                         "TimelineIn": 0,
-                        "Effects": [{"Type": "Volume", "Gain": config.background_gain}],
+                        "Effects": [
+                            {"Type": "Volume", "Gain": config.background_gain}
+                        ],
                     }
                 ]
             }
@@ -195,7 +202,8 @@ def build_audio_extract_timeline(video_url: str) -> dict[str, object]:
 def _walk_output_values(value: object, label: str = "") -> Iterable[tuple[str, str]]:
     if isinstance(value, dict):
         for key, child in value.items():
-            yield from _walk_output_values(child, f"{label}/{key}" if label else str(key))
+            next_label = f"{label}/{key}" if label else str(key)
+            yield from _walk_output_values(child, next_label)
     elif isinstance(value, list):
         for index, child in enumerate(value):
             yield from _walk_output_values(child, f"{label}/{index}")
@@ -217,7 +225,19 @@ def collect_i_production_outputs(
 ) -> list[tuple[str, str]]:
     candidates = list(_walk_output_values(result.get("OutputUrls", []), "OutputUrls"))
     candidates.extend(_walk_output_values(result.get("Result", ""), "Result"))
-    for index, object_key in enumerate(result.get("OutputFiles", []) or []):
+
+    output_files = result.get("OutputFiles", []) or []
+    if isinstance(output_files, str):
+        try:
+            output_files = json.loads(output_files)
+        except json.JSONDecodeError:
+            output_files = [output_files]
+    if isinstance(output_files, dict):
+        output_files = list(output_files.values())
+    if not isinstance(output_files, list):
+        output_files = [output_files]
+
+    for index, object_key in enumerate(output_files):
         text = str(object_key or "").strip()
         if not text:
             continue
@@ -275,9 +295,14 @@ def output_dimensions(request: JobRequest) -> tuple[int, int]:
     if width <= 1920 and height <= 1920 and width * height <= 1920 * 1080:
         return width - width % 2, height - height % 2
     scale = (
-        min(1920 / width, 1080 / height) if width >= height else min(1080 / width, 1920 / height)
+        min(1920 / width, 1080 / height)
+        if width >= height
+        else min(1080 / width, 1920 / height)
     )
-    return max(128, int(width * scale) // 2 * 2), max(128, int(height * scale) // 2 * 2)
+    return (
+        max(128, int(width * scale) // 2 * 2),
+        max(128, int(height * scale) // 2 * 2),
+    )
 
 
 class AliyunMediaService:
@@ -298,7 +323,7 @@ class AliyunMediaService:
             _safe_name(name),
         )
         try:
-            await __import__("asyncio").to_thread(
+            await asyncio.to_thread(
                 self.store.put_bytes,
                 object_key,
                 content,
@@ -337,7 +362,9 @@ class AliyunMediaService:
         background_url = None
         if request.separate_background and source_audio_url:
             try:
-                vocal_url, background_url, task_id, outputs = await self._demix(source_audio_url)
+                vocal_url, background_url, task_id, outputs = await self._demix(
+                    source_audio_url
+                )
                 task_ids["music_demix"] = task_id
                 metadata["music_demix_outputs"] = outputs
                 if not vocal_url or not background_url:
@@ -452,7 +479,7 @@ class AliyunMediaService:
                 f"{translated.language or 'translated'}.srt",
             )
             try:
-                await __import__("asyncio").to_thread(
+                await asyncio.to_thread(
                     self.store.put_bytes,
                     subtitle_object_key,
                     transcript_to_srt(translated).encode("utf-8"),
