@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.7.0
+
+- Added `subtitle_recognition_mode=hybrid|asr|ocr`, with hybrid cloud ASR and cloud OCR as the default.
+- Added an Alibaba ICE `CaptionExtraction` worker that submits the original OSS video URL and converts the returned SRT into the normalized `Transcript` contract.
+- Added normalized OCR region, frame rate, language, track, and required/degradable behavior to `JobRequest`.
+- Added deterministic ASR/OCR fusion: visible text and display timing come from OCR, speaker IDs and word timing come from overlapping ASR, and ASR-only narration/offscreen speech is retained.
+- Added conflict metadata when OCR and ASR disagree instead of silently pretending both recognition paths match.
+- Added preferred and secondary Caption Worker routing, health checks, timeouts, Docker, Kubernetes, configuration, and documentation.
+- Explicitly excluded Whisper, Tesseract, PaddleOCR, OpenCV frame OCR, and local visual-recognition models from the default recognition pipeline.
+- Changed the recommended subtitle-removal provider order to cloud-only `aliyun,caca`; the trusted server-side local remover remains an explicit opt-in and is not an OCR engine.
+- Added configurable cloud OCR cost guardrails and recognition-aware provider-health checks.
+- Added SRT parsing, Alibaba CaptionExtraction contract, Caption Worker API, OCR/ASR fusion, cost, health, and standalone-deployment tests.
+- Kept OCR, ASR, and subtitle removal parallel where possible to improve the chance of finishing a five-minute video within the soft 300-second target.
+
 ## 0.6.0
 
 - Added a standalone Alibaba STS broker that issues short-lived, object-scoped OSS credentials without exposing permanent AccessKeys to desktop clients.
