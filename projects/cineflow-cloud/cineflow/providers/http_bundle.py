@@ -67,6 +67,8 @@ class HttpWorkerClient:
 
 
 class FailoverWorkerClient:
+    """Try the preferred worker first, then its optional fallback."""
+
     def __init__(
         self,
         primary: HttpWorkerClient,
@@ -110,10 +112,28 @@ class FailoverWorkerClient:
 
 
 class ProductionProviders:
-    """Composition root for media/ASR/fusion workers, DeepSeek and Azure TTS."""
+    """Standalone composition root.
+
+    Media, ASR and speaker workers use a preferred endpoint plus an optional
+    fallback. Deployment policy should point preferred endpoints at Alibaba Cloud
+    implementations first and fallback endpoints at Volcengine when needed.
+    DeepSeek is the only/default translation engine in this release; Azure TTS is
+    retained for multilingual role dubbing.
+    """
 
     def __init__(self, settings: Settings) -> None:
-        self.media = HttpWorkerClient(settings.media_worker_url, settings.worker_bearer_token)
+        primary_media = HttpWorkerClient(
+            settings.media_worker_url, settings.worker_bearer_token
+        )
+        secondary_media = (
+            HttpWorkerClient(
+                settings.secondary_media_worker_url, settings.worker_bearer_token
+            )
+            if settings.secondary_media_worker_url
+            else None
+        )
+        self.media = FailoverWorkerClient(primary_media, secondary_media)
+
         primary_asr = HttpWorkerClient(
             settings.asr_worker_url, settings.worker_bearer_token
         )
@@ -125,13 +145,25 @@ class ProductionProviders:
             else None
         )
         self.asr = FailoverWorkerClient(primary_asr, secondary_asr)
-        self.speaker = HttpWorkerClient(
+
+        primary_speaker = HttpWorkerClient(
             settings.speaker_worker_url, settings.worker_bearer_token
         )
+        secondary_speaker = (
+            HttpWorkerClient(
+                settings.secondary_speaker_worker_url, settings.worker_bearer_token
+            )
+            if settings.secondary_speaker_worker_url
+            else None
+        )
+        self.speaker = FailoverWorkerClient(primary_speaker, secondary_speaker)
+
         self.translator = DeepSeekTranslator(
             settings.deepseek_api_key,
             settings.deepseek_base_url,
             settings.deepseek_model,
+            max_tokens=settings.deepseek_max_tokens,
+            thinking=settings.deepseek_thinking,
         )
         self.azure = AzureTTSClient(
             AzureSpeechEndpoint(settings.azure_speech_key, settings.azure_speech_region),
@@ -183,9 +215,7 @@ class ProductionProviders:
             105.0,
         )
         evidence = [LineEvidence.model_validate(item) for item in data["evidence"]]
-        preliminary = fuse_speakers(
-            transcript.lines, evidence, review_threshold=0.82
-        )
+        preliminary = fuse_speakers(transcript.lines, evidence, review_threshold=0.82)
         ambiguous = {item.line_id for item in preliminary if item.needs_review}
         if not ambiguous:
             return evidence
