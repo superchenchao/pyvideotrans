@@ -11,13 +11,9 @@ class FakeStore:
 
 def test_i_production_output_files_accept_json_string_and_remove_duplicates():
     result = {
-        "OutputUrls": [
-            "https://bucket.oss-cn-beijing.aliyuncs.com/out/vocal.wav"
-        ],
+        "OutputUrls": ["https://bucket.oss-cn-beijing.aliyuncs.com/out/vocal.wav"],
         "OutputFiles": '["out/vocal.wav","out/background.wav"]',
-        "Result": {
-            "vocal": "https://bucket.oss-cn-beijing.aliyuncs.com/out/vocal.wav"
-        },
+        "Result": {"vocal": "https://bucket.oss-cn-beijing.aliyuncs.com/out/vocal.wav"},
     }
 
     outputs = collect_i_production_outputs(result, FakeStore())

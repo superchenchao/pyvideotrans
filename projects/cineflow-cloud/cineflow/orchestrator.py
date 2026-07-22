@@ -95,10 +95,7 @@ class PipelineOrchestrator:
                 event_type="accepted",
                 stage="accepted",
                 progress=0,
-                message=(
-                    "job accepted; 300 seconds is an optimization target, "
-                    "not a hard timeout"
-                ),
+                message=("job accepted; 300 seconds is an optimization target, not a hard timeout"),
                 data={
                     "predicted_seconds": record.predicted_seconds,
                     "target_seconds": record.target_seconds,
@@ -175,8 +172,7 @@ class PipelineOrchestrator:
                     stage=name,
                     progress=record.progress,
                     message=(
-                        f"{name} completed after its target checkpoint; "
-                        "the job continues normally"
+                        f"{name} completed after its target checkpoint; the job continues normally"
                     ),
                     data={"total_elapsed_seconds": round(timer.elapsed, 3)},
                 ),
@@ -314,9 +310,7 @@ class PipelineOrchestrator:
                     evidence = await speaker_task
                     decisions = fuse_speakers(transcript.lines, evidence)
                 except Exception as exc:
-                    record.warnings.append(
-                        f"speaker fusion degraded to one Azure voice: {exc}"
-                    )
+                    record.warnings.append(f"speaker fusion degraded to one Azure voice: {exc}")
                     decisions = self._single_voice_decisions(transcript.lines)
             else:
                 speaker_task.cancel()
@@ -342,12 +336,8 @@ class PipelineOrchestrator:
             try:
                 media = await media_task
             except Exception as exc:
-                record.warnings.append(
-                    f"media preparation failed; upstream video retained: {exc}"
-                )
-                fallback_video = (
-                    record.request.clean_video_url or record.request.input_url
-                )
+                record.warnings.append(f"media preparation failed; upstream video retained: {exc}")
+                fallback_video = record.request.clean_video_url or record.request.input_url
                 media = MediaArtifacts(
                     video_url=str(fallback_video),
                     source_audio_url=(
@@ -383,9 +373,7 @@ class PipelineOrchestrator:
                 )
                 for warning in record.warnings
             )
-            record.state = (
-                JobState.DEGRADED if quality_degraded else JobState.SUCCEEDED
-            )
+            record.state = JobState.DEGRADED if quality_degraded else JobState.SUCCEEDED
         except Exception as exc:
             record.state = JobState.FAILED
             record.error = str(exc)

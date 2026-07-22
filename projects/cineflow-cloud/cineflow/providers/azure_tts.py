@@ -185,51 +185,48 @@ class AzureTTSClient:
             rate=f"{normalized_rate:+d}%",
         )
         errors: list[str] = []
-        async with self.semaphore:
-            async with httpx.AsyncClient(
-                timeout=self.request_timeout_seconds,
-                transport=self.transport,
-            ) as client:
-                for endpoint in self.endpoints:
-                    try:
-                        response: httpx.Response | None = None
-                        for attempt in range(2):
-                            response = await client.post(
-                                endpoint.url,
-                                headers={
-                                    "Ocp-Apim-Subscription-Key": endpoint.key,
-                                    "Content-Type": "application/ssml+xml",
-                                    "X-Microsoft-OutputFormat": self.output_format,
-                                    "User-Agent": "cineflow-cloud",
-                                },
-                                content=ssml.encode("utf-8"),
-                            )
-                            if response.status_code not in {
-                                429,
-                                500,
-                                502,
-                                503,
-                                504,
-                            }:
-                                response.raise_for_status()
-                                return response.content
-                            if attempt == 0:
-                                retry_after = response.headers.get(
-                                    "Retry-After",
-                                    "0.5",
-                                )
-                                try:
-                                    delay = min(
-                                        2.0,
-                                        max(0.1, float(retry_after)),
-                                    )
-                                except ValueError:
-                                    delay = 0.5
-                                await asyncio.sleep(delay)
-                        if response is not None:
+        async with self.semaphore, httpx.AsyncClient(
+            timeout=self.request_timeout_seconds,
+            transport=self.transport,
+        ) as client:
+            for endpoint in self.endpoints:
+                try:
+                    response: httpx.Response | None = None
+                    for attempt in range(2):
+                        response = await client.post(
+                            endpoint.url,
+                            headers={
+                                "Ocp-Apim-Subscription-Key": endpoint.key,
+                                "Content-Type": "application/ssml+xml",
+                                "X-Microsoft-OutputFormat": self.output_format,
+                                "User-Agent": "cineflow-cloud",
+                            },
+                            content=ssml.encode("utf-8"),
+                        )
+                        if response.status_code not in {
+                            429,
+                            500,
+                            502,
+                            503,
+                            504,
+                        }:
                             response.raise_for_status()
-                    except Exception as exc:
-                        errors.append(f"{endpoint.region}: {exc}")
-        raise RuntimeError(
-            "Azure TTS failed in all configured regions: " + " | ".join(errors)
-        )
+                            return response.content
+                        if attempt == 0:
+                            retry_after = response.headers.get(
+                                "Retry-After",
+                                "0.5",
+                            )
+                            try:
+                                delay = min(
+                                    2.0,
+                                    max(0.1, float(retry_after)),
+                                )
+                            except ValueError:
+                                delay = 0.5
+                            await asyncio.sleep(delay)
+                    if response is not None:
+                        response.raise_for_status()
+                except Exception as exc:
+                    errors.append(f"{endpoint.region}: {exc}")
+        raise RuntimeError("Azure TTS failed in all configured regions: " + " | ".join(errors))

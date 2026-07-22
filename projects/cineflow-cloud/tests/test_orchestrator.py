@@ -93,10 +93,7 @@ async def test_unresolved_azure_timing_overflow_is_preserved_and_reported():
     events = await orchestrator.events.history(accepted.job_id)
 
     assert completed.state == JobState.DEGRADED
-    assert any(
-        warning.startswith("azure tts timing overflow")
-        for warning in completed.warnings
-    )
+    assert any(warning.startswith("azure tts timing overflow") for warning in completed.warnings)
     timing_event = next(event for event in events if event.event_type == "timing_warning")
     assert timing_event.data["line_ids"] == [2]
     assert timing_event.data["max_overflow_ms"] == 800

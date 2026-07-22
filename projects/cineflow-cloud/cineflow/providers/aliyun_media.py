@@ -122,11 +122,7 @@ def _pack_dialogue_audio_tracks(
     track_ends: list[int] = []
     for start_ms, end_ms, item in scheduled:
         target = next(
-            (
-                index
-                for index, previous_end in enumerate(track_ends)
-                if previous_end <= start_ms
-            ),
+            (index for index, previous_end in enumerate(track_ends) if previous_end <= start_ms),
             None,
         )
         if target is None:
@@ -174,9 +170,7 @@ def build_assembly_timeline(
                     {
                         "MediaURL": background_url,
                         "TimelineIn": 0,
-                        "Effects": [
-                            {"Type": "Volume", "Gain": config.background_gain}
-                        ],
+                        "Effects": [{"Type": "Volume", "Gain": config.background_gain}],
                     }
                 ]
             }
@@ -295,9 +289,7 @@ def output_dimensions(request: JobRequest) -> tuple[int, int]:
     if width <= 1920 and height <= 1920 and width * height <= 1920 * 1080:
         return width - width % 2, height - height % 2
     scale = (
-        min(1920 / width, 1080 / height)
-        if width >= height
-        else min(1080 / width, 1920 / height)
+        min(1920 / width, 1080 / height) if width >= height else min(1080 / width, 1920 / height)
     )
     return (
         max(128, int(width * scale) // 2 * 2),
@@ -362,9 +354,7 @@ class AliyunMediaService:
         background_url = None
         if request.separate_background and source_audio_url:
             try:
-                vocal_url, background_url, task_id, outputs = await self._demix(
-                    source_audio_url
-                )
+                vocal_url, background_url, task_id, outputs = await self._demix(source_audio_url)
                 task_ids["music_demix"] = task_id
                 metadata["music_demix_outputs"] = outputs
                 if not vocal_url or not background_url:

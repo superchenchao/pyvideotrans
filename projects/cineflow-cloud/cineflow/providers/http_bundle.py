@@ -78,10 +78,7 @@ class FailoverWorkerClient:
 
     async def health(self, name: str) -> ProviderHealth:
         results = await asyncio.gather(
-            *(
-                client.health(f"{name}_{index + 1}")
-                for index, client in enumerate(self.clients)
-            )
+            *(client.health(f"{name}_{index + 1}") for index, client in enumerate(self.clients))
         )
         healthy = [item for item in results if item.healthy]
         healthy_latencies = [item.latency_ms for item in healthy]
@@ -91,13 +88,10 @@ class FailoverWorkerClient:
             healthy=bool(healthy),
             warm=any(item.warm for item in healthy),
             latency_ms=(
-                min(healthy_latencies)
-                if healthy_latencies
-                else max(all_latencies, default=0.0)
+                min(healthy_latencies) if healthy_latencies else max(all_latencies, default=0.0)
             ),
             detail=" | ".join(
-                f"{item.name}:{'ok' if item.healthy else item.detail}"
-                for item in results
+                f"{item.name}:{'ok' if item.healthy else item.detail}" for item in results
             ),
         )
 
@@ -183,13 +177,9 @@ class ProductionProviders:
             ),
             concurrency=settings.azure_tts_concurrency,
             max_fit_rate_percent=settings.azure_tts_max_fit_rate_percent,
-            duration_tolerance_ratio=(
-                settings.azure_tts_duration_tolerance_ratio
-            ),
+            duration_tolerance_ratio=(settings.azure_tts_duration_tolerance_ratio),
             max_fit_attempts=settings.azure_tts_max_fit_attempts,
-            request_timeout_seconds=(
-                settings.azure_tts_request_timeout_seconds
-            ),
+            request_timeout_seconds=(settings.azure_tts_request_timeout_seconds),
         )
 
     def _worker_timeout(self, field: str, default: float = 300.0) -> float:
@@ -284,8 +274,7 @@ class ProductionProviders:
             voice = resolve_character_voice(request, decision.character_id)
             if not voice:
                 raise ValueError(
-                    "target_voice is required until the character voice registry "
-                    "is connected"
+                    "target_voice is required until the character voice registry is connected"
                 )
             target_duration_ms = max(1, line.end_ms - line.start_ms)
             result = await self.azure.synthesize_for_slot(
