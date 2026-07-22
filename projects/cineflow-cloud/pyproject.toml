@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cineflow-cloud"
-version = "0.3.0"
+version = "0.4.0"
 description = "Standalone cloud video translation orchestration with a soft five-minute performance target."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -19,6 +19,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+aliyun = [
+  "aliyun-python-sdk-core>=2.16",
+  "oss2>=2.19",
+]
 gpu = [
   "pyannote.audio>=4,<5",
   "torch>=2.6",
@@ -32,6 +36,7 @@ dev = [
 [project.scripts]
 cineflow = "cineflow.api:run"
 cineflow-asr-worker = "cineflow.asr_worker:run"
+cineflow-media-worker = "cineflow.media_worker:run"
 cineflow-speaker-worker = "cineflow.speaker_worker:run"
 
 [tool.setuptools.packages.find]
