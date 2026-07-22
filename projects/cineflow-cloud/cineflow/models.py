@@ -119,7 +119,11 @@ class SpeakerDecision(BaseModel):
 class MediaArtifacts(BaseModel):
     video_url: str
     background_url: str | None = None
+    vocal_url: str | None = None
     source_audio_url: str | None = None
+    provider: str = ""
+    task_ids: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
     degraded_features: list[str] = Field(default_factory=list)
 
 
@@ -137,6 +141,9 @@ class DubbingArtifact(BaseModel):
 class OutputArtifact(BaseModel):
     video_url: str
     subtitle_url: str | None = None
+    provider: str = ""
+    task_id: str = ""
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class AdmissionResult(BaseModel):
