@@ -63,11 +63,11 @@ source_audio_url（可选，优先用于 ASR 和声伴分离）
 
 ### `/v1/artifacts/base64`
 
-控制平面将 Azure TTS 返回的单条音频写入 Media Worker：
+控制平面将 Azure TTS 返回的单条 RIFF PCM WAV 写入 Media Worker：
 
 ```json
 {
-  "name": "line-17.mp3",
+  "name": "line-17.wav",
   "content_base64": "..."
 }
 ```
@@ -97,11 +97,14 @@ Worker 构造 ICE Timeline：
 - 视频轨使用干净视频，并把原视频音量设为 0；
 - 有 `background_url` 时按 `CINEFLOW_MEDIA_BACKGROUND_GAIN` 混入背景；
 - 每条 Azure TTS 片段按字幕 `start_ms` 设置 `TimelineIn`；
+- 音频轨分配使用 WAV 实测 `duration_ms`，不是字幕长度估算；
 - 相互重叠的配音片段自动分配到不同音频轨；
 - 硬字幕使用 `SubtitleTracks[].SubtitleTrackClips`；
 - 最终输出到私有 OSS；
 - `soft` 模式当前单独交付 SRT，不把 mov_text 字幕轨封装进 MP4；
 - 返回最终视频签名 URL、字幕 URL、ICE 任务 ID 和输出元数据。
+
+Azure 时长测量、SSML 语速重试和残余溢出字段见 `docs/azure-tts.md`。
 
 ## 运行
 
@@ -185,11 +188,11 @@ Media Worker 的 `job_timeout_seconds` 和控制平面 HTTP timeout 是单个云
 这是可运行的 Media Worker MVP，但生产上线前仍需完成以下验证：
 
 1. **真实 ICE 返回结构**：不同地域/版本的 `MusicDemix` 结果字段需要用正式账号做契约测试；无法分类时系统保留全部输出到 `metadata` 并标记降级；
-2. **真正的配音时长拟合**：当前按字幕开始时间放置 Azure 音频；若配音超过时间槽，会分轨保留声音，但尚未自动 time-stretch；
+2. **残余配音超时处理**：当前已测量 WAV 时长，并允许 Azure 用有界 `prosody rate` 重生成；达到最大语速后仍超时的音频会完整保留、分轨并标记 `timing_warning`，尚未自动触发 DeepSeek 缩句或 post-TTS time-stretch；
 3. **软字幕封装**：当前返回独立 SRT；需要内嵌软字幕时应增加专门封装步骤；
 4. **任务持久化**：当前一次 HTTP 请求内完成提交和轮询；生产版应把 `JobId` 写入 Redis/PostgreSQL，以便 Worker 重启后继续查询；
 5. **火山 Media 后备**：控制平面已有 `SECONDARY_MEDIA_WORKER_URL`，但真实火山媒体适配器尚未实现；
-6. **实测性能和费用**：必须用真实 30 秒、2 分钟和 5 分钟素材记录 p50/p95、声伴分离耗时、合成耗时和实际账单。
+6. **实测性能和费用**：必须用真实 30 秒、2 分钟和 5 分钟素材记录 p50/p95、声伴分离耗时、TTS 二次生成率、合成耗时和实际账单。
 
 ## 接口安全
 
