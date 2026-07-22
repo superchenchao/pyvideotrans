@@ -11,6 +11,7 @@ import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlparse
 
 import httpx
@@ -44,10 +45,14 @@ class AnalyzeRequest(BaseModel):
 
 class SpeakerWorkerSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="CINEFLOW_SPEAKER_", env_file=".env", extra="ignore"
+        env_prefix="CINEFLOW_SPEAKER_",
+        env_file=".env",
+        extra="ignore",
     )
 
     mode: str = "demo"
+    audio_backend: Literal["auto", "asr", "pyannote"] = "auto"
+    asr_turn_confidence: float = Field(default=0.9, ge=0, le=1)
     hf_token: str = ""
     pyannote_model: str = "pyannote/speaker-diarization-community-1"
     device: str = "cuda"
@@ -56,30 +61,62 @@ class SpeakerWorkerSettings(BaseSettings):
     port: int = 8090
 
 
-def overlap_ms(left_start: int, left_end: int, right_start: int, right_end: int) -> int:
+def overlap_ms(
+    left_start: int,
+    left_end: int,
+    right_start: int,
+    right_end: int,
+) -> int:
     return max(0, min(left_end, right_end) - max(left_start, right_start))
 
 
+def audio_turns_from_transcript(
+    transcript: Transcript,
+    *,
+    confidence: float = 0.9,
+) -> list[AudioTurn]:
+    """Use cloud ASR diarization labels as the first audio-speaker evidence."""
+
+    return [
+        AudioTurn(
+            start_ms=line.start_ms,
+            end_ms=line.end_ms,
+            speaker_id=line.speaker_id,
+            confidence=confidence,
+        )
+        for line in transcript.lines
+        if line.speaker_id
+    ]
+
+
 def associate_audio_speakers_with_faces(
-    audio_turns: list[AudioTurn], visual_tracks: list[VisualTrack]
+    audio_turns: list[AudioTurn],
+    visual_tracks: list[VisualTrack],
 ) -> dict[str, str]:
-    """One-to-one audio speaker → face identity association from confident co-speech."""
+    """One-to-one audio speaker to face association from confident co-speech."""
 
     scores: dict[tuple[str, str], float] = defaultdict(float)
     for audio in audio_turns:
         for visual in visual_tracks:
             overlap = overlap_ms(
-                audio.start_ms, audio.end_ms, visual.start_ms, visual.end_ms
+                audio.start_ms,
+                audio.end_ms,
+                visual.start_ms,
+                visual.end_ms,
             )
             if overlap:
                 scores[(audio.speaker_id, visual.face_id)] += (
-                    overlap * audio.confidence * visual.score * visual.av_sync_confidence
+                    overlap
+                    * audio.confidence
+                    * visual.score
+                    * visual.av_sync_confidence
                 )
 
     mapping: dict[str, str] = {}
     used_faces: set[str] = set()
     for (speaker_id, face_id), _score in sorted(
-        scores.items(), key=lambda item: (-item[1], item[0][0], item[0][1])
+        scores.items(),
+        key=lambda item: (-item[1], item[0][0], item[0][1]),
     ):
         if speaker_id in mapping or face_id in used_faces:
             continue
@@ -89,7 +126,8 @@ def associate_audio_speakers_with_faces(
 
 
 def _candidate_scores(
-    values: dict[str, float], duration_ms: int
+    values: dict[str, float],
+    duration_ms: int,
 ) -> list[CandidateScore]:
     if not values:
         return []
@@ -99,7 +137,8 @@ def _candidate_scores(
             score=min(1.0, max(0.001, value / duration_ms)),
         )
         for character_id, value in sorted(
-            values.items(), key=lambda pair: (-pair[1], pair[0])
+            values.items(),
+            key=lambda pair: (-pair[1], pair[0]),
         )
     ]
 
@@ -121,16 +160,29 @@ def build_line_evidence(
         av_sync = 0.0
 
         for turn in audio_turns:
-            overlap = overlap_ms(line.start_ms, line.end_ms, turn.start_ms, turn.end_ms)
+            overlap = overlap_ms(
+                line.start_ms,
+                line.end_ms,
+                turn.start_ms,
+                turn.end_ms,
+            )
             if not overlap:
                 continue
-            character_id = mapping.get(turn.speaker_id, f"audio:{turn.speaker_id}")
+            character_id = mapping.get(
+                turn.speaker_id,
+                f"audio:{turn.speaker_id}",
+            )
             audio_scores[character_id] += overlap * turn.confidence
             total_audio_overlap += overlap
             active_audio_speakers.add(turn.speaker_id)
 
         for track in visual_tracks:
-            overlap = overlap_ms(line.start_ms, line.end_ms, track.start_ms, track.end_ms)
+            overlap = overlap_ms(
+                line.start_ms,
+                line.end_ms,
+                track.start_ms,
+                track.end_ms,
+            )
             if not overlap:
                 continue
             visual_scores[track.face_id] += overlap * track.score
@@ -147,7 +199,8 @@ def build_line_evidence(
                     or max(item.score for item in visual_candidates) < 0.2
                 ),
                 overlap_speech=(
-                    len(active_audio_speakers) > 1 and total_audio_overlap > duration * 1.05
+                    len(active_audio_speakers) > 1
+                    and total_audio_overlap > duration * 1.05
                 ),
                 av_sync_confidence=av_sync if visual_candidates else 0.0,
             )
@@ -165,16 +218,34 @@ class SpeakerRuntime:
     async def startup(self) -> None:
         if self.settings.mode == "demo":
             return
+        if not self.settings.active_speaker_command:
+            self.detail = "CINEFLOW_SPEAKER_ACTIVE_SPEAKER_COMMAND is missing"
+            return
+
+        if self.settings.audio_backend == "asr":
+            self.warm = True
+            self.detail = "cloud ASR diarization and active-speaker command ready"
+            return
+
         if not self.settings.hf_token:
+            if self.settings.audio_backend == "auto":
+                self.warm = True
+                self.detail = (
+                    "cloud ASR diarization and active-speaker command ready; "
+                    "pyannote fallback unavailable"
+                )
+                return
             self.detail = "CINEFLOW_SPEAKER_HF_TOKEN is missing"
             return
+
         try:
             self.pipeline = await asyncio.to_thread(self._load_pyannote)
-            self.warm = bool(self.settings.active_speaker_command)
+            self.warm = True
             self.detail = (
-                "pyannote and active-speaker command ready"
-                if self.warm
-                else "pyannote ready; active-speaker command missing"
+                "cloud ASR diarization preferred; pyannote and active-speaker "
+                "fallback ready"
+                if self.settings.audio_backend == "auto"
+                else "pyannote and active-speaker command ready"
             )
         except Exception as exc:
             self.detail = str(exc)
@@ -185,7 +256,8 @@ class SpeakerRuntime:
         from pyannote.audio import Pipeline
 
         pipeline = Pipeline.from_pretrained(
-            self.settings.pyannote_model, token=self.settings.hf_token
+            self.settings.pyannote_model,
+            token=self.settings.hf_token,
         )
         pipeline.to(torch.device(self.settings.device))
         return pipeline
@@ -193,23 +265,82 @@ class SpeakerRuntime:
     async def analyze(self, request: AnalyzeRequest) -> list[LineEvidence]:
         if self.settings.mode == "demo":
             return self._demo_evidence(request.transcript)
-        if not self.warm or self.pipeline is None:
+        if not self.warm:
             raise RuntimeError(self.detail)
+
+        asr_turns = audio_turns_from_transcript(
+            request.transcript,
+            confidence=self.settings.asr_turn_confidence,
+        )
+        use_asr_turns = (
+            self.settings.audio_backend != "pyannote" and bool(asr_turns)
+        )
+        if self.settings.audio_backend == "asr" and not use_asr_turns:
+            raise RuntimeError(
+                "ASR audio backend selected but transcript has no speaker_id labels"
+            )
 
         with tempfile.TemporaryDirectory(prefix="cineflow-speaker-") as directory:
             work = Path(directory)
-            video = await self._materialize(str(request.job.input_url), work / "input.mp4")
-            audio = work / "audio.wav"
-            await self._extract_audio(video, audio)
-            audio_task = asyncio.to_thread(
-                self._run_pyannote, audio, request.job.expected_speakers
+            video_url = request.job.clean_video_url or request.job.input_url
+            video = await self._materialize(
+                str(video_url),
+                work / "input.mp4",
             )
-            visual_task = asyncio.to_thread(self._run_active_speaker, video, work)
-            audio_turns, visual_tracks = await asyncio.gather(audio_task, visual_task)
-            mapping = associate_audio_speakers_with_faces(audio_turns, visual_tracks)
+            visual_task = asyncio.to_thread(
+                self._run_active_speaker,
+                video,
+                work,
+            )
+
+            if use_asr_turns:
+                audio_turns = asr_turns
+                visual_tracks = await visual_task
+            else:
+                if self.pipeline is None:
+                    raise RuntimeError(
+                        "transcript has no cloud ASR speaker labels and "
+                        "pyannote fallback is unavailable"
+                    )
+                audio = await self._prepare_audio(request.job, video, work)
+                audio_task = asyncio.to_thread(
+                    self._run_pyannote,
+                    audio,
+                    request.job.expected_speakers,
+                )
+                audio_turns, visual_tracks = await asyncio.gather(
+                    audio_task,
+                    visual_task,
+                )
+
+            mapping = associate_audio_speakers_with_faces(
+                audio_turns,
+                visual_tracks,
+            )
             return build_line_evidence(
-                request.transcript, audio_turns, visual_tracks, mapping
+                request.transcript,
+                audio_turns,
+                visual_tracks,
+                mapping,
             )
+
+    async def _prepare_audio(
+        self,
+        job: JobRequest,
+        video: Path,
+        work: Path,
+    ) -> Path:
+        if job.source_audio_url is not None:
+            suffix = (
+                Path(urlparse(str(job.source_audio_url)).path).suffix or ".audio"
+            )
+            return await self._materialize(
+                str(job.source_audio_url),
+                work / f"source{suffix}",
+            )
+        audio = work / "audio.wav"
+        await self._extract_audio(video, audio)
+        return audio
 
     async def _materialize(self, url: str, destination: Path) -> Path:
         parsed = urlparse(url)
@@ -219,7 +350,10 @@ class SpeakerRuntime:
             return destination
         if parsed.scheme in {"http", "https"}:
             async with (
-                httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client,
+                httpx.AsyncClient(
+                    timeout=60.0,
+                    follow_redirects=True,
+                ) as client,
                 client.stream("GET", url) as response,
             ):
                 response.raise_for_status()
@@ -258,16 +392,22 @@ class SpeakerRuntime:
             raise RuntimeError(stderr.decode("utf-8", errors="replace"))
 
     def _run_pyannote(
-        self, audio: Path, expected_speakers: int | None
+        self,
+        audio: Path,
+        expected_speakers: int | None,
     ) -> list[AudioTurn]:
-        kwargs = {"num_speakers": expected_speakers} if expected_speakers else {}
+        kwargs = {
+            "num_speakers": expected_speakers,
+        } if expected_speakers else {}
         output = self.pipeline(str(audio), **kwargs)
         annotation = getattr(output, "speaker_diarization", output)
         turns: list[AudioTurn] = []
         if hasattr(annotation, "itertracks"):
             iterator = (
                 (segment, speaker)
-                for segment, _track, speaker in annotation.itertracks(yield_label=True)
+                for segment, _track, speaker in annotation.itertracks(
+                    yield_label=True
+                )
             )
         else:
             iterator = iter(annotation)
@@ -281,13 +421,26 @@ class SpeakerRuntime:
             )
         return turns
 
-    def _run_active_speaker(self, video: Path, work: Path) -> list[VisualTrack]:
+    def _run_active_speaker(
+        self,
+        video: Path,
+        work: Path,
+    ) -> list[VisualTrack]:
         output = work / "active-speaker.json"
         template = self.settings.active_speaker_command
         command = shlex.split(
-            template.format(input=str(video), output=str(output), workdir=str(work))
+            template.format(
+                input=str(video),
+                output=str(output),
+                workdir=str(work),
+            )
         )
-        subprocess.run(command, check=True, timeout=90, env=os.environ.copy())
+        subprocess.run(
+            command,
+            check=True,
+            timeout=90,
+            env=os.environ.copy(),
+        )
         data = json.loads(output.read_text(encoding="utf-8"))
         raw_tracks = data.get("tracks", data) if isinstance(data, dict) else data
         return [VisualTrack.model_validate(item) for item in raw_tracks]
@@ -300,8 +453,18 @@ class SpeakerRuntime:
             rows.append(
                 LineEvidence(
                     line_id=line.line_id,
-                    audio=[CandidateScore(character_id=character, score=0.88)],
-                    visual=[CandidateScore(character_id=character, score=0.95)],
+                    audio=[
+                        CandidateScore(
+                            character_id=character,
+                            score=0.88,
+                        )
+                    ],
+                    visual=[
+                        CandidateScore(
+                            character_id=character,
+                            score=0.95,
+                        )
+                    ],
                     av_sync_confidence=0.9,
                 )
             )
@@ -319,7 +482,9 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="CineFlow CineFusion Worker", version="0.1.0", lifespan=lifespan
+    title="CineFlow CineFusion Worker",
+    version="0.3.0",
+    lifespan=lifespan,
 )
 
 
@@ -329,7 +494,7 @@ async def healthz() -> dict[str, object]:
         "ok": runtime.warm,
         "warm": runtime.warm,
         "detail": runtime.detail,
-        "backend": "pyannote-community-1+external-active-speaker",
+        "backend": f"{settings.audio_backend}+external-active-speaker",
     }
 
 
