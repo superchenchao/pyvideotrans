@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - agent/cineflow-cloud-realtime-5m
+  pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: write
