@@ -146,12 +146,15 @@ def validate_probe(
         warnings.append(
             f"generated height differs: expected {request.expected_height}, got {result.height}"
         )
-    if request.expected_fps is not None and result.fps is not None:
-        if abs(result.fps - request.expected_fps) > fps_tolerance:
-            valid = False
-            warnings.append(
-                f"generated FPS differs: expected {request.expected_fps:.3f}, got {result.fps:.3f}"
-            )
+    if (
+        request.expected_fps is not None
+        and result.fps is not None
+        and abs(result.fps - request.expected_fps) > fps_tolerance
+    ):
+        valid = False
+        warnings.append(
+            f"generated FPS differs: expected {request.expected_fps:.3f}, got {result.fps:.3f}"
+        )
     return SubtitleOutputValidation(
         valid=valid,
         size_bytes=result.size_bytes,
