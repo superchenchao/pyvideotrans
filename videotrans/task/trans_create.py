@@ -629,12 +629,20 @@ class TransCreate(BaseTask):
     def diariz(self):
         _st=time.time()
         speaker_path = Path(self.cfg.cache_folder + "/speaker.json")
+        speaker_type = settings.get('speaker_type', 'volcengine')
         # 说话人设为1，不进行分离
         if self._exit() or not self.cfg.enable_diariz or self.max_speakers == 1:
             return
+        if (
+                speaker_type == 'volcengine'
+                and speaker_path.exists()
+                and not speaker_path.with_name('speaker.volcengine.json').is_file()
+        ):
+            # 安装更新包后的首次运行不能继续复用旧本地模型的角色结果。
+            speaker_path.unlink(missing_ok=True)
         expected_speakers = None
         auto_retry_count = None
-        if self.max_speakers < 1:
+        if self.max_speakers < 1 and speaker_type != 'volcengine':
             try:
                 from videotrans.process.series_speakers import (
                     infer_oversegmentation_speaker_count,
@@ -661,8 +669,14 @@ class TransCreate(BaseTask):
             and (not expected_speakers or len(set(cached_speakers)) != expected_speakers)
         ):
             return
-        # built pyannote reverb ali_CAM
-        speaker_type = settings.get('speaker_type', 'built')
+        # volcengine built pyannote reverb ali_CAM
+        if speaker_type == 'volcengine':
+            from videotrans.recognition.volcengine_flash import credentials_configured
+            if not credentials_configured():
+                raise SpeechToTextError(
+                    '火山极速角色识别尚未配置，请在“语音识别”菜单打开'
+                    '“字节语音大模型极速版”填写 API Key。'
+                )
         hf_token = settings.get('hf_token')
         if speaker_type == 'built' and self.cfg.detect_language[:2] not in ['zh', 'en']:
             logger.error(f'当前选择 built 说话人分离模型，但不支持当前语言:{self.cfg.detect_language}')
@@ -687,7 +701,13 @@ class TransCreate(BaseTask):
             subtitles_file=f'{self.cfg.cache_folder}/diariz-{time.time()}.json'
             Path(subtitles_file).write_text(json.dumps([[it['start_time'], it['end_time']] for it in self.source_srt_list]),encoding='utf-8')
             kw = {
-                "input_file": self.cfg.source_wav,
+                "input_file": (
+                    self.recogn_vocal
+                    if tools.vail_file(getattr(self, 'recogn_vocal', None))
+                    else self.cfg.vocal
+                    if tools.vail_file(getattr(self.cfg, 'vocal', None))
+                    else self.cfg.source_wav
+                ),
                 "subtitles_file": subtitles_file,
                 "speak_file":self.cfg.cache_folder + "/speaker.json",
                 "num_speakers": (
@@ -700,7 +720,11 @@ class TransCreate(BaseTask):
                 'ali_CAM'
                 if speaker_type == 'built' and correction_count else speaker_type
             )
-            if run_speaker_type == 'built':
+            if run_speaker_type == 'volcengine':
+                from videotrans.recognition.volcengine_flash import (
+                    volcengine_flash_speakers as _run_speakers,
+                )
+            elif run_speaker_type == 'built':
                 tools.down_file_from_ms(f'{ROOT_DIR}/models/onnx', [
                     "https://www.modelscope.cn/models/himyworld/videotrans/resolve/master/onnx/seg_model.onnx",
                     "https://www.modelscope.cn/models/himyworld/videotrans/resolve/master/onnx/nemo_en_titanet_small.onnx",
@@ -739,11 +763,18 @@ class TransCreate(BaseTask):
                 )
 
             _rs = self._new_process(callback=_run_speakers, title=title,
-                                         is_cuda=self.cfg.is_cuda and run_speaker_type != 'built', kwargs=kw)
+                                         is_cuda=(
+                                             self.cfg.is_cuda
+                                             and run_speaker_type not in ['built', 'volcengine']
+                                         ), kwargs=kw)
 
             # “无上限”在短剧上偶尔会把同一人按场景/音色变化切成几十个
             # spk。只对明显过切结果做一次有界重跑，显式指定人数时不干预。
-            if _rs and self.max_speakers < 1 and not expected_speakers and not auto_retry_count:
+            if (
+                    _rs and speaker_type != 'volcengine'
+                    and self.max_speakers < 1
+                    and not expected_speakers and not auto_retry_count
+            ):
                 try:
                     detected_speakers = json.loads(
                         speaker_path.read_text(encoding='utf-8')
@@ -792,6 +823,8 @@ class TransCreate(BaseTask):
             self.signal(text=tr('separating speakers end'))
         except Exception as e:
             logger.exception(f'说话人分离失败，跳过 {e}', exc_info=True)
+            if speaker_type == 'volcengine':
+                raise SpeechToTextError(f'火山极速角色识别失败：{e}') from e
 
         logger.debug(f'[说话人分离阶段结束耗时]:{time.time()-_st}s')
 

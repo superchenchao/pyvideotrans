@@ -54,7 +54,7 @@ notices = {
 
         "merge_short_sub": "只有选中该项，才会合并短字幕",
         "whisper_prepare": "是否提前将音频切割为句子片段后再发给whisper模型识别?\n若使用clone配音角色，请选中，并将最短语音设为3000，最大语音设为10，提供语音克隆可靠性",
-        "speaker_type": "用于说话人分离的模型，默认内置模型支持中英. \n若选 pyannote 必须拥有 https://huggingface.co 上的token，\n并且同意pyannote组织的授权协议\n\n具体请访问URL查看教程:\nhttps://pvt9.com/shuohuaren",
+        "speaker_type": "用于说话人分离的渠道。默认 volcengine，调用火山引擎“大模型录音文件极速版”，需先在语音识别菜单中配置 API Key。\n若选 pyannote 必须拥有 https://huggingface.co 上的token，并同意pyannote组织的授权协议。",
         "hf_token": "填写你在 huggingface.co 的token，否则无法使用 pyannote，具体查看教程\nhttps://pvt9.com/shuohuaren",
 
         "cuda_com_type": "faster模式时计算数据类型，int8=消耗资源少，速度快，精度低，float32=消耗资源多，速度慢，精度高，float16适合GPU加速。default默认自选",
@@ -318,7 +318,7 @@ if defaulelang != 'zh':
 
             "merge_short_sub": "Short subtitles will only be merged if this option is selected",
             "whisper_prepare": "Should we pre-segment the speech using VAD before sending it to the Whisper model for recognition? \nIf using cloned voice-over characters, please select this option and set the shortest speech length to 3000 and the maximum speech length to 10 to improve the reliability of the voice cloning.",
-            "speaker_type": "The model used for speaker separation. The default is the built-in model, supporting both Chinese and English. Pyannote is optional. \nIf selected, you must have a token from \nhttps://huggingface.co \nand agree to the Pyannote licensing agreement. \nFor details, please visit the URL for a tutorial: \nhttps://pvt9.com/shuohuaren",
+            "speaker_type": "Speaker separation provider. VolcEngine Flash is the default and requires its API key in the Speech Recognition settings. Pyannote requires a Hugging Face token and model access.",
             "hf_token": "Enter your token from huggingface.co. Otherwise, you cannot use Pyannote speaker separation. \nFor details, please see the tutorial: \nhttps://pvt9.com/shuohuaren",
 
             "cuda_com_type": "Compute type for faster-whisper (e.g., int8, float16, float32).",
@@ -565,7 +565,7 @@ class Ui_setini(object):
             ],
             "llm_ai_type": ['chatgpt', 'deepseek'],
             "vad_type": ['tenvad', 'silero'],
-            "speaker_type": ['built', 'ali_CAM', 'pyannote', 'reverb'],
+            "speaker_type": ['volcengine', 'built', 'ali_CAM', 'pyannote', 'reverb'],
             "video_codec": ['264', '265'],
             "preset": ['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower',
                        'veryslow'],

@@ -1834,6 +1834,10 @@ class MultiFolderTaskWindow(QDialog):
             return
         if recognition.is_input_api(recogn_type=base_cfg["recogn_type"]) is not True:
             return
+        if recognition.is_speaker_api_ready(
+                enable_diariz=base_cfg.get("enable_diariz", False)
+        ) is not True:
+            return
         missing_voice_languages = []
         for project in runnable:
             for language in project.languages:

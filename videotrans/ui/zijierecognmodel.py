@@ -19,7 +19,7 @@ class Ui_zijierecognform(object):
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(zijierecognform.sizePolicy().hasHeightForWidth())
         zijierecognform.setSizePolicy(sizePolicy)
-        zijierecognform.setMaximumSize(QtCore.QSize(800, 300))
+        zijierecognform.setMaximumSize(QtCore.QSize(800, 390))
 
         self.verticalLayout = QtWidgets.QVBoxLayout(zijierecognform)
         self.verticalLayout.setObjectName("verticalLayout")
@@ -30,6 +30,19 @@ class Ui_zijierecognform(object):
             "\n这和【字节火山字幕生成】也非同个产品，本API支持语言更多效果更好，并且支持说话人识别"
             "\n使用前请务必 "+tr("Fill out the tutorial"))
         self.verticalLayout.addWidget(labetips)
+
+        self.apiKeyLayout = QtWidgets.QFormLayout()
+        self.api_key_label = QtWidgets.QLabel(zijierecognform)
+        self.api_key_label.setMinimumSize(QtCore.QSize(100, 35))
+        self.zijierecognmodel_apikey = QtWidgets.QLineEdit(zijierecognform)
+        self.zijierecognmodel_apikey.setMinimumSize(QtCore.QSize(210, 35))
+        self.zijierecognmodel_apikey.setEchoMode(QtWidgets.QLineEdit.Password)
+        self.apiKeyLayout.setWidget(0, QtWidgets.QFormLayout.LabelRole, self.api_key_label)
+        self.apiKeyLayout.setWidget(0, QtWidgets.QFormLayout.FieldRole, self.zijierecognmodel_apikey)
+        self.verticalLayout.addLayout(self.apiKeyLayout)
+
+        legacy_label = QtWidgets.QLabel("旧版控制台（已有配置可继续使用）", zijierecognform)
+        self.verticalLayout.addWidget(legacy_label)
 
         self.formLayout_2 = QtWidgets.QFormLayout()
         self.formLayout_2.setSizeConstraint(QtWidgets.QLayout.SetMinimumSize)
@@ -68,6 +81,7 @@ class Ui_zijierecognform(object):
 
         self.zijierecognmodel_token = QtWidgets.QLineEdit(zijierecognform)
         self.zijierecognmodel_token.setMinimumSize(QtCore.QSize(210, 35))
+        self.zijierecognmodel_token.setEchoMode(QtWidgets.QLineEdit.Password)
         self.zijierecognmodel_token.setObjectName("zijierecognmodel_token")
         self.formLayout.setWidget(0, QtWidgets.QFormLayout.FieldRole, self.zijierecognmodel_token)
         self.verticalLayout.addLayout(self.formLayout)
@@ -99,11 +113,13 @@ class Ui_zijierecognform(object):
         self.retranslateUi(zijierecognform)
         QtCore.QMetaObject.connectSlotsByName(zijierecognform)
     def update_ui(self):
+        self.zijierecognmodel_apikey.setText(params.get("zijierecognmodel_apikey",''))
         self.zijierecognmodel_appid.setText(params.get("zijierecognmodel_appid",''))
         self.zijierecognmodel_token.setText(params.get("zijierecognmodel_token",''))
 
     def retranslateUi(self, zijierecognform):
         zijierecognform.setWindowTitle(tr('VolcEngine STT'))
+        self.api_key_label.setText("API Key（新版）")
         self.label.setText("AppID")
         self.label_2.setText("Access Token")
         self.set.setText(tr("Save"))

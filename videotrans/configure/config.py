@@ -288,6 +288,18 @@ class AppSettings:
             self._apply_dict(default)
             return default
 
+        # 2026-07: 角色识别默认迁移到火山录音文件极速版。版本标记只让
+        # 已安装程序迁移一次，之后用户仍可在高级设置中手动切换其他模型。
+        try:
+            speaker_provider_version = int(
+                temp_json.get("speaker_provider_version", 0) or 0
+            )
+        except (TypeError, ValueError):
+            speaker_provider_version = 0
+        if speaker_provider_version < 1:
+            temp_json["speaker_type"] = "volcengine"
+            temp_json["speaker_provider_version"] = 1
+
         # 合并逻辑
         merged_settings = {}
         # 处理特殊连字符键
@@ -484,7 +496,8 @@ class AppSettings:
             "qwentts_role": '',
             "qwentts_models": Qwentts_Models,
             "show_more_settings": False,
-            "speaker_type": "built",
+            "speaker_type": "volcengine",
+            "speaker_provider_version": 1,
             "speaker_refine": True,
             "hf_token": "",
             "cjk_len": 20,
@@ -841,6 +854,7 @@ class AppParams:
             "doubao2_access": "",
             "zijierecognmodel_appid": "",
             "zijierecognmodel_token": "",
+            "zijierecognmodel_apikey": "",
             "chattts_api": "",
             "app_mode": "biaozhun",
             "stt_source_language": 0,

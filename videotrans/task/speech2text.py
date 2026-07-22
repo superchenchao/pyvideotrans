@@ -194,10 +194,23 @@ class SpeechToText(BaseTask):
                 logger.exception(f"重新断句失败已恢复原样 {e}", exc_info=True)
 
     def diariz(self):
-        if self._exit() or not self.cfg.enable_diariz or Path(self.cfg.cache_folder + "/speaker.json").exists():
+        speaker_path = Path(self.cfg.cache_folder + "/speaker.json")
+        speaker_type = settings.get('speaker_type', 'volcengine')
+        if self._exit() or not self.cfg.enable_diariz:
             return
+        if speaker_path.exists():
+            if speaker_type != 'volcengine' or speaker_path.with_name(
+                    'speaker.volcengine.json').is_file():
+                return
+            speaker_path.unlink(missing_ok=True)
 
-        speaker_type = settings.get('speaker_type', 'built')
+        if speaker_type == 'volcengine':
+            from videotrans.recognition.volcengine_flash import credentials_configured
+            if not credentials_configured():
+                raise SpeechToTextError(
+                    '火山极速角色识别尚未配置，请在“语音识别”菜单打开'
+                    '“字节语音大模型极速版”填写 API Key。'
+                )
         hf_token = settings.get('hf_token')
         if speaker_type == 'built' and self.cfg.detect_language[:2] not in ['zh', 'en']:
             logger.error(f'当前选择 built 说话人分离模型，但不支持当前语言:{self.cfg.detect_language}')
@@ -225,7 +238,11 @@ class SpeechToText(BaseTask):
             "num_speakers": self.max_speakers,
             "is_cuda": self.cfg.is_cuda
         }
-        if speaker_type == 'built':
+        if speaker_type == 'volcengine':
+            from videotrans.recognition.volcengine_flash import (
+                volcengine_flash_speakers as _run_speakers,
+            )
+        elif speaker_type == 'built':
             tools.down_file_from_ms(f'{ROOT_DIR}/models/onnx', [
                 "https://www.modelscope.cn/models/himyworld/videotrans/resolve/master/onnx/seg_model.onnx",
                 "https://www.modelscope.cn/models/himyworld/videotrans/resolve/master/onnx/nemo_en_titanet_small.onnx",
@@ -256,12 +273,17 @@ class SpeechToText(BaseTask):
                     endpoint=hf_endpoit
                 )
             _rs = self._new_process(callback=_run_speakers, title=title,
-                                         is_cuda=self.cfg.is_cuda and speaker_type != 'built', kwargs=kw)
+                                         is_cuda=(
+                                             self.cfg.is_cuda
+                                             and speaker_type not in ['built', 'volcengine']
+                                         ), kwargs=kw)
 
             logger.debug('分离说话人成功完成' if _rs else '分离失败说话人失败')
             self.signal(text=tr('separating speakers end'))
         except Exception as e:
             logger.exception(f'说话人分离失败，跳过 {e}', exc_info=True)
+            if speaker_type == 'volcengine':
+                raise SpeechToTextError(f'火山极速角色识别失败：{e}') from e
         self.signal(text=tr('separating speakers end'))
 
     def task_done(self):

@@ -519,6 +519,14 @@ class WinAction(WinActionBase):
         if self.check_proxy() is not True:
             self.main.startbtn.setDisabled(False)
             return
+        diariz_control = getattr(self.main, 'enable_diariz', None)
+        if recognition.is_speaker_api_ready(
+                enable_diariz=(
+                    diariz_control.isChecked() if diariz_control is not None else False
+                )
+        ) is not True:
+            self.main.startbtn.setDisabled(False)
+            return
         if self.main.app_mode == "biaozhun" and len(target_languages) == 1:
             target_code = translator.get_code(show_text=target_languages[0])
             roles = tools.role_menu(self.main.tts_type.currentIndex(), target_code)

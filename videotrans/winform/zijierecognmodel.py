@@ -16,10 +16,12 @@ def openwin():
 
     def test():
 
+        api_key = winobj.zijierecognmodel_apikey.text().strip()
         appid = winobj.zijierecognmodel_appid.text().strip()
         access = winobj.zijierecognmodel_token.text().strip()
-        if not appid or not access:
-            return tools.show_error(tr('Appid access and cluster are required'))
+        if not api_key and (not appid or not access):
+            return tools.show_error('请填写新版 API Key，或同时填写旧版 AppID 和 Access Token')
+        params["zijierecognmodel_apikey"] = api_key
         params["zijierecognmodel_appid"] = appid
         params["zijierecognmodel_token"] = access
 
@@ -30,9 +32,11 @@ def openwin():
         winobj.test.setText(tr('Testing...'))
 
     def save():
+        api_key = winobj.zijierecognmodel_apikey.text().strip()
         appid = winobj.zijierecognmodel_appid.text().strip()
         access = winobj.zijierecognmodel_token.text().strip()
 
+        params["zijierecognmodel_apikey"] = api_key
         params["zijierecognmodel_appid"] = appid
         params["zijierecognmodel_token"] = access
         params.save()

@@ -1,26 +1,16 @@
 import json
-import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List,  Union
 
-import requests
 from videotrans.configure.excepts import SpeechToTextError
-from videotrans.configure.config import params, logger
 from videotrans.recognition._base import BaseRecogn
+from videotrans.recognition.volcengine_flash import (
+    extract_utterances,
+    request_transcription,
+)
 from videotrans.task.taskcfg import SrtItem
 from videotrans.util import tools
-
-_error = {
-    "20000003": "静音音频",
-
-    "45000001": "请求参数缺失必需字段 / 字段值无效",
-    "45000002": "空音频",
-    "45000151": "音频格式不正确",
-
-    "550XXXX": "服务内部处理错误",
-    "55000031": "服务器繁忙"
-}
 
 
 @dataclass
@@ -28,47 +18,10 @@ class ZijieRecogn(BaseRecogn):
 
     def _exec(self) -> Union[List[SrtItem], None]:
         if self._exit():  return
-
-        submit_url = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
-        task_id = str(uuid.uuid4())
-        appid = params.get('zijierecognmodel_appid', '')
-        headers = {
-            "X-Api-App-Key": appid,
-            "X-Api-Access-Key": params.get('zijierecognmodel_token', ''),
-            "X-Api-Resource-Id": "volc.bigasr.auc_turbo",
-            "X-Api-Request-Id": task_id,
-            "X-Api-Sequence": "-1"
-        }
-        request = {
-            "user": {
-                "uid": appid
-            },
-            "audio": {"data": self._audio_to_base64(self.audio_file)},
-            "request": {
-                "model_name": "bigmodel",
-                "model_version": "400",
-                "enable_itn": True,
-                "enable_punc": True,
-                "enable_ddc": True,
-                "show_utterances": True,
-                # "vad_segment":True,
-                # "end_window_size":300,
-                "enable_speaker_info": True
-            }
-        }
-        response = requests.post(submit_url, json=request, headers=headers)
-        logger.info(f'{response.headers=}')
-        response.raise_for_status()
-        code = response.headers.get('X-Api-Status-Code')
-        if not code:
-            raise SpeechToTextError(f"未知错误:{response.text=},{response.headers=}")
-        if str(code) != "20000000":
-            raise SpeechToTextError(_error.get(str(code), '未知错误'))
-
-        res = response.json()
-        seg_list = res.get('result', {}).get('utterances')
+        res, trace_id = request_transcription(self.audio_file)
+        seg_list = extract_utterances(res)
         if not seg_list:
-            raise SpeechToTextError(f'返回数据中无识别结果:{response=}')
+            raise SpeechToTextError('火山极速版返回数据中无识别结果')
 
         srt_list = []
         speaker_list = []
@@ -77,7 +30,7 @@ class ZijieRecogn(BaseRecogn):
         for it in seg_list:
             if not it.get('text', '').strip():
                 continue
-            speaker_list.append(f'spk{it.get("additions", {}).get("speaker", 0)}')
+            speaker_list.append(it['speaker'])
             startraw = tools.ms_to_time_string(ms=it['start_time'])
             endraw = tools.ms_to_time_string(ms=it['end_time'])
             tmp = SrtItem(
@@ -97,4 +50,12 @@ class ZijieRecogn(BaseRecogn):
         )
         if speaker_list:
             Path(f'{self.cache_folder}/speaker.json').write_text(json.dumps(speaker_list), encoding='utf-8')
+            Path(f'{self.cache_folder}/speaker.volcengine.json').write_text(
+                json.dumps({
+                    "provider": "volcengine_flash",
+                    "trace_id": trace_id,
+                    "speaker_count": len(set(speaker_list)),
+                }, ensure_ascii=False),
+                encoding='utf-8',
+            )
         return srt_list

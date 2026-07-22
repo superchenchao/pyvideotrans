@@ -148,10 +148,28 @@ def is_allow_lang(langcode: str = None, recogn_type: int = None, model_name=None
 def is_input_api(recogn_type: int = None, return_str=False):
     _cls = _ID_NAME_DICT.get(recogn_type)
     if not _cls: return True
+    if recogn_type == ZIJIE_RECOGN_MODEL:
+        from videotrans.recognition.volcengine_flash import credentials_configured
+        if credentials_configured():
+            return True
+        return (
+            "请先配置火山极速版 API Key"
+            if return_str else winform.get_win(_cls.win).openwin()
+        )
     if _cls.key_name and not params.get(_cls.key_name):
         return "Please configure the API Key information of the Deepgram channel first." if return_str else winform.get_win(
             _cls.win).openwin()
     return True
+
+
+def is_speaker_api_ready(*, enable_diariz: bool, return_str=False):
+    if not enable_diariz or settings.get('speaker_type', 'volcengine') != 'volcengine':
+        return True
+    from videotrans.recognition.volcengine_flash import credentials_configured
+    if credentials_configured():
+        return True
+    message = '请先配置火山“大模型录音文件极速版”的 API Key'
+    return message if return_str else winform.get_win('zijierecognmodel').openwin()
 
 
 # 统一入口

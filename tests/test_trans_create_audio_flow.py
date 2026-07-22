@@ -132,6 +132,66 @@ def test_prepare_recognition_vocal_keeps_original_source_separate(tmp_path, monk
     assert ffmpeg_calls[0][ffmpeg_calls[0].index("-af") + 1] == "volume=1.5"
 
 
+def test_volcengine_is_default_diarization_provider_and_uses_clean_vocal(
+        tmp_path, monkeypatch
+):
+    cache_dir = tmp_path / "cache"
+    target_dir = tmp_path / "target"
+    cache_dir.mkdir()
+    target_dir.mkdir()
+    source_wav = cache_dir / "source.wav"
+    vocal_wav = cache_dir / "vocal.wav"
+    recognition_vocal = cache_dir / "recognition-vocal.wav"
+    source_wav.write_bytes(b"source")
+    vocal_wav.write_bytes(b"vocal")
+    recognition_vocal.write_bytes(b"clean-vocal")
+    # Simulate an old local-model cache. The cloud provider must replace it.
+    (cache_dir / "speaker.json").write_text(json.dumps(["spk9"]), encoding="utf-8")
+
+    task = object.__new__(TransCreate)
+    task.cfg = SimpleNamespace(
+        enable_diariz=True,
+        cache_folder=cache_dir.as_posix(),
+        target_dir=target_dir.as_posix(),
+        detect_language="zh-cn",
+        source_wav=source_wav.as_posix(),
+        vocal=vocal_wav.as_posix(),
+        is_cuda=True,
+    )
+    task.recogn_vocal = recognition_vocal.as_posix()
+    task.max_speakers = 0
+    task.precent = 0
+    task.source_srt_list = [{"start_time": 0, "end_time": 1000}]
+    task._exit = lambda: False
+    task.signal = lambda **kwargs: None
+    calls = []
+
+    def fake_process(*, callback, kwargs, is_cuda, **unused):
+        calls.append((callback.__name__, dict(kwargs), is_cuda))
+        Path(kwargs["speak_file"]).write_text(json.dumps(["spk0"]), encoding="utf-8")
+        Path(kwargs["speak_file"]).with_name("speaker.volcengine.json").write_text(
+            json.dumps({"provider": "volcengine_flash"}), encoding="utf-8"
+        )
+        return True
+
+    monkeypatch.setattr(
+        settings,
+        "get",
+        lambda key, default=None: "volcengine" if key == "speaker_type" else default,
+    )
+    from videotrans.recognition import volcengine_flash
+    monkeypatch.setattr(volcengine_flash, "credentials_configured", lambda: True)
+    task._new_process = fake_process
+
+    task.diariz()
+
+    assert len(calls) == 1
+    assert calls[0][0] == "volcengine_flash_speakers"
+    assert calls[0][1]["input_file"] == recognition_vocal.as_posix()
+    assert calls[0][2] is False
+    assert json.loads((target_dir / "speaker.json").read_text(encoding="utf-8")) == ["spk0"]
+
+
 def test_refinement_replaces_only_similar_original_audio_candidates():
     baseline = [
         {"line": 1, "start_time": 31500, "end_time": 33020, "text": "我醉了真好"},
