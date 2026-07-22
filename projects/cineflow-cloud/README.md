@@ -1,58 +1,131 @@
 # CineFlow Cloud
 
-面向中文短剧、影视片段和多角色内容的云端翻译配音系统。普通电脑只负责把视频上传到对象存储、提交任务、查看进度并下载成片；语音识别、多模态人物归因、DeepSeek 翻译、Azure TTS、音画对齐和合成都在云端执行。
+面向中文短剧、影视片段和多角色内容的独立云端翻译配音服务。
 
-## 产品硬约束
+当前暂时存放在 `projects/cineflow-cloud`，但它是一个**可直接整体移动到新仓库的独立项目**：
 
-- 单条输入视频最长 **300 秒**；
-- 严格 SLA 从“文件已上传且 `POST /v1/jobs` 返回 202”开始；
-- 已接受任务最多 **300 秒**进入成功、降级成功、失败或超时终态；
-- 准入预测必须保留至少 20 秒安全余量，默认五分钟输入 p95 预测为 256 秒；
-- 没有空闲预热槽位、GPU 未预热、必要 Worker 不健康或预计费用超预算时直接拒绝，不让已接受任务排队；
-- 默认单目标语言、1080p 以内、输入文件不超过 512MB；
-- 上传耗时不计入处理 SLA，因为公网带宽不受服务端控制。
+- 不导入 `videotrans`；
+- 不读取父项目配置；
+- 不复用父项目 Python 包；
+- 有自己的 `pyproject.toml`、依赖、Dockerfile、测试、文档和 CI；
+- 父项目只需把已上传的 OSS URL 作为普通 HTTP API 参数传进来。
 
-这套机制不是口头承诺。代码中同时存在：输入限制、p95 预测、实时健康检查、无排队容量门、分阶段截止点、总截止时间和费用硬门禁。
+## 已确认的产品边界
+
+### 上游继续沿用现有实现
+
+本项目**不重新实现**以下功能：
+
+1. 原视频上传 OSS；
+2. 私有 Bucket、STS、分片上传、断点续传和对象校验；
+3. 当前项目已有的本地/Caca/阿里云 IMS 字幕消除；
+4. 字幕消除任务恢复、结果校验和 OSS 清理。
+
+上游处理结束后向 CineFlow 提交：
+
+- `input_url`：现有 OSS 上传流程产生的原视频签名 URL；
+- `clean_video_url`：可选，现有字幕消除流程产生的干净视频 URL；
+- `source_audio_url`：可选，现有流程已经生成音频时可直接复用。
+
+因此，把本目录以后移动到其他仓库不会破坏上传和字幕消除逻辑，也不会形成源码级耦合。
+
+### 本项目负责
+
+- 云端音频准备和可选声伴分离；
+- 中文 ASR；
+- 多模态人物归因；
+- DeepSeek 字幕翻译；
+- Azure 多角色 TTS；
+- 音画对齐；
+- 最终合成和结果交付。
+
+## 五分钟目标
+
+输入视频最长 300 秒。目标是**尽可能在任务提交后 300 秒内完成**，但 300 秒不是强制截止时间：
+
+- 预测超过 300 秒仍然接受任务；
+- 没有空闲槽位时进入队列，不返回 429；
+- Worker 冷启动会产生性能警告，不会仅因此拒绝；
+- 运行超过 300 秒后继续处理；
+- 成功任务仍然是 `succeeded`，并通过 `target_exceeded=true` 标记目标未达到；
+- 只有真实的输入错误、费用超限或 Provider 无可用路径时才拒绝/失败。
+
+上传耗时不计入该性能目标，因为公网带宽不受本服务控制。
+
+## Provider 顺序
+
+除已明确保留的 DeepSeek 和 Azure TTS 外，部署时遵循：
+
+```text
+阿里云 API / Worker 适配器
+        ↓ 不满足功能、效果或速度
+火山引擎 API / Worker 适配器
+        ↓ 仍不满足
+自建云端 Worker
+```
+
+`MEDIA/ASR/SPEAKER_WORKER_URL` 是首选端点，建议指向阿里云实现；对应的 `SECONDARY_*` 端点用于火山引擎或其他后备实现。控制平面会先调用首选端点，失败后再调用后备端点。
+
+## 翻译：默认且仅使用 DeepSeek
+
+当前版本不做按语言自动切换，统一先使用 DeepSeek：
+
+```text
+provider: deepseek
+model: deepseek-v4-flash
+base URL: https://api.deepseek.com/v1
+max completion tokens: 65536
+thinking: disabled
+```
+
+这组默认值与现有 pyVideoTrans 的 DeepSeek 通道保持一致，但代码是本项目自己的独立 HTTP 客户端，不会 import 父项目实现。
+
+翻译请求使用 JSON Output，并要求：
+
+- 固定 `line_id`；
+- 固定行数和顺序；
+- 不合并、不拆分字幕；
+- 带角色名和术语表；
+- 根据原时间槽生成适合配音的简洁口语；
+- 普通翻译默认关闭思考模式以降低延迟。
+
+## 配音：保留 Azure TTS
+
+- 支持 `character_voices`，同一目标语言内每个角色使用不同 Azure 音色；
+- `target_voice` 是没有单独角色配置时的后备；
+- 支持主区域和备用区域；
+- 支持并发、429/5xx 短重试；
+- SSML 只使用一层 `<prosody>`。
 
 ## 说话人方案
 
-不再把 ali_CAM 作为唯一决策模型。CineFusion Worker 将以下证据统一到逐行字幕：
+不再把 ali_CAM 作为唯一决策模型。CineFusion Worker 汇总：
 
-1. pyannote Community-1 音频说话人分段；
-2. Light-ASD 或 LR-ASD 主动说话人得分；
-3. ArcFace 等跨镜头人脸身份聚类；
+1. pyannote Community-1 音频分段；
+2. Light-ASD/LR-ASD 主动说话人分数；
+3. ArcFace 等跨镜头人脸身份；
 4. 画外音、重叠说话和音画同步状态；
-5. 可选的文本证据；
-6. 控制平面的动态权重与 Viterbi 式序列解码。
+5. DeepSeek 低置信度文本软证据；
+6. 动态权重和 Viterbi 式序列解码。
 
-GPU Worker 已包含 pyannote 预热、音频说话人与人脸身份关联、逐字幕证据生成和外部主动说话人命令适配器。Light-ASD/LR-ASD 模型本体不复制进本仓库，部署时按其许可证挂载并通过命令输出统一 JSON。
+Light-ASD/LR-ASD 模型本体不复制进本仓库，部署时按许可证挂载，并通过统一 JSON 命令适配器连接。
 
-## 翻译与配音
-
-- 主翻译：DeepSeek，使用 JSON Output、固定行号、固定顺序、术语表和角色名上下文；
-- 默认关闭思考模式，避免普通字幕翻译增加延迟；
-- 配音：Azure Speech REST TTS；
-- 支持 `character_voices`，同一目标语言内每个角色使用不同 Azure 音色；
-- `target_voice` 作为未单独配置角色的后备音色；
-- Azure 支持主区域和第二区域故障切换、并发上限、429/5xx 短重试；
-- SSML 只使用一层 `<prosody>`，避免重复嵌套。
-
-## 当前仓库包含
+## 当前包含
 
 - FastAPI 控制平面；
-- `/v1/admission` 运行前耗时和费用预估；
-- 五分钟 SLA 准入与无排队容量槽；
-- `/readyz` Worker 健康与预热检查；
-- SSE 任务进度流；
-- 多模态动态融合与序列解码；
-- DeepSeek JSON 字幕翻译客户端；
-- Azure Speech REST TTS、角色音色映射和区域容灾；
+- `/v1/admission` 耗时和费用预估；
+- 软 300 秒性能目标；
+- 有界并发和等待队列；
+- `/readyz` 与 Worker 健康检查；
+- SSE 任务进度；
+- 多模态融合与序列解码；
+- 独立 DeepSeek JSON 翻译客户端；
+- Azure Speech REST TTS；
 - Media、ASR、CineFusion Worker HTTP 契约；
 - 可部署的 CineFusion GPU Worker；
-- Demo Provider 和自动化测试；
-- Docker、GPU Docker、Kubernetes 示例和 SLA 验收脚本。
+- Docker、Kubernetes 示例和性能基准脚本。
 
-> 这是可运行的控制平面与 CineFusion Worker MVP。生产上线仍需要 Media Worker、ASR Worker、对象存储和真实 Light-ASD/LR-ASD 推理命令。只有真实素材在目标云实例上的 p95 小于 280 秒后，才应开启生产流量。
+> 当前是控制平面和 CineFusion Worker MVP。正式上线仍需接入真实 Media/ASR Worker、对象存储结果写入和主动说话人模型，并在目标云实例上做真实素材 p50/p95 测试。
 
 ## 本地运行
 
@@ -65,13 +138,14 @@ uvicorn cineflow.api:app --host 0.0.0.0 --port 8080
 
 默认 `CINEFLOW_MODE=demo`，不会调用付费 API。
 
-### 先做准入检查
+## 准入预估
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/admission \
   -H 'Content-Type: application/json' \
   -d '{
-    "input_url": "https://example.com/already-uploaded.mp4",
+    "input_url": "https://example.com/oss-source.mp4",
+    "clean_video_url": "https://example.com/oss-cleaned.mp4",
     "probe": {
       "duration_seconds": 300,
       "input_bytes": 180000000,
@@ -88,61 +162,62 @@ curl -X POST http://127.0.0.1:8080/v1/admission \
       "character_002": "en-US-AndrewMultilingualNeural"
     },
     "estimated_tts_characters": 3000,
-    "max_cost_cny": 5,
+    "max_cost_cny": 5.0,
     "subtitle_mode": "soft",
     "multi_speaker": true,
-    "strict_sla": true,
-    "max_cost_cny": 5.0
+    "optimize_for_target": true
   }'
 ```
 
-返回中包含 `predicted_seconds`、`estimated_cost_cny` 和费用分项。
+返回：
 
-### 提交任务
+- `predicted_seconds`；
+- `target_seconds`；
+- `likely_within_target`；
+- `estimated_cost_cny`；
+- `warnings`。
 
-把同一 JSON 提交到：
+即使 `likely_within_target=false`，任务也可以正常提交并继续执行。
+
+## 提交和查询
 
 ```bash
 curl -X POST http://127.0.0.1:8080/v1/jobs \
   -H 'Content-Type: application/json' \
   --data @job.json
-```
 
-查询状态：
-
-```bash
 curl http://127.0.0.1:8080/v1/jobs/JOB_ID
-```
-
-订阅进度：
-
-```bash
 curl -N http://127.0.0.1:8080/v1/jobs/JOB_ID/events
 ```
 
 ## API
 
-- `GET /healthz`：控制平面存活；
-- `GET /readyz`：必要 Worker、模型预热和空闲槽位；
-- `GET /v1/capacity`：当前执行槽位；
-- `POST /v1/admission`：不占槽、不计费的准入预估；
+- `GET /healthz`：控制平面和 Provider 状态；
+- `GET /readyz`：Provider 是否可用；忙碌不代表不就绪；
+- `GET /v1/capacity`：运行数、等待数和可用槽位；
+- `POST /v1/admission`：免费预估；
 - `POST /v1/jobs`：提交任务；
 - `GET /v1/jobs/{job_id}`：任务状态；
-- `GET /v1/jobs/{job_id}/events`：SSE 事件流；
+- `GET /v1/jobs/{job_id}/events`：SSE；
 - Swagger：`/docs`。
 
-## 生产配置
+## 生产配置摘要
 
 ```text
 CINEFLOW_MODE=production
-CINEFLOW_MEDIA_WORKER_URL=https://media-worker.internal
-CINEFLOW_ASR_WORKER_URL=https://asr-worker.internal
-CINEFLOW_SECONDARY_ASR_WORKER_URL=https://backup-asr.internal
-CINEFLOW_SPEAKER_WORKER_URL=https://speaker-worker.internal
-CINEFLOW_WORKER_BEARER_TOKEN=...
+CINEFLOW_TARGET_PROCESSING_SECONDS=300
+
+# 首选阿里云适配器，后备火山引擎适配器
+CINEFLOW_MEDIA_WORKER_URL=https://aliyun-media.internal
+CINEFLOW_SECONDARY_MEDIA_WORKER_URL=https://volc-media.internal
+CINEFLOW_ASR_WORKER_URL=https://aliyun-asr.internal
+CINEFLOW_SECONDARY_ASR_WORKER_URL=https://volc-asr.internal
+CINEFLOW_SPEAKER_WORKER_URL=https://aliyun-or-private-speaker.internal
+CINEFLOW_SECONDARY_SPEAKER_WORKER_URL=https://volc-or-private-speaker.internal
 
 CINEFLOW_DEEPSEEK_API_KEY=...
 CINEFLOW_DEEPSEEK_MODEL=deepseek-v4-flash
+CINEFLOW_DEEPSEEK_THINKING=false
 
 CINEFLOW_AZURE_SPEECH_KEY=...
 CINEFLOW_AZURE_SPEECH_REGION=eastasia
@@ -150,71 +225,9 @@ CINEFLOW_AZURE_SPEECH_SECONDARY_KEY=...
 CINEFLOW_AZURE_SPEECH_SECONDARY_REGION=southeastasia
 ```
 
-CineFusion Worker：
-
-```text
-CINEFLOW_SPEAKER_MODE=production
-CINEFLOW_SPEAKER_HF_TOKEN=hf_...
-CINEFLOW_SPEAKER_PYANNOTE_MODEL=pyannote/speaker-diarization-community-1
-CINEFLOW_SPEAKER_DEVICE=cuda
-CINEFLOW_SPEAKER_ACTIVE_SPEAKER_COMMAND=python /opt/asd/infer_json.py --input {input} --output {output}
-```
-
-生产环境不得在接单后下载模型。Worker 启动时完成加载，`/healthz` 只有在 pyannote 和主动说话人命令都准备好时才返回 `warm=true`。
-
-## 验收
-
-```bash
-python scripts/benchmark_sla.py \
-  --api http://127.0.0.1:8080 \
-  --input-url https://example.com/five-minutes.mp4 \
-  --duration 300 \
-  --input-bytes 180000000 \
-  --target-language en-US \
-  --voice en-US-AvaMultilingualNeural
-```
-
-上线门槛不是单次跑进 300 秒，而是代表性视频矩阵的 p95 小于 280 秒，同时说话人准确率达到既定基线。
-
-更多内容见：
+详细内容见：
 
 - `docs/architecture.md`
 - `docs/sla.md`
 - `docs/speaker-worker.md`
 - `docs/deployment.md`
-
-
-## CineFusion Worker
-
-Demo：
-
-```bash
-uvicorn cineflow.speaker_worker:app --port 8090
-```
-
-生产模式需要预先下载 pyannote 模型，并设置：
-
-```text
-CINEFLOW_SPEAKER_MODE=production
-CINEFLOW_SPEAKER_HF_TOKEN=...
-CINEFLOW_SPEAKER_DEVICE=cuda
-CINEFLOW_SPEAKER_ACTIVE_SPEAKER_COMMAND=python /models/light_asd/run.py --input {input} --output {output}
-```
-
-主动说话人命令必须输出 `docs/speaker-worker.md` 定义的 JSON。模型在容器启动时预热，任务期间不允许下载。
-
-
-## SLA 基准脚本
-
-上传真实测试视频后运行：
-
-```bash
-python scripts/benchmark_sla.py \
-  --input-url 'https://...' \
-  --duration 300 \
-  --input-bytes 200000000 \
-  --target-language en-US \
-  --voice en-US-AvaMultilingualNeural
-```
-
-脚本先调用免费准入预检，再从任务接受时刻计时；超出 300 秒或返回失败终态会以非零状态退出。
