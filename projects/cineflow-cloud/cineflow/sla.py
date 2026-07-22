@@ -2,32 +2,28 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import TypeVar
 
 from .config import Settings
 from .cost import CostEstimator
 from .models import CostQuote, JobRequest, ProviderHealth
 
-T = TypeVar("T")
-
 
 class AdmissionRejected(RuntimeError):
-    """Raised before billing when the five-minute SLA cannot be accepted."""
-
-
-class CapacityUnavailable(AdmissionRejected):
-    """Accepted jobs are never allowed to wait in an internal queue."""
+    """Raised before billing for an invalid, unsupported, or over-budget job."""
 
 
 class ProviderUnavailable(AdmissionRejected):
-    """A mandatory provider is unhealthy or its model is not pre-warmed."""
+    """Raised when no mandatory provider path can currently execute the job."""
 
 
 @dataclass(frozen=True)
 class P95Profile:
-    """P95 stage times for a five-minute input on pre-warmed workers."""
+    """Initial p95 estimates for a five-minute input on warm workers.
+
+    These numbers guide optimization and user-facing estimates. They never turn
+    the 300-second goal into a cancellation deadline.
+    """
 
     media_prepare: float = 105.0
     asr: float = 38.0
@@ -37,16 +33,28 @@ class P95Profile:
     assembly: float = 52.0
     fixed_overhead: float = 8.0
 
-    def predicted_seconds(self, duration_seconds: float) -> float:
-        factor = max(0.18, duration_seconds / 300.0)
-        media = self.media_prepare * factor
+    def predicted_seconds(self, request: JobRequest) -> float:
+        duration_factor = max(0.18, request.probe.duration_seconds / 300.0)
+        pixels = request.probe.width * request.probe.height
+        pixel_factor = max(1.0, min(2.0, pixels / float(1920 * 1080)))
+        fps_factor = max(1.0, request.probe.fps / 30.0)
+        visual_factor = duration_factor * max(pixel_factor**0.35, fps_factor**0.25)
+        codec_penalty = 12.0 if request.probe.codec.casefold() in {"av1", "vp9"} else 0.0
+        hard_subtitle_penalty = 18.0 if request.subtitle_mode == "hard" else 0.0
+
+        media = self.media_prepare * visual_factor
         language_path = (
-            self.asr * factor
-            + max(self.speaker_fusion * factor, self.translation * factor)
-            + self.azure_tts * factor
-            + self.assembly * factor
+            self.asr * duration_factor
+            + max(self.speaker_fusion * visual_factor, self.translation * duration_factor)
+            + self.azure_tts * duration_factor
+            + self.assembly * visual_factor
         )
-        return self.fixed_overhead + max(media, language_path)
+        return (
+            self.fixed_overhead
+            + codec_penalty
+            + hard_subtitle_penalty
+            + max(media, language_path)
+        )
 
 
 class AdmissionController:
@@ -67,11 +75,10 @@ class AdmissionController:
             gpu_per_second=settings.cost_gpu_per_second,
             render_per_minute=settings.cost_render_per_minute,
             separation_per_minute=settings.cost_separation_per_minute,
-            subtitle_removal_per_minute=(
-                settings.cost_subtitle_removal_per_minute
-            ),
         )
+        self._slots = asyncio.Semaphore(settings.max_inflight_jobs)
         self._inflight = 0
+        self._queued = 0
         self._capacity_lock = asyncio.Lock()
 
     def quote(self, request: JobRequest) -> tuple[float, CostQuote]:
@@ -79,23 +86,11 @@ class AdmissionController:
         if probe.duration_seconds > self.settings.max_video_seconds:
             raise AdmissionRejected("video duration exceeds the five-minute product limit")
         if probe.input_bytes > self.settings.max_input_bytes:
-            raise AdmissionRejected(
-                "input is too large for the five-minute upload/processing profile"
-            )
+            raise AdmissionRejected("input is too large for the configured processing profile")
         if probe.codec.casefold() not in self.SUPPORTED_CODECS:
-            raise AdmissionRejected(f"unsupported codec for SLA mode: {probe.codec}")
-        if probe.width * probe.height > 1920 * 1080:
-            raise AdmissionRejected("strict SLA mode accepts at most 1080p input")
-        if request.subtitle_mode == "hard" and probe.fps > 30:
-            raise AdmissionRejected("hard-subtitle SLA mode accepts at most 30 FPS")
+            raise AdmissionRejected(f"unsupported input codec: {probe.codec}")
 
-        predicted = self.p95.predicted_seconds(probe.duration_seconds)
-        allowed = self.settings.hard_sla_seconds - self.settings.sla_reserve_seconds
-        if request.strict_sla and predicted > allowed:
-            raise AdmissionRejected(
-                f"predicted p95 {predicted:.1f}s exceeds admission budget {allowed}s"
-            )
-
+        predicted = self.p95.predicted_seconds(request)
         cost = self.cost_estimator.quote(request)
         if cost.total_cny > request.max_cost_cny:
             raise AdmissionRejected(
@@ -109,66 +104,73 @@ class AdmissionController:
 
     def validate_provider_health(
         self, request: JobRequest, health: list[ProviderHealth]
-    ) -> None:
+    ) -> list[str]:
         mandatory = {"media", "asr", "deepseek", "azure_tts"}
         if request.multi_speaker:
             mandatory.add("speaker")
-        unhealthy = [
-            item for item in health if item.name in mandatory and not item.healthy
+        indexed = {item.name: item for item in health}
+        unavailable = [
+            name for name in sorted(mandatory) if name not in indexed or not indexed[name].healthy
         ]
-        if unhealthy:
-            names = ", ".join(item.name for item in unhealthy)
-            raise ProviderUnavailable(f"mandatory providers are unhealthy: {names}")
-        if request.strict_sla:
-            warm_required = {"media", "asr"}
-            if request.multi_speaker:
-                warm_required.add("speaker")
-            cold = [
-                item.name
-                for item in health
-                if item.name in warm_required and not item.warm
-            ]
-            if cold:
-                raise ProviderUnavailable(
-                    "strict SLA requires pre-warmed workers: " + ", ".join(cold)
-                )
+        if unavailable:
+            raise ProviderUnavailable(
+                "mandatory providers are unavailable: " + ", ".join(unavailable)
+            )
 
-    async def acquire_nowait(self) -> None:
+        cold = [name for name in sorted(mandatory) if not indexed[name].warm]
+        return (
+            [
+                "some workers are cold; the job remains accepted but may miss the "
+                f"{self.settings.target_processing_seconds}s target: " + ", ".join(cold)
+            ]
+            if cold
+            else []
+        )
+
+    async def acquire(self) -> float:
+        """Wait for a processing slot instead of rejecting a valid job."""
+
+        queued_at = time.monotonic()
         async with self._capacity_lock:
-            if self._inflight >= self.settings.max_inflight_jobs:
-                raise CapacityUnavailable("all pre-warmed SLA slots are busy; retry later")
+            self._queued += 1
+        try:
+            await self._slots.acquire()
+        except BaseException:
+            async with self._capacity_lock:
+                self._queued = max(0, self._queued - 1)
+            raise
+        wait_seconds = time.monotonic() - queued_at
+        async with self._capacity_lock:
+            self._queued = max(0, self._queued - 1)
             self._inflight += 1
+        return wait_seconds
 
     async def release(self) -> None:
         async with self._capacity_lock:
             self._inflight = max(0, self._inflight - 1)
+        self._slots.release()
 
     async def capacity(self) -> dict[str, int]:
         async with self._capacity_lock:
             return {
                 "inflight": self._inflight,
+                "queued": self._queued,
                 "max_inflight": self.settings.max_inflight_jobs,
                 "available": max(0, self.settings.max_inflight_jobs - self._inflight),
             }
 
 
-class Deadline:
-    def __init__(self, hard_seconds: float) -> None:
-        self.started = time.monotonic()
-        self.hard_at = self.started + hard_seconds
+class TargetTimer:
+    """Tracks the five-minute objective without cancelling work when it is missed."""
+
+    def __init__(self, target_seconds: float, *, started: float | None = None) -> None:
+        self.started = started if started is not None else time.monotonic()
+        self.target_seconds = target_seconds
 
     @property
     def elapsed(self) -> float:
         return time.monotonic() - self.started
 
     @property
-    def remaining(self) -> float:
-        return max(0.0, self.hard_at - time.monotonic())
-
-    async def run_before(self, offset_seconds: float, awaitable: Awaitable[T]) -> T:
-        stage_deadline = min(self.hard_at, self.started + offset_seconds)
-        timeout = stage_deadline - time.monotonic()
-        if timeout <= 0:
-            raise TimeoutError("stage deadline already expired")
-        async with asyncio.timeout(timeout):
-            return await awaitable
+    def exceeded(self) -> bool:
+        return self.elapsed > self.target_seconds
