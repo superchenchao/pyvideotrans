@@ -14,14 +14,61 @@ from ..models import (
 
 
 class DeepSeekTranslator:
-    def __init__(self, api_key: str, base_url: str, model: str) -> None:
+    """Standalone DeepSeek client matching the existing project's defaults.
+
+    No code is imported from the parent pyVideoTrans project. The default model,
+    OpenAI-compatible endpoint, large completion allowance and disabled thinking
+    mode intentionally mirror the existing DeepSeek channel.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        model: str,
+        *,
+        max_tokens: int = 65536,
+        thinking: bool = False,
+    ) -> None:
         if not api_key:
             raise ValueError("DeepSeek API key is required in production mode")
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
         self.model = model
+        self.max_tokens = max_tokens
+        self.thinking = thinking
+
+    @property
+    def chat_url(self) -> str:
+        return f"{self.base_url}/chat/completions"
+
+    def _body(self, *, prompt: dict, temperature: float, system: str) -> dict:
+        return {
+            "model": self.model,
+            "max_completion_tokens": self.max_tokens,
+            "temperature": temperature,
+            "response_format": {"type": "json_object"},
+            "thinking": {"type": "enabled" if self.thinking else "disabled"},
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+            ],
+        }
+
+    async def _post_json(self, body: dict, *, timeout: float) -> dict:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                self.chat_url,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json=body,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+        return json.loads(content)
 
     async def translate(self, request: JobRequest, transcript: Transcript) -> Transcript:
+        if request.translation_engine != "deepseek":
+            raise ValueError("this release supports DeepSeek translation only")
         payload_lines = [
             {
                 "line_id": line.line_id,
@@ -45,28 +92,14 @@ class DeepSeekTranslator:
             ],
             "lines": payload_lines,
         }
-        body = {
-            "model": self.model,
-            "temperature": 0.25,
-            "response_format": {"type": "json_object"},
-            "thinking": {"type": "disabled"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "You are a precise multilingual subtitle localization engine.",
-                },
-                {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-            ],
-        }
-        async with httpx.AsyncClient(timeout=25.0) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=body,
-            )
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
+        parsed = await self._post_json(
+            self._body(
+                prompt=prompt,
+                temperature=0.25,
+                system="You are a precise multilingual subtitle localization engine.",
+            ),
+            timeout=25.0,
+        )
         translated_rows = parsed.get("lines")
         if not isinstance(translated_rows, list):
             raise ValueError("DeepSeek response is missing a lines array")
@@ -160,37 +193,21 @@ class DeepSeekTranslator:
             },
             "lines": rows,
         }
-        body = {
-            "model": self.model,
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-            "thinking": {"type": "disabled"},
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You provide conservative JSON dialogue-context evidence for "
-                        "speaker attribution in film subtitles."
-                    ),
-                },
-                {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-            ],
-        }
-        async with httpx.AsyncClient(timeout=12.0) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=body,
-            )
-            response.raise_for_status()
-            content = response.json()["choices"][0]["message"]["content"]
-        parsed = json.loads(content)
+        parsed = await self._post_json(
+            self._body(
+                prompt=prompt,
+                temperature=0.1,
+                system=(
+                    "You provide conservative JSON dialogue-context evidence for "
+                    "speaker attribution in film subtitles."
+                ),
+            ),
+            timeout=12.0,
+        )
         output = parsed.get("lines")
         expected_ids = [row["line_id"] for row in rows]
         output_ids = (
-            [int(item["line_id"]) for item in output]
-            if isinstance(output, list)
-            else []
+            [int(item["line_id"]) for item in output] if isinstance(output, list) else []
         )
         if output_ids != expected_ids:
             raise ValueError("DeepSeek speaker reasoning changed line IDs or ordering")
@@ -211,4 +228,3 @@ class DeepSeekTranslator:
                 )
             result.append(LineEvidence(line_id=line_id, text=candidates))
         return result
-
