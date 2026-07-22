@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import Awaitable, TypeVar
+from typing import TypeVar
 
 from .config import Settings
 from .cost import CostEstimator

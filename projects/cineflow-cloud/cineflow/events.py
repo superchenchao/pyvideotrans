@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections import defaultdict
 from collections.abc import AsyncIterator
 
@@ -28,10 +29,8 @@ class EventBroker:
                 del history[: len(history) - self.history_limit]
             queues = tuple(self._subscribers[job_id])
         for queue in queues:
-            try:
+            with contextlib.suppress(asyncio.QueueFull):
                 queue.put_nowait(event)
-            except asyncio.QueueFull:
-                pass
 
     async def history(self, job_id: str) -> list[JobEvent]:
         async with self._lock:

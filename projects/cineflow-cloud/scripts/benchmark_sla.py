@@ -7,7 +7,6 @@ import time
 
 import httpx
 
-
 TERMINAL = {"succeeded", "degraded", "failed", "timed_out", "rejected"}
 
 

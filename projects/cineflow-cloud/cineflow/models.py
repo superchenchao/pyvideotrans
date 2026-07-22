@@ -44,7 +44,7 @@ class JobRequest(BaseModel):
     expected_speakers: Annotated[int, Field(ge=1, le=20)] | None = None
 
     @model_validator(mode="after")
-    def validate_languages(self) -> "JobRequest":
+    def validate_languages(self) -> JobRequest:
         if self.source_language.casefold() == self.target_language.casefold():
             raise ValueError("target_language must differ from source_language")
         return self
@@ -57,7 +57,7 @@ class SubtitleLine(BaseModel):
     text: str
 
     @model_validator(mode="after")
-    def validate_time_range(self) -> "SubtitleLine":
+    def validate_time_range(self) -> SubtitleLine:
         if self.end_ms <= self.start_ms:
             raise ValueError("end_ms must be greater than start_ms")
         return self

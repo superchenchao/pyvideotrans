@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 import json
 import os
 import shlex
@@ -10,6 +9,7 @@ import subprocess
 import tempfile
 import time
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
 
