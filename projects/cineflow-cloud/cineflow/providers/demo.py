@@ -38,9 +38,9 @@ class DemoProviders:
     async def prepare_media(self, request: JobRequest) -> MediaArtifacts:
         await self._sleep(40)
         return MediaArtifacts(
-            video_url=str(request.input_url),
+            video_url=str(request.clean_video_url or request.input_url),
             background_url="memory://background.wav" if request.separate_background else None,
-            source_audio_url="memory://source.wav",
+            source_audio_url=str(request.source_audio_url or "memory://source.wav"),
         )
 
     async def transcribe(self, request: JobRequest) -> Transcript:
@@ -84,9 +84,7 @@ class DemoProviders:
         return Transcript(
             language=request.target_language,
             lines=[
-                line.model_copy(
-                    update={"text": f"[{request.target_language}] {line.text}"}
-                )
+                line.model_copy(update={"text": f"[{request.target_language}] {line.text}"})
                 for line in transcript.lines
             ],
         )
