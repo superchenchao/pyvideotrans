@@ -27,6 +27,7 @@ class P95Profile:
 
     media_prepare: float = 105.0
     asr: float = 38.0
+    cloud_ocr: float = 55.0
     speaker_fusion: float = 92.0
     translation: float = 14.0
     azure_tts: float = 66.0
@@ -42,9 +43,15 @@ class P95Profile:
         codec_penalty = 12.0 if request.probe.codec.casefold() in {"av1", "vp9"} else 0.0
         hard_subtitle_penalty = 18.0 if request.subtitle_mode == "hard" else 0.0
 
+        recognition_paths = []
+        if request.subtitle_recognition_mode in {"asr", "hybrid"}:
+            recognition_paths.append(self.asr * duration_factor)
+        if request.subtitle_recognition_mode in {"ocr", "hybrid"}:
+            recognition_paths.append(self.cloud_ocr * visual_factor)
+        recognition = max(recognition_paths, default=0.0)
         media = self.media_prepare * visual_factor
         language_path = (
-            self.asr * duration_factor
+            recognition
             + max(self.speaker_fusion * visual_factor, self.translation * duration_factor)
             + self.azure_tts * duration_factor
             + self.assembly * visual_factor
@@ -67,6 +74,7 @@ class AdmissionController:
         self.p95 = p95 or P95Profile()
         self.cost_estimator = cost_estimator or CostEstimator(
             asr_per_second=settings.cost_asr_per_second,
+            ocr_per_minute=settings.cost_ocr_per_minute,
             translation_per_character=settings.cost_translation_per_character,
             azure_tts_per_character=settings.cost_azure_tts_per_character,
             gpu_per_second=settings.cost_gpu_per_second,
@@ -102,7 +110,11 @@ class AdmissionController:
     def validate_provider_health(
         self, request: JobRequest, health: list[ProviderHealth]
     ) -> list[str]:
-        mandatory = {"media", "asr", "deepseek", "azure_tts"}
+        mandatory = {"media", "deepseek", "azure_tts"}
+        if request.subtitle_recognition_mode in {"asr", "hybrid"}:
+            mandatory.add("asr")
+        if request.subtitle_recognition_mode in {"ocr", "hybrid"}:
+            mandatory.add("caption")
         if request.multi_speaker:
             mandatory.add("speaker")
         indexed = {item.name: item for item in health}
