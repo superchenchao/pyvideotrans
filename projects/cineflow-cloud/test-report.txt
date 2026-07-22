@@ -1,0 +1,43 @@
+..........................F                                              [100%]
+=================================== FAILURES ===================================
+_____________ test_low_confidence_line_gets_batched_text_evidence ______________
+
+    async def test_low_confidence_line_gets_batched_text_evidence():
+        providers = object.__new__(ProductionProviders)
+        providers.speaker = FakeSpeaker()
+        providers.translator = FakeTranslator()
+        request = JobRequest(
+            input_url="https://example.com/input.mp4",
+            probe=VideoProbe(duration_seconds=60, input_bytes=1_000_000),
+            target_language="en-US",
+            target_voice="en-US-AvaMultilingualNeural",
+        )
+        transcript = Transcript(
+            language="zh-CN",
+            lines=[SubtitleLine(line_id=1, start_ms=0, end_ms=1000, text="小雪，你来了")],
+        )
+>       evidence = await providers.analyze_speakers(request, transcript)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_text_reasoning_hook.py:53: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <cineflow.providers.http_bundle.ProductionProviders object at 0x7f50950faa90>
+request = JobRequest(input_url=HttpUrl('https://example.com/input.mp4'), clean_video_url=None, source_audio_url=None, probe=Vide... multi_speaker=True, optimize_for_target=True, max_cost_cny=5.0, estimated_tts_characters=None, expected_speakers=None)
+transcript = Transcript(language='zh-CN', lines=[SubtitleLine(line_id=1, start_ms=0, end_ms=1000, text='小雪，你来了', speaker_id=None, words=[])], provider='', task_id='', usage_seconds=None, metadata={})
+
+    async def analyze_speakers(
+        self, request: JobRequest, transcript: Transcript
+    ) -> list[LineEvidence]:
+        data = await self.speaker.post(
+            "/v1/analyze",
+            {"job": request.model_dump(mode="json"), "transcript": transcript.model_dump()},
+>           self.settings.speaker_worker_timeout_seconds,
+            ^^^^^^^^^^^^^
+        )
+E       AttributeError: 'ProductionProviders' object has no attribute 'settings'
+
+cineflow/providers/http_bundle.py:224: AttributeError
+=========================== short test summary info ============================
+FAILED tests/test_text_reasoning_hook.py::test_low_confidence_line_gets_batched_text_evidence - AttributeError: 'ProductionProviders' object has no attribute 'settings'
+1 failed, 26 passed in 0.61s
