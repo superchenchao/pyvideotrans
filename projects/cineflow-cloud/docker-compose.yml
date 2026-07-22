@@ -35,6 +35,16 @@ services:
       - ./external-subtitle-models:/opt/subtitle-models:ro
     restart: unless-stopped
 
+  caption-aliyun:
+    profiles: ["recognition"]
+    build:
+      context: .
+      dockerfile: Dockerfile.caption
+    env_file: .env
+    ports:
+      - "8096:8096"
+    restart: unless-stopped
+
   media-aliyun:
     profiles: ["media"]
     build:
@@ -46,7 +56,7 @@ services:
     restart: unless-stopped
 
   asr-aliyun:
-    profiles: ["asr"]
+    profiles: ["recognition"]
     build:
       context: .
       dockerfile: Dockerfile.asr
@@ -59,7 +69,7 @@ services:
     restart: unless-stopped
 
   asr-volcengine:
-    profiles: ["asr"]
+    profiles: ["recognition"]
     build:
       context: .
       dockerfile: Dockerfile.asr
