@@ -11,7 +11,7 @@ from .config import get_settings
 from .models import AdmissionResult, JobRecord, JobRequest
 from .orchestrator import JobStore, PipelineOrchestrator
 from .providers import DemoProviders, ProductionProviders
-from .sla import AdmissionController, AdmissionRejected, CapacityUnavailable
+from .sla import AdmissionController, AdmissionRejected
 
 settings = get_settings()
 providers = DemoProviders() if settings.mode == "demo" else ProductionProviders(settings)
@@ -21,10 +21,10 @@ orchestrator = PipelineOrchestrator(providers, admission, store)
 
 app = FastAPI(
     title="CineFlow Cloud",
-    version="0.1.0",
+    version="0.2.0",
     description=(
-        "Deadline-aware cloud video translation. The 300-second SLA starts only after "
-        "the input object is already uploaded and the job passes admission control."
+        "Standalone cloud video translation. Inputs are already uploaded to OSS by an "
+        "external client. Five minutes is an optimization target, not a hard timeout."
     ),
 )
 
@@ -35,7 +35,8 @@ async def healthz() -> dict[str, object]:
     return {
         "ok": all(item.healthy for item in provider_health),
         "mode": settings.mode,
-        "hard_sla_seconds": settings.hard_sla_seconds,
+        "translation_provider": settings.translation_provider,
+        "target_processing_seconds": settings.target_processing_seconds,
         "capacity": await admission.capacity(),
         "providers": [item.model_dump() for item in provider_health],
     }
@@ -44,15 +45,9 @@ async def healthz() -> dict[str, object]:
 @app.get("/readyz")
 async def readyz() -> dict[str, object]:
     provider_health = await providers.health()
-    try:
-        # A representative strict request is not needed here; readiness only
-        # exposes provider warmth and immediate slot availability.
-        capacity = await admission.capacity()
-        ready = all(item.healthy and item.warm for item in provider_health)
-        ready = ready and capacity["available"] > 0
-    except Exception:
-        ready = False
-        capacity = await admission.capacity()
+    capacity = await admission.capacity()
+    # A busy service is still ready: valid jobs wait instead of being rejected.
+    ready = all(item.healthy for item in provider_health)
     if not ready:
         raise HTTPException(
             status_code=503,
@@ -71,23 +66,31 @@ async def readyz() -> dict[str, object]:
 
 @app.post("/v1/admission", response_model=AdmissionResult)
 async def check_admission(request: JobRequest) -> AdmissionResult:
+    target = settings.target_processing_seconds
     try:
         predicted, cost = admission.quote(request)
-        admission.validate_provider_health(request, await providers.health())
+        warnings = admission.validate_provider_health(request, await providers.health())
+        likely = predicted <= target
+        if not likely:
+            warnings.append(
+                f"predicted p95 is {predicted:.1f}s; the task is still accepted and will "
+                f"continue beyond the {target}s target if needed"
+            )
         return AdmissionResult(
             accepted=True,
             predicted_seconds=round(predicted, 2),
+            target_seconds=target,
+            likely_within_target=likely,
             estimated_cost_cny=cost.total_cny,
             cost_breakdown=cost.breakdown,
-            hard_sla_seconds=settings.hard_sla_seconds,
-            reserve_seconds=settings.sla_reserve_seconds,
+            warnings=warnings,
         )
     except AdmissionRejected as exc:
         return AdmissionResult(
             accepted=False,
             predicted_seconds=0.0,
-            hard_sla_seconds=settings.hard_sla_seconds,
-            reserve_seconds=settings.sla_reserve_seconds,
+            target_seconds=target,
+            likely_within_target=False,
             reason=str(exc),
         )
 
@@ -101,8 +104,6 @@ async def get_capacity() -> dict[str, int]:
 async def create_job(request: JobRequest) -> JobRecord:
     try:
         return await orchestrator.submit(request)
-    except CapacityUnavailable as exc:
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except AdmissionRejected as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
