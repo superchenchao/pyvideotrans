@@ -34,21 +34,11 @@ jobs:
           path = Path('projects/cineflow-cloud/cineflow/subtitle_worker.py')
           text = path.read_text(encoding='utf-8')
 
-          old = '''                submission = self._submission_from_job(job)
-                  has_existing_submission = bool(
-                      submission.external_job_id
-                      or submission.completed
-                      or (
-                          submission.output_object_key
-                          and await asyncio.to_thread(
-                              self.store.object_exists,
-                              submission.output_object_key,
-                          )
-                      )
-                  )
-                  if not has_existing_submission or provider.name == "local":
-          '''
-          new = '''                submission = self._submission_from_job(job)
+          start_marker = '                submission = self._submission_from_job(job)\n'
+          end_marker = '                if not has_existing_submission or provider.name == "local":\n'
+          start = text.index(start_marker)
+          end = text.index(end_marker, start) + len(end_marker)
+          replacement = '''                submission = self._submission_from_job(job)
                   output_exists = bool(
                       submission.output_object_key
                       and await asyncio.to_thread(
@@ -66,54 +56,41 @@ jobs:
                       )
                   if not has_existing_submission:
           '''
-          if old not in text:
-              raise SystemExit('submission block not found')
-          text = text.replace(old, new, 1)
+          text = text[:start] + replacement + text[end:]
 
-          old = '''        job = await self._load(job_id)
-                  provider = self.providers.get(job.selected_provider)
-          '''
-          new = '''        job = await self._load(job_id)
-                  task = self.tasks.get(job_id)
+          cancel_section = text.index('    async def cancel(\n')
+          load_marker = '        job = await self._load(job_id)\n'
+          load_at = text.index(load_marker, cancel_section) + len(load_marker)
+          cancellation = '''        task = self.tasks.get(job_id)
                   if task is not None and task is not asyncio.current_task() and not task.done():
                       task.cancel()
                       await asyncio.gather(task, return_exceptions=True)
-                  provider = self.providers.get(job.selected_provider)
           '''
-          if old not in text:
-              raise SystemExit('cancel block not found')
-          text = text.replace(old, new, 1)
+          text = text[:load_at] + cancellation + text[load_at:]
 
-          old = '''            if timestamp > threshold:
+          cleanup_section = text.index('    async def cleanup(\n')
+          timestamp_marker = '''            if timestamp > threshold:
                       continue
-                  delete_output = delete_successful_outputs or job.state not in {
-                      SubtitleJobState.SUCCEEDED,
-                      SubtitleJobState.DEGRADED,
-                  }
-                  try:
-                      await self.cancel(
-                          job.job_id,
-                          delete_output=delete_output,
-                          delete_input=False,
-                      )
           '''
-          new = '''            if timestamp > threshold:
-                      continue
-                  if job.state in {
+          timestamp_at = text.index(timestamp_marker, cleanup_section) + len(timestamp_marker)
+          delete_start = text.index(
+              '            delete_output = delete_successful_outputs or job.state not in {\n',
+              timestamp_at,
+          )
+          try_marker = '            try:\n'
+          delete_end = text.index(try_marker, delete_start)
+          skip_success = '''            if job.state in {
                       SubtitleJobState.SUCCEEDED,
                       SubtitleJobState.DEGRADED,
                   } and not delete_successful_outputs:
                       continue
-                  try:
-                      await self.cancel(
-                          job.job_id,
-                          delete_output=True,
-                          delete_input=False,
-                      )
           '''
-          if old not in text:
-              raise SystemExit('cleanup block not found')
-          text = text.replace(old, new, 1)
+          text = text[:delete_start] + skip_success + text[delete_end:]
+          text = text.replace(
+              '                    delete_output=delete_output,\n',
+              '                    delete_output=True,\n',
+              1,
+          )
           path.write_text(text, encoding='utf-8')
           PY
       - name: Format and lint-fix
