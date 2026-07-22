@@ -175,6 +175,10 @@ class ProductionProviders:
             concurrency=settings.azure_tts_concurrency,
         )
 
+    def _worker_timeout(self, field: str, default: float = 300.0) -> float:
+        settings = getattr(self, "settings", None)
+        return float(getattr(settings, field, default))
+
     async def health(self) -> list[ProviderHealth]:
         media, asr, speaker = await asyncio.gather(
             self.media.health("media"),
@@ -203,7 +207,7 @@ class ProductionProviders:
         data = await self.media.post(
             "/v1/prepare",
             request.model_dump(mode="json"),
-            self.settings.media_worker_timeout_seconds,
+            self._worker_timeout("media_worker_timeout_seconds"),
         )
         return MediaArtifacts.model_validate(data)
 
@@ -211,7 +215,7 @@ class ProductionProviders:
         data = await self.asr.post(
             "/v1/transcribe",
             request.model_dump(mode="json"),
-            self.settings.asr_worker_timeout_seconds,
+            self._worker_timeout("asr_worker_timeout_seconds"),
         )
         return Transcript.model_validate(data)
 
@@ -221,7 +225,7 @@ class ProductionProviders:
         data = await self.speaker.post(
             "/v1/analyze",
             {"job": request.model_dump(mode="json"), "transcript": transcript.model_dump()},
-            self.settings.speaker_worker_timeout_seconds,
+            self._worker_timeout("speaker_worker_timeout_seconds"),
         )
         evidence = [LineEvidence.model_validate(item) for item in data["evidence"]]
         preliminary = fuse_speakers(transcript.lines, evidence, review_threshold=0.82)
@@ -288,6 +292,6 @@ class ProductionProviders:
                 "translated": translated.model_dump(),
                 "dubbing": dubbing.model_dump(),
             },
-            self.settings.media_worker_timeout_seconds,
+            self._worker_timeout("media_worker_timeout_seconds"),
         )
         return OutputArtifact.model_validate(data)
