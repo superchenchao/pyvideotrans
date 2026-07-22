@@ -21,8 +21,10 @@ def test_directory_contains_everything_needed_when_moved_to_a_new_repo():
         "README.md",
         "LICENSE",
         "Dockerfile",
+        "Dockerfile.asr",
         ".env.example",
         ".github/workflows/ci.yml",
+        "docs/asr-worker.md",
     ]
     missing = [name for name in required if not (PROJECT_ROOT / name).is_file()]
     assert missing == []
