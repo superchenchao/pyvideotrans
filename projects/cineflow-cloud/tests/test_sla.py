@@ -2,7 +2,7 @@ import pytest
 
 from cineflow.config import Settings
 from cineflow.models import JobRequest, VideoProbe
-from cineflow.sla import AdmissionController, AdmissionRejected
+from cineflow.sla import AdmissionController, AdmissionRejected, P95Profile
 
 
 def request_for(**probe_updates):
@@ -24,10 +24,20 @@ def request_for(**probe_updates):
     )
 
 
-def test_five_minute_job_is_admitted_with_reserve():
+def test_five_minute_job_has_a_realistic_soft_target_prediction():
     controller = AdmissionController(Settings())
     predicted = controller.estimate(request_for())
-    assert predicted <= 280
+    assert predicted <= 300
+
+
+def test_prediction_over_300_seconds_does_not_reject_the_job():
+    controller = AdmissionController(
+        Settings(),
+        p95=P95Profile(fixed_overhead=400),
+    )
+    predicted, quote = controller.quote(request_for())
+    assert predicted > 300
+    assert quote.total_cny > 0
 
 
 def test_oversized_input_is_rejected_before_billing():
@@ -37,7 +47,7 @@ def test_oversized_input_is_rejected_before_billing():
         controller.estimate(request_for(input_bytes=100_000_001))
 
 
-def test_4k_input_is_rejected_in_strict_sla_mode():
+def test_4k_input_is_estimated_instead_of_rejected_for_missing_the_target():
     controller = AdmissionController(Settings())
-    with pytest.raises(AdmissionRejected, match="1080p"):
-        controller.estimate(request_for(width=3840, height=2160))
+    predicted = controller.estimate(request_for(width=3840, height=2160))
+    assert predicted > 0
