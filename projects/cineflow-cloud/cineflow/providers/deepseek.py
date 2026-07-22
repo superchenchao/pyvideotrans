@@ -125,6 +125,108 @@ class DeepSeekTranslator:
             ],
         )
 
+    async def shorten_for_timing(
+        self,
+        request: JobRequest,
+        transcript: Transcript,
+        measurements: dict[int, dict[str, int]],
+    ) -> dict[int, str]:
+        """Batch-rewrite only lines that remain too long after Azure rate fitting.
+
+        The returned mapping mutates neither the transcript nor its line IDs. The
+        caller decides whether to accept each rewrite and re-synthesize it.
+        """
+
+        if not measurements:
+            return {}
+        line_index = {line.line_id: index for index, line in enumerate(transcript.lines)}
+        missing = sorted(set(measurements) - set(line_index))
+        if missing:
+            raise ValueError(f"timing rewrite references unknown line IDs: {missing}")
+
+        rows = []
+        originals: dict[int, str] = {}
+        expected_ids: list[int] = []
+        for line in transcript.lines:
+            measurement = measurements.get(line.line_id)
+            if measurement is None:
+                continue
+            expected_ids.append(line.line_id)
+            originals[line.line_id] = line.text.strip()
+            index = line_index[line.line_id]
+            context = transcript.lines[max(0, index - 2) : index + 3]
+            actual_ms = max(1, int(measurement.get("actual_duration_ms", 1)))
+            target_ms = max(1, int(measurement.get("target_duration_ms", 1)))
+            rows.append(
+                {
+                    "line_id": line.line_id,
+                    "text": line.text,
+                    "target_duration_ms": target_ms,
+                    "actual_duration_ms": actual_ms,
+                    "overflow_ms": max(0, actual_ms - target_ms),
+                    "applied_rate_percent": int(
+                        measurement.get("rate_percent", 0)
+                    ),
+                    "suggested_length_ratio": round(
+                        min(0.95, max(0.25, target_ms / actual_ms * 0.9)),
+                        3,
+                    ),
+                    "context": [
+                        {"line_id": item.line_id, "text": item.text}
+                        for item in context
+                    ],
+                }
+            )
+
+        prompt = {
+            "task": "subtitle_timing_shortening",
+            "target_language": request.target_language,
+            "character_names": request.character_names,
+            "glossary": request.glossary,
+            "rules": [
+                "Return every supplied line_id exactly once and in the same order.",
+                "Rewrite only the supplied line text; never merge or split lines.",
+                "Preserve plot meaning, speaker intent, names, terminology, and tone.",
+                "Use natural concise spoken language suitable for dubbing.",
+                "Use suggested_length_ratio as a strong compression target.",
+                "Do not add explanations, notes, brackets, or alternative versions.",
+                'Return JSON only: {"lines":[{"line_id":1,"text":"..."}]}',
+            ],
+            "lines": rows,
+        }
+        parsed = await self._post_json(
+            self._body(
+                prompt=prompt,
+                temperature=0.15,
+                system=(
+                    "You are a subtitle dialogue editor. Shorten translated lines "
+                    "without changing meaning so synthesized speech fits strict time slots."
+                ),
+            ),
+            timeout=20.0,
+        )
+        output = parsed.get("lines")
+        if not isinstance(output, list):
+            raise ValueError("DeepSeek timing rewrite is missing a lines array")
+        output_ids = [int(item["line_id"]) for item in output]
+        if output_ids != expected_ids:
+            raise ValueError("DeepSeek timing rewrite changed line IDs or ordering")
+
+        rewrites: dict[int, str] = {}
+        for item in output:
+            line_id = int(item["line_id"])
+            text = " ".join(str(item.get("text", "")).split()).strip()
+            if not text:
+                raise ValueError(f"DeepSeek timing rewrite returned empty line {line_id}")
+            original = originals[line_id]
+            if len(text) > len(original):
+                raise ValueError(
+                    f"DeepSeek timing rewrite made line {line_id} longer"
+                )
+            if text != original:
+                rewrites[line_id] = text
+        return rewrites
+
     async def reason_speakers(
         self,
         request: JobRequest,
@@ -149,7 +251,9 @@ class DeepSeekTranslator:
             line = transcript.lines[index]
             row = by_line.get(line_id, LineEvidence(line_id=line_id))
             candidates = {
-                item.character_id for item in [*row.audio, *row.visual] if item.character_id
+                item.character_id
+                for item in [*row.audio, *row.visual]
+                if item.character_id
             }
             if not candidates:
                 continue
@@ -159,7 +263,10 @@ class DeepSeekTranslator:
                 {
                     "line_id": line_id,
                     "text": line.text,
-                    "context": [{"line_id": item.line_id, "text": item.text} for item in context],
+                    "context": [
+                        {"line_id": item.line_id, "text": item.text}
+                        for item in context
+                    ],
                     "candidates": sorted(candidates),
                     "audio": [item.model_dump() for item in row.audio],
                     "visual": [item.model_dump() for item in row.visual],
@@ -183,7 +290,9 @@ class DeepSeekTranslator:
                 "lines": [
                     {
                         "line_id": 1,
-                        "candidates": [{"character_id": "character_001", "score": 0.7}],
+                        "candidates": [
+                            {"character_id": "character_001", "score": 0.7}
+                        ],
                     }
                 ]
             },
@@ -202,7 +311,11 @@ class DeepSeekTranslator:
         )
         output = parsed.get("lines")
         expected_ids = [row["line_id"] for row in rows]
-        output_ids = [int(item["line_id"]) for item in output] if isinstance(output, list) else []
+        output_ids = (
+            [int(item["line_id"]) for item in output]
+            if isinstance(output, list)
+            else []
+        )
         if output_ids != expected_ids:
             raise ValueError("DeepSeek speaker reasoning changed line IDs or ordering")
 
@@ -216,7 +329,10 @@ class DeepSeekTranslator:
                 if character_id not in allowed:
                     raise ValueError("DeepSeek invented a speaker candidate")
                 candidates.append(
-                    CandidateScore(character_id=character_id, score=float(candidate["score"]))
+                    CandidateScore(
+                        character_id=character_id,
+                        score=float(candidate["score"]),
+                    )
                 )
             result.append(LineEvidence(line_id=line_id, text=candidates))
         return result
