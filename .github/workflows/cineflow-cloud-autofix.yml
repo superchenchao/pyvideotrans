@@ -1,0 +1,41 @@
+name: Temporary CineFlow Ruff Autofix
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+    paths:
+      - 'projects/cineflow-cloud/**'
+      - '.github/workflows/cineflow-cloud-autofix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Format and fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet 'ruff>=0.9'
+          ruff format projects/cineflow-cloud
+          ruff check --fix --unsafe-fixes projects/cineflow-cloud
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add projects/cineflow-cloud
+          git diff --cached --quiet && exit 0
+          git commit -m 'Format Azure TTS timing fit'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m
