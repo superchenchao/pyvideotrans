@@ -1,0 +1,39 @@
+name: Bootstrap CineFlow Cloud
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - name: Unpack standalone project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d projects/.cineflow-cloud-bundle || exit 0
+          rm -rf projects/cineflow-cloud
+          mkdir -p projects/cineflow-cloud
+          cat projects/.cineflow-cloud-bundle/part-* \
+            | base64 --decode \
+            | tar -xz -C projects/cineflow-cloud
+          rm -rf projects/.cineflow-cloud-bundle
+      - name: Commit unpacked project
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add projects/cineflow-cloud projects/.cineflow-cloud-bundle
+          git diff --cached --quiet && exit 0
+          git commit -m 'Add CineFlow Cloud standalone project'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m

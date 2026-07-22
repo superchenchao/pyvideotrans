@@ -1,0 +1,30 @@
+name: CineFlow Cloud CI
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+    paths:
+      - 'projects/cineflow-cloud/**'
+      - '.github/workflows/cineflow-cloud-ci.yml'
+  pull_request:
+    paths:
+      - 'projects/cineflow-cloud/**'
+      - '.github/workflows/cineflow-cloud-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/cineflow-cloud
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: projects/cineflow-cloud/pyproject.toml
+      - run: python -m pip install -e '.[dev]'
+      - run: ruff check .
+      - run: pytest -q -W error
