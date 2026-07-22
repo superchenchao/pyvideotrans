@@ -1,0 +1,26 @@
+name: CineFlow Cloud Lint Report
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+
+jobs:
+  report:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report remaining Ruff errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --quiet --depth 1 --branch agent/cineflow-cloud-realtime-5m \
+            https://github.com/superchenchao/pyvideotrans.git /tmp/pyvideotrans
+          cd /tmp/pyvideotrans/projects/cineflow-cloud
+          python -m pip install --quiet 'ruff>=0.9'
+          set +e
+          ruff check . --output-format=concise > /tmp/ruff-report.txt
+          status=$?
+          set -e
+          sed -n '1,80p' /tmp/ruff-report.txt
+          exit "$status"
