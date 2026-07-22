@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cineflow-cloud"
-version = "0.2.0"
+version = "0.3.0"
 description = "Standalone cloud video translation orchestration with a soft five-minute performance target."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,7 @@ dev = [
 
 [project.scripts]
 cineflow = "cineflow.api:run"
+cineflow-asr-worker = "cineflow.asr_worker:run"
 cineflow-speaker-worker = "cineflow.speaker_worker:run"
 
 [tool.setuptools.packages.find]
