@@ -130,6 +130,12 @@ class DubbingClip(BaseModel):
     character_id: str
     audio_url: str
     duration_ms: int | None = None
+    target_duration_ms: int | None = None
+    rate_percent: int = 0
+    timing_overflow_ms: int = 0
+    within_target: bool = True
+    output_format: str = ""
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class DubbingArtifact(BaseModel):
