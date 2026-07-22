@@ -29,30 +29,31 @@ async def test_caption_worker_reports_no_local_ocr_and_returns_transcript():
         CaptionWorkerSettings(bearer_token="secret"),
         extractor=FakeExtractor(),
     )
+    payload = {
+        "input_url": "https://example.com/original.mp4",
+        "clean_video_url": "https://example.com/clean.mp4",
+        "probe": {
+            "duration_seconds": 10,
+            "input_bytes": 1000,
+            "width": 1280,
+            "height": 720,
+            "fps": 25,
+        },
+        "target_language": "en-US",
+    }
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         health = await client.get("/healthz")
         assert health.status_code == 200
         assert health.json()["local_ocr"] is False
 
-        denied = await client.post("/v1/extract", json={})
+        denied = await client.post("/v1/extract", json=payload)
         assert denied.status_code == 401
 
         response = await client.post(
             "/v1/extract",
             headers={"Authorization": "Bearer secret"},
-            json={
-                "input_url": "https://example.com/original.mp4",
-                "clean_video_url": "https://example.com/clean.mp4",
-                "probe": {
-                    "duration_seconds": 10,
-                    "input_bytes": 1000,
-                    "width": 1280,
-                    "height": 720,
-                    "fps": 25,
-                },
-                "target_language": "en-US",
-            },
+            json=payload,
         )
         assert response.status_code == 200
         assert response.json()["provider"] == "fake_cloud_ocr"
