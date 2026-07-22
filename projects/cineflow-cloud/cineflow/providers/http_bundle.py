@@ -78,7 +78,10 @@ class FailoverWorkerClient:
 
     async def health(self, name: str) -> ProviderHealth:
         results = await asyncio.gather(
-            *(client.health(f"{name}_{index + 1}") for index, client in enumerate(self.clients))
+            *(
+                client.health(f"{name}_{index + 1}")
+                for index, client in enumerate(self.clients)
+            )
         )
         healthy = [item for item in results if item.healthy]
         healthy_latencies = [item.latency_ms for item in healthy]
@@ -88,10 +91,13 @@ class FailoverWorkerClient:
             healthy=bool(healthy),
             warm=any(item.warm for item in healthy),
             latency_ms=(
-                min(healthy_latencies) if healthy_latencies else max(all_latencies, default=0.0)
+                min(healthy_latencies)
+                if healthy_latencies
+                else max(all_latencies, default=0.0)
             ),
             detail=" | ".join(
-                f"{item.name}:{'ok' if item.healthy else item.detail}" for item in results
+                f"{item.name}:{'ok' if item.healthy else item.detail}"
+                for item in results
             ),
         )
 
@@ -117,27 +123,43 @@ class ProductionProviders:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        primary_media = HttpWorkerClient(settings.media_worker_url, settings.worker_bearer_token)
+        primary_media = HttpWorkerClient(
+            settings.media_worker_url,
+            settings.worker_bearer_token,
+        )
         secondary_media = (
-            HttpWorkerClient(settings.secondary_media_worker_url, settings.worker_bearer_token)
+            HttpWorkerClient(
+                settings.secondary_media_worker_url,
+                settings.worker_bearer_token,
+            )
             if settings.secondary_media_worker_url
             else None
         )
         self.media = FailoverWorkerClient(primary_media, secondary_media)
 
-        primary_asr = HttpWorkerClient(settings.asr_worker_url, settings.worker_bearer_token)
+        primary_asr = HttpWorkerClient(
+            settings.asr_worker_url,
+            settings.worker_bearer_token,
+        )
         secondary_asr = (
-            HttpWorkerClient(settings.secondary_asr_worker_url, settings.worker_bearer_token)
+            HttpWorkerClient(
+                settings.secondary_asr_worker_url,
+                settings.worker_bearer_token,
+            )
             if settings.secondary_asr_worker_url
             else None
         )
         self.asr = FailoverWorkerClient(primary_asr, secondary_asr)
 
         primary_speaker = HttpWorkerClient(
-            settings.speaker_worker_url, settings.worker_bearer_token
+            settings.speaker_worker_url,
+            settings.worker_bearer_token,
         )
         secondary_speaker = (
-            HttpWorkerClient(settings.secondary_speaker_worker_url, settings.worker_bearer_token)
+            HttpWorkerClient(
+                settings.secondary_speaker_worker_url,
+                settings.worker_bearer_token,
+            )
             if settings.secondary_speaker_worker_url
             else None
         )
@@ -151,12 +173,23 @@ class ProductionProviders:
             thinking=settings.deepseek_thinking,
         )
         self.azure = AzureTTSClient(
-            AzureSpeechEndpoint(settings.azure_speech_key, settings.azure_speech_region),
+            AzureSpeechEndpoint(
+                settings.azure_speech_key,
+                settings.azure_speech_region,
+            ),
             AzureSpeechEndpoint(
                 settings.azure_speech_secondary_key,
                 settings.azure_speech_secondary_region,
             ),
             concurrency=settings.azure_tts_concurrency,
+            max_fit_rate_percent=settings.azure_tts_max_fit_rate_percent,
+            duration_tolerance_ratio=(
+                settings.azure_tts_duration_tolerance_ratio
+            ),
+            max_fit_attempts=settings.azure_tts_max_fit_attempts,
+            request_timeout_seconds=(
+                settings.azure_tts_request_timeout_seconds
+            ),
         )
 
     def _worker_timeout(self, field: str, default: float = 300.0) -> float:
@@ -208,17 +241,27 @@ class ProductionProviders:
     ) -> list[LineEvidence]:
         data = await self.speaker.post(
             "/v1/analyze",
-            {"job": request.model_dump(mode="json"), "transcript": transcript.model_dump()},
+            {
+                "job": request.model_dump(mode="json"),
+                "transcript": transcript.model_dump(),
+            },
             self._worker_timeout("speaker_worker_timeout_seconds"),
         )
         evidence = [LineEvidence.model_validate(item) for item in data["evidence"]]
-        preliminary = fuse_speakers(transcript.lines, evidence, review_threshold=0.82)
+        preliminary = fuse_speakers(
+            transcript.lines,
+            evidence,
+            review_threshold=0.82,
+        )
         ambiguous = {item.line_id for item in preliminary if item.needs_review}
         if not ambiguous:
             return evidence
         try:
             text_evidence = await self.translator.reason_speakers(
-                request, transcript, evidence, ambiguous
+                request,
+                transcript,
+                evidence,
+                ambiguous,
             )
         except Exception:
             # Text reasoning is weak evidence and must never block delivery.
@@ -236,19 +279,26 @@ class ProductionProviders:
     ) -> DubbingArtifact:
         decision_by_line = {item.line_id: item for item in decisions}
 
-        async def one(line):
+        async def one(line) -> DubbingClip:
             decision = decision_by_line[line.line_id]
             voice = resolve_character_voice(request, decision.character_id)
             if not voice:
                 raise ValueError(
-                    "target_voice is required until the character voice registry is connected"
+                    "target_voice is required until the character voice registry "
+                    "is connected"
                 )
-            audio = await self.azure.synthesize(request.target_language, voice, line.text)
+            target_duration_ms = max(1, line.end_ms - line.start_ms)
+            result = await self.azure.synthesize_for_slot(
+                request.target_language,
+                voice,
+                line.text,
+                target_duration_ms,
+            )
             artifact = await self.media.post(
                 "/v1/artifacts/base64",
                 {
-                    "name": f"line-{line.line_id}.mp3",
-                    "content_base64": base64.b64encode(audio).decode("ascii"),
+                    "name": f"line-{line.line_id}{result.extension}",
+                    "content_base64": base64.b64encode(result.audio).decode("ascii"),
                 },
                 20.0,
             )
@@ -256,6 +306,18 @@ class ProductionProviders:
                 line_id=line.line_id,
                 character_id=decision.character_id,
                 audio_url=artifact["url"],
+                duration_ms=result.duration_ms,
+                target_duration_ms=result.target_duration_ms,
+                rate_percent=result.rate_percent,
+                timing_overflow_ms=result.overflow_ms,
+                within_target=result.within_target,
+                output_format=result.output_format,
+                metadata={
+                    "attempts": result.attempts,
+                    "voice": voice,
+                    "artifact_object_key": artifact.get("object_key", ""),
+                    "artifact_download_url": artifact.get("download_url", ""),
+                },
             )
 
         clips = await asyncio.gather(*(one(line) for line in translated.lines))
