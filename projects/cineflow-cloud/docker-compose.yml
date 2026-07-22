@@ -6,6 +6,35 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  upload-aliyun:
+    profiles: ["ingest"]
+    build:
+      context: .
+      dockerfile: Dockerfile.upload
+    env_file: .env
+    environment:
+      CINEFLOW_UPLOAD_STATE_DIR: /var/lib/cineflow/uploads
+    ports:
+      - "8094:8094"
+    volumes:
+      - cineflow-upload-state:/var/lib/cineflow/uploads
+    restart: unless-stopped
+
+  subtitle-removal:
+    profiles: ["ingest"]
+    build:
+      context: .
+      dockerfile: Dockerfile.subtitle
+    env_file: .env
+    environment:
+      CINEFLOW_SUBTITLE_STATE_DIR: /var/lib/cineflow/subtitles
+    ports:
+      - "8095:8095"
+    volumes:
+      - cineflow-subtitle-state:/var/lib/cineflow/subtitles
+      - ./external-subtitle-models:/opt/subtitle-models:ro
+    restart: unless-stopped
+
   media-aliyun:
     profiles: ["media"]
     build:
@@ -61,3 +90,7 @@ services:
               count: 1
               capabilities: [gpu]
     restart: unless-stopped
+
+volumes:
+  cineflow-upload-state:
+  cineflow-subtitle-state:
