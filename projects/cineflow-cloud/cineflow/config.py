@@ -25,14 +25,15 @@ class Settings(BaseSettings):
     max_input_bytes: int = Field(default=512 * 1024 * 1024, ge=1)
     max_inflight_jobs: int = Field(default=2, ge=1, le=64)
 
-    # This standalone service receives an OSS URL produced by the existing
-    # upload/subtitle-removal flow. It deliberately does not import that client.
     media_worker_url: str = ""
     secondary_media_worker_url: str = ""
     media_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
     asr_worker_url: str = ""
     secondary_asr_worker_url: str = ""
     asr_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
+    caption_worker_url: str = ""
+    secondary_caption_worker_url: str = ""
+    caption_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
     speaker_worker_url: str = ""
     secondary_speaker_worker_url: str = ""
     speaker_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
@@ -57,9 +58,9 @@ class Settings(BaseSettings):
     azure_tts_max_fit_attempts: int = Field(default=2, ge=1, le=4)
     azure_tts_request_timeout_seconds: float = Field(default=25.0, ge=5, le=120)
 
-    # Conservative billing guardrails. OSS upload and burned-subtitle removal
-    # remain upstream and therefore are intentionally excluded from this quote.
+    # Configurable billing guardrails. Provider invoices remain the source of truth.
     cost_asr_per_second: float = Field(default=0.00022, ge=0)
+    cost_ocr_per_minute: float = Field(default=0.10, ge=0)
     cost_translation_per_character: float = Field(default=0.000003, ge=0)
     cost_azure_tts_per_character: float = Field(default=0.0000954, ge=0)
     cost_gpu_per_second: float = Field(default=0.0062, ge=0)
