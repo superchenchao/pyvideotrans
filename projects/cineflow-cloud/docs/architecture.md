@@ -12,68 +12,57 @@ CineFlow Cloud 是可以整体移动到独立仓库的完整视频翻译系统�
   └─ 直接并发分片上传 OSS，可断点续传
           │
           ▼
-Upload Worker
-  ├─ 持久化 session / multipart upload ID
-  ├─ HEAD 校验大小、Content-Type、SHA-256 元数据
-  ├─ 中止遗留分片
-  └─ 返回规范 URL 与签名 URL
+      原视频 input_url
           │
-          ▼
-Subtitle Removal Worker
-  ├─ 阿里云 ICE VideoDetext
-  ├─ Caca API
-  └─ 服务端本地字幕消除命令
-          │
-          ├─ 持久化外部 JobId
-          ├─ Worker 重启恢复
-          ├─ 结果复制到项目 OSS
-          └─ ffprobe 校验时长/画面/FPS/音轨
-          │
-          ▼
-CineFlow Control Plane
-  ├─ Media Worker：音频抽取、MusicDemix
-  ├─ ASR Worker：阿里云 Fun-ASR，火山后备
-  └─ ASR 完成后并行
-       ├─ CineFusion：speaker_id、主动说话人、人脸、上下文
-       └─ DeepSeek：字幕翻译
-              │
-              ▼
-       Azure 多角色 TTS
-       ├─ RIFF PCM WAV
-       ├─ 真实时长测量
-       └─ 有界 SSML 语速拟合
-              │
-              ▼
-       Alibaba ICE Timeline
-       ├─ 原音轨静音
-       ├─ 背景声混合
-       ├─ 按真实时长放置多角色配音
-       ├─ 硬字幕或独立 SRT
-       └─ 私有 OSS 成片
+   ┌──────┼──────────────┐
+   │      │              │
+   ▼      ▼              ▼
+字幕消除  云 OCR          云 ASR
+VideoDetext/Caca  CaptionExtraction  Fun-ASR/火山
+   │      │              │
+   │      └──────┬───────┘
+   │             ▼
+   │      OCR/ASR 字幕融合
+   │      - OCR 可见文字和显示时间
+   │      - ASR speaker_id 和词时间
+   │      - ASR-only 旁白/画外音
+   │             │
+   │      ┌──────┴────────┐
+   │      ▼               ▼
+   │  CineFusion       DeepSeek 翻译
+   │      │               │
+   │      └──────┬────────┘
+   │             ▼
+   │       Azure 多角色 TTS
+   │             │
+   └─────────────┼──────────────┐
+                 ▼              │
+          Alibaba ICE Timeline  │
+                 │              │
+                 └────→ 私有 OSS 成片
 ```
 
 ## 服务边界
 
 | 服务 | 默认端口 | 责任 |
 |---|---:|---|
-| Control Plane | 8080 | 费用预估、队列、编排、SSE、结果状态 |
+| Control Plane | 8080 | 费用预估、队列、编排、SSE、融合、结果状态 |
 | CineFusion Worker | 8090 | 音频与视觉人物证据、多模态融合 |
 | ASR Worker | 8091/8092 | 阿里云 Fun-ASR 与火山后备 |
 | Media Worker | 8093 | 音频准备、MusicDemix、Azure 片段存储、最终合成 |
 | Upload Worker | 8094 | STS、上传会话、验证、中止、清理 |
-| Subtitle Worker | 8095 | VideoDetext、Caca、本地模型、恢复和输出校验 |
+| Subtitle Worker | 8095 | VideoDetext、Caca、可选服务端移除器、恢复和校验 |
+| Caption Worker | 8096 | 阿里云 CaptionExtraction 云 OCR、SRT 归一化 |
 
 每个 Worker 通过 HTTP 契约解耦，后续可独立扩缩容，也可以把文件状态存储替换为 Redis/PostgreSQL，而不改业务请求模型。
 
 ## 上传架构
 
-### 为什么原片不经过控制平面
-
 原片直接从桌面端上传 OSS：
 
 - 避免控制平面双倍占用公网带宽；
 - 避免大文件落到 API 节点临时磁盘；
-- 允许 `oss2` 原生 multipart、并发和断点续传；
+- 允许 `oss2` multipart、并发和断点续传；
 - 桌面端只持有短期、单对象权限；
 - 上传会话和 upload ID 由服务端持久化，方便中止与清理。
 
@@ -100,20 +89,64 @@ wait(submission)
 cancel(submission)
 ```
 
-### 自动路由
+推荐默认路由：
+
+```text
+aliyun → caca
+```
+
+`local` 仍可显式启用为服务端字幕移除命令，但不是 OCR 识别器，也不参与默认云路径。
+
+- Alibaba/Caca 外部 JobId 写入状态文件；
+- Worker 启动时扫描非终态任务并恢复；
+- 所有输出归一化到新项目自己的 OSS 前缀；
+- `ffprobe` 校验时长、画面、FPS 和音轨。
+
+## API-only 字幕识别
 
 默认：
 
 ```text
-aliyun → caca → local
+subtitle_recognition_mode=hybrid
 ```
 
-- `provider=auto`：选择第一个已配置后端；
-- 指定 provider：不可用时直接报错，不静默换服务；
-- Alibaba/Caca 外部 JobId 会写入状态文件；
-- Worker 启动时扫描非终态任务并恢复；
-- 本地命令无法从模型内部进度恢复，崩溃后会重新执行；
-- 所有输出最终归一化到新项目自己的 OSS 前缀并统一校验。
+识别任务在上传完成后与字幕消除并行：
+
+```text
+input_url        → Alibaba CaptionExtraction OCR
+source_audio_url → Alibaba Fun-ASR / Volcengine ASR
+clean_video_url  → 后续人物视觉分析和最终合成
+```
+
+OCR 必须读取原视频，因为 `clean_video_url` 已移除可见字幕。
+
+识别阶段不会在客户端或控制平面运行：
+
+- Whisper；
+- Tesseract；
+- PaddleOCR；
+- OpenCV 全片抽帧 OCR；
+- 本地视觉识别模型。
+
+Caption Worker 直接提交 OSS URL 到阿里云 ICE，并在健康信息中返回 `local_ocr=false`。控制平面只解析服务商返回的 SRT/JSON。
+
+### OCR/ASR 融合
+
+`subtitle_recognition.py` 执行确定性融合：
+
+1. 按时间重叠匹配 OCR 行与 ASR 行；
+2. OCR 行保留画面文字和显示时间；
+3. 从最佳 ASR 行继承 `speaker_id` 与词级时间；
+4. 未被 OCR 覆盖的 ASR 行作为旁白或画外音加入；
+5. 文字相似度过低时记录冲突行 ID；
+6. 按时间排序并重建连续 `line_id`。
+
+混合模式下：
+
+- OCR 失败、ASR 成功：降级到 ASR；
+- ASR 失败、OCR 成功：降级到 OCR；
+- 两者都失败：任务失败；
+- `ocr_required=true` 且 OCR 失败：任务失败。
 
 ## 云 Provider 优先级
 
@@ -125,10 +158,11 @@ aliyun → caca → local
 
 当前落地情况：
 
+- OCR：阿里云 CaptionExtraction 主路径，保留 Secondary Caption Worker 契约；
 - ASR：阿里云 Fun-ASR 主路径，火山 BigModel Flash 后备；
-- 字幕消除：阿里 VideoDetext 主路径，Caca 和本地后备；
-- Media：阿里 ICE 已实现，火山 Media 后备仍待实现；
-- Speaker：优先云 ASR speaker 标签，视觉主动说话人仍由可替换外部模型提供；
+- 字幕消除：阿里 VideoDetext 主路径，Caca 后备；
+- Media：阿里 ICE 已实现；
+- Speaker：优先云 ASR speaker 标签，视觉主动说话人由可替换外部模型提供；
 - 翻译：固定 DeepSeek；
 - TTS：固定 Azure Speech，支持第二地域容灾。
 
@@ -153,13 +187,14 @@ aliyun → caca → local
 - `POST /v1/subtitles/recover`
 - `POST /v1/subtitles/cleanup`
 
-### 翻译流水线 Worker
+### Recognition and translation Workers
 
-- `POST /v1/prepare`
-- `POST /v1/transcribe`
-- `POST /v1/analyze`
-- `POST /v1/artifacts/base64`
-- `POST /v1/assemble`
+- `POST /v1/extract`：云 OCR；
+- `POST /v1/transcribe`：云 ASR；
+- `POST /v1/analyze`：人物证据；
+- `POST /v1/prepare`：媒体准备；
+- `POST /v1/artifacts/base64`：保存 Azure 音频；
+- `POST /v1/assemble`：最终合成。
 
 ## CineFusion
 
@@ -180,7 +215,7 @@ DeepSeek 只能在已有候选角色中排序，不能创造角色 ID。
 300 秒是优化目标而不是截止时间：
 
 - 上传耗时单独统计，不计入服务端处理目标；
-- 视频已上传并创建处理任务后开始统计；
+- OCR、ASR 和字幕消除并行；
 - 无执行槽时排队，不拒绝；
 - 预测慢或 Worker 冷启动只产生警告；
 - 超过 300 秒继续执行；
@@ -192,7 +227,7 @@ DeepSeek 只能在已有候选角色中排序，不能创造角色 ID。
 
 - Upload 和 Subtitle Worker 使用原子 JSON 文件，可挂载持久卷；
 - 控制平面任务、事件和队列仍是进程内 MVP；
-- Media/ASR 云 JobId 的跨进程恢复仍需继续完善。
+- Media、ASR、Caption 云 JobId 的跨进程恢复仍需继续完善。
 
 生产多副本：
 
