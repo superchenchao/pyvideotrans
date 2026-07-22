@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Any
 
 import httpx
 
@@ -35,7 +34,8 @@ class CacaSubtitleProvider:
     """Configurable adapter for the existing Caca removal service.
 
     Caca installations differ in endpoint naming. Paths are environment-driven,
-    while response parsing accepts the common task/status/output field variants.
+    while response parsing accepts common task/status/output field variants. The
+    generated result is normalized into CineFlow's configured OSS bucket.
     """
 
     name = "caca"
@@ -53,11 +53,24 @@ class CacaSubtitleProvider:
 
     @property
     def configured(self) -> bool:
-        return bool(self.config.base_url.strip() and self.config.api_key.strip())
+        return bool(
+            self.config.base_url.strip()
+            and self.config.api_key.strip()
+            and self.store.configured
+        )
 
     @property
     def detail(self) -> str:
-        return "Caca API configured" if self.configured else "Caca base URL or API key missing"
+        if self.configured:
+            return "Caca API and result OSS storage configured"
+        missing = []
+        if not self.config.base_url.strip():
+            missing.append("base URL")
+        if not self.config.api_key.strip():
+            missing.append("API key")
+        if not self.store.configured:
+            missing.append("OSS result store")
+        return "Caca missing " + ", ".join(missing)
 
     @property
     def headers(self) -> dict[str, str]:
@@ -73,6 +86,10 @@ class CacaSubtitleProvider:
         return f"{self.config.base_url.rstrip('/')}/{path.lstrip('/')}"
 
     @staticmethod
+    def _usable(value: object | None) -> bool:
+        return value is not None and value != "" and value != [] and value != {}
+
+    @staticmethod
     def _find(payload: object, keys: tuple[str, ...]) -> object | None:
         if isinstance(payload, dict):
             lowered = {str(key).lower(): value for key, value in payload.items()}
@@ -81,12 +98,12 @@ class CacaSubtitleProvider:
                     return lowered[key.lower()]
             for value in payload.values():
                 found = CacaSubtitleProvider._find(value, keys)
-                if found not in {None, "", [], {}}:
+                if CacaSubtitleProvider._usable(found):
                     return found
         elif isinstance(payload, list):
             for value in payload:
                 found = CacaSubtitleProvider._find(value, keys)
-                if found not in {None, "", [], {}}:
+                if CacaSubtitleProvider._usable(found):
                     return found
         return None
 
