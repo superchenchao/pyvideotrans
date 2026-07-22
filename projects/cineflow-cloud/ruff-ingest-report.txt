@@ -1,14 +1,3 @@
-E501 Line too long (105 > 100)
-   --> projects/cineflow-cloud/cineflow/upload_client.py:205:101
-    |
-203 |     if len(content) != length:
-204 |         raise UploadClientError(
-205 |             f"local file changed while reading part {part_number}: expected {length}, got {len(content)}"
-    |                                                                                                     ^^^^^
-206 |         )
-207 |     result = bucket.upload_part(object_key, upload_id, part_number, content)
-    |
-
 E501 Line too long (103 > 100)
   --> projects/cineflow-cloud/scripts/patch_ingest_runtime.py:59:101
    |
@@ -20,4 +9,4 @@ E501 Line too long (103 > 100)
 61 |             f"{indent}    await asyncio.gather(task, return_exceptions=True)",
    |
 
-Found 2 errors.
+Found 1 error.

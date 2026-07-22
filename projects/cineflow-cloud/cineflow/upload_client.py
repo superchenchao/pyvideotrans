@@ -202,7 +202,8 @@ def upload_one_part(
         content = source.read(length)
     if len(content) != length:
         raise UploadClientError(
-            f"local file changed while reading part {part_number}: expected {length}, got {len(content)}"
+            "local file changed while reading part "
+            f"{part_number}: expected {length}, got {len(content)}"
         )
     result = bucket.upload_part(object_key, upload_id, part_number, content)
     etag = str(getattr(result, "etag", "") or "")
