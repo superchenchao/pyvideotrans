@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 
@@ -36,10 +37,8 @@ def _walk_urls(value: object) -> list[str]:
         if text.startswith(("http://", "https://", "oss://")):
             result.append(text)
         elif text.startswith(("[", "{")):
-            try:
+            with suppress(json.JSONDecodeError):
                 result.extend(_walk_urls(json.loads(text)))
-            except json.JSONDecodeError:
-                pass
     return result
 
 
@@ -154,7 +153,10 @@ class AliyunCaptionExtractor:
             raise AliyunCaptionError(str(exc)) from exc
 
         urls = caption_output_urls(result, self.store)
-        preferred = next((url for url in urls if url.lower().split("?", 1)[0].endswith(".srt")), None)
+        preferred = next(
+            (url for url in urls if url.lower().split("?", 1)[0].endswith(".srt")),
+            None,
+        )
         output_url = preferred or (urls[0] if urls else self.store.canonical_url(output_key))
         content = await self._download_text(output_url)
         transcript = parse_srt(
