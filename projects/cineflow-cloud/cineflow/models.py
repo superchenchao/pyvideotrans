@@ -25,16 +25,37 @@ class VideoProbe(BaseModel):
     fps: Annotated[float, Field(gt=0, le=60)] = 25.0
 
 
+class OCRRegion(BaseModel):
+    """Normalized subtitle area in the original, not-yet-cleaned video."""
+
+    x: Annotated[float, Field(ge=0.0, le=1.0)] = 0.0
+    y: Annotated[float, Field(ge=0.0, le=1.0)] = 0.65
+    width: Annotated[float, Field(gt=0.0, le=1.0)] = 1.0
+    height: Annotated[float, Field(gt=0.0, le=1.0)] = 0.35
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> OCRRegion:
+        if self.x + self.width > 1.0 or self.y + self.height > 1.0:
+            raise ValueError("OCR region must stay inside normalized video bounds")
+        return self
+
+
 class JobRequest(BaseModel):
-    # The existing client owns OSS upload and burned-subtitle removal. input_url
-    # is the uploaded source; clean_video_url can point at the already-cleaned
-    # result. CineFlow does not import or call the parent project.
+    # input_url is the uploaded original video and remains the OCR source.
+    # clean_video_url, when present, is the subtitle-removal output used for visual
+    # speaker analysis and final assembly. All recognition calls run in cloud workers.
     input_url: HttpUrl
     clean_video_url: HttpUrl | None = None
     source_audio_url: HttpUrl | None = None
     probe: VideoProbe
     source_language: str = "zh-CN"
     target_language: str
+    subtitle_recognition_mode: Literal["hybrid", "asr", "ocr"] = "hybrid"
+    ocr_region: OCRRegion | None = None
+    ocr_fps: Annotated[int, Field(ge=2, le=10)] = 5
+    ocr_language: Literal["ch", "en", "ch_ml"] = "ch_ml"
+    ocr_track: Literal["main", "all"] = "main"
+    ocr_required: bool = False
     translation_engine: Literal["deepseek"] = "deepseek"
     target_voice: str = ""
     character_voices: dict[str, str] = Field(default_factory=dict)
@@ -75,6 +96,9 @@ class SubtitleLine(BaseModel):
     text: str
     speaker_id: str | None = None
     words: list[WordTiming] = Field(default_factory=list)
+    source: str = ""
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)] | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def validate_time_range(self) -> SubtitleLine:
