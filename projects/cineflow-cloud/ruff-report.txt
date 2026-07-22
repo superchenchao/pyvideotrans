@@ -1,0 +1,5 @@
+cineflow/speaker_worker.py:129:55: B023 Function definition does not bind loop variable `duration`
+cineflow/speaker_worker.py:132:56: B023 Function definition does not bind loop variable `item`
+cineflow/speaker_worker.py:132:65: B023 Function definition does not bind loop variable `item`
+cineflow/speaker_worker.py:218:13: SIM117 Use a single `with` statement with multiple contexts instead of nested `with` statements
+Found 4 errors.
