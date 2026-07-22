@@ -55,11 +55,28 @@ class JobRequest(BaseModel):
         return self
 
 
+class WordTiming(BaseModel):
+    start_ms: int
+    end_ms: int
+    text: str
+    punctuation: str = ""
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> WordTiming:
+        if self.end_ms < self.start_ms:
+            raise ValueError(
+                "word end_ms must be greater than or equal to start_ms"
+            )
+        return self
+
+
 class SubtitleLine(BaseModel):
     line_id: int
     start_ms: int
     end_ms: int
     text: str
+    speaker_id: str | None = None
+    words: list[WordTiming] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_time_range(self) -> SubtitleLine:
@@ -71,6 +88,10 @@ class SubtitleLine(BaseModel):
 class Transcript(BaseModel):
     language: str
     lines: list[SubtitleLine]
+    provider: str = ""
+    task_id: str = ""
+    usage_seconds: float | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 class CandidateScore(BaseModel):
