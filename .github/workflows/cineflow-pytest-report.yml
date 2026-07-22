@@ -1,0 +1,37 @@
+name: Temporary CineFlow Pytest Report
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+    paths:
+      - '.github/workflows/cineflow-pytest-report.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - shell: bash
+        run: |
+          set -euo pipefail
+          cd projects/cineflow-cloud
+          python -m pip install --quiet -e '.[dev]'
+          set +e
+          pytest -q -W error > pytest-report.txt 2>&1
+          set -e
+          cd ../..
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add projects/cineflow-cloud/pytest-report.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Capture cloud OCR pytest diagnostics'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m
