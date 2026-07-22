@@ -4,10 +4,11 @@ from .models import CostQuote, JobRequest
 
 
 class CostEstimator:
-    """Conservative admission quote for one accepted job.
+    """Conservative quote for work owned by this standalone service.
 
-    Prices are defaults derived from the deployment assumptions and must remain
-    configurable in production billing. This quote is a guardrail, not an invoice.
+    OSS upload and burned-subtitle removal stay in the existing upstream flow,
+    so they are intentionally excluded. Prices remain configurable guardrails,
+    not a replacement for provider billing records.
     """
 
     def __init__(
@@ -19,7 +20,6 @@ class CostEstimator:
         gpu_per_second: float = 0.0062,
         render_per_minute: float = 0.0651,
         separation_per_minute: float = 0.10,
-        subtitle_removal_per_minute: float = 0.40,
     ) -> None:
         self.asr_per_second = asr_per_second
         self.translation_per_character = translation_per_character
@@ -27,7 +27,6 @@ class CostEstimator:
         self.gpu_per_second = gpu_per_second
         self.render_per_minute = render_per_minute
         self.separation_per_minute = separation_per_minute
-        self.subtitle_removal_per_minute = subtitle_removal_per_minute
 
     def quote(self, request: JobRequest) -> CostQuote:
         duration = request.probe.duration_seconds
@@ -37,22 +36,18 @@ class CostEstimator:
         if characters is None:
             characters = max(100, round(speech_seconds * 8.0))
 
-        # Translation is tiny relative to video AI and is deliberately padded.
+        # DeepSeek translation is small relative to video and TTS costs, but a
+        # conservative floor prevents it from disappearing from the estimate.
         translation = max(0.01, characters * self.translation_per_character)
         gpu_active_seconds = min(90.0, 12.0 + duration * 0.16)
         breakdown = {
             "asr": speech_seconds * self.asr_per_second,
-            "translation": translation,
+            "deepseek_translation": translation,
             "azure_tts": characters * self.azure_tts_per_character,
             "multimodal_gpu": gpu_active_seconds * self.gpu_per_second,
             "render": minutes * self.render_per_minute,
             "background_separation": (
                 minutes * self.separation_per_minute if request.separate_background else 0.0
-            ),
-            "subtitle_removal": (
-                minutes * self.subtitle_removal_per_minute
-                if request.remove_burned_subtitles
-                else 0.0
             ),
         }
         rounded = {key: round(value, 4) for key, value in breakdown.items()}
