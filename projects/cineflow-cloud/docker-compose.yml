@@ -6,6 +6,32 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  asr-aliyun:
+    profiles: ["asr"]
+    build:
+      context: .
+      dockerfile: Dockerfile.asr
+    env_file: .env
+    environment:
+      CINEFLOW_ASR_BACKEND: aliyun
+      CINEFLOW_ASR_PORT: "8091"
+    ports:
+      - "8091:8091"
+    restart: unless-stopped
+
+  asr-volcengine:
+    profiles: ["asr"]
+    build:
+      context: .
+      dockerfile: Dockerfile.asr
+    env_file: .env
+    environment:
+      CINEFLOW_ASR_BACKEND: volcengine
+      CINEFLOW_ASR_PORT: "8091"
+    ports:
+      - "8092:8091"
+    restart: unless-stopped
+
   speaker-worker:
     profiles: ["gpu"]
     build:
