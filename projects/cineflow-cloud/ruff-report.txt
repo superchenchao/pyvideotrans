@@ -1,3 +1,0 @@
-cineflow/providers/aliyun_media.py:231:101: E501 Line too long (103 > 100)
-cineflow/providers/aliyun_media.py:280:101: E501 Line too long (101 > 100)
-Found 2 errors.
