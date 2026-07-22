@@ -7,6 +7,11 @@ on:
     paths:
       - 'projects/cineflow-cloud/**'
       - '.github/workflows/cineflow-cloud-validation.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'projects/cineflow-cloud/**'
+      - '.github/workflows/cineflow-cloud-validation.yml'
 
 jobs:
   test:
