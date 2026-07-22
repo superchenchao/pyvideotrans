@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: cineflow-upload-state
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cineflow-upload-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cineflow-upload-worker
+  template:
+    metadata:
+      labels:
+        app: cineflow-upload-worker
+    spec:
+      containers:
+        - name: upload-worker
+          image: ghcr.io/OWNER/cineflow-cloud-upload:latest
+          ports:
+            - containerPort: 8094
+          envFrom:
+            - secretRef:
+                name: cineflow-secrets
+            - configMapRef:
+                name: cineflow-config
+          env:
+            - name: CINEFLOW_UPLOAD_STATE_DIR
+              value: /var/lib/cineflow/uploads
+          volumeMounts:
+            - name: state
+              mountPath: /var/lib/cineflow/uploads
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8094
+            periodSeconds: 5
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8094
+            periodSeconds: 15
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+      volumes:
+        - name: state
+          persistentVolumeClaim:
+            claimName: cineflow-upload-state
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cineflow-upload-worker
+spec:
+  selector:
+    app: cineflow-upload-worker
+  ports:
+    - port: 8094
+      targetPort: 8094
