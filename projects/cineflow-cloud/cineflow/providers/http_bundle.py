@@ -122,6 +122,7 @@ class ProductionProviders:
     """
 
     def __init__(self, settings: Settings) -> None:
+        self.settings = settings
         primary_media = HttpWorkerClient(
             settings.media_worker_url, settings.worker_bearer_token
         )
@@ -199,11 +200,19 @@ class ProductionProviders:
         ]
 
     async def prepare_media(self, request: JobRequest) -> MediaArtifacts:
-        data = await self.media.post("/v1/prepare", request.model_dump(mode="json"), 120.0)
+        data = await self.media.post(
+            "/v1/prepare",
+            request.model_dump(mode="json"),
+            self.settings.media_worker_timeout_seconds,
+        )
         return MediaArtifacts.model_validate(data)
 
     async def transcribe(self, request: JobRequest) -> Transcript:
-        data = await self.asr.post("/v1/transcribe", request.model_dump(mode="json"), 55.0)
+        data = await self.asr.post(
+            "/v1/transcribe",
+            request.model_dump(mode="json"),
+            self.settings.asr_worker_timeout_seconds,
+        )
         return Transcript.model_validate(data)
 
     async def analyze_speakers(
@@ -212,7 +221,7 @@ class ProductionProviders:
         data = await self.speaker.post(
             "/v1/analyze",
             {"job": request.model_dump(mode="json"), "transcript": transcript.model_dump()},
-            105.0,
+            self.settings.speaker_worker_timeout_seconds,
         )
         evidence = [LineEvidence.model_validate(item) for item in data["evidence"]]
         preliminary = fuse_speakers(transcript.lines, evidence, review_threshold=0.82)
@@ -279,6 +288,6 @@ class ProductionProviders:
                 "translated": translated.model_dump(),
                 "dubbing": dubbing.model_dump(),
             },
-            70.0,
+            self.settings.media_worker_timeout_seconds,
         )
         return OutputArtifact.model_validate(data)
