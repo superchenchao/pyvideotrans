@@ -1,37 +1,36 @@
 # 阿里云 Media Worker
 
-`cineflow.media_worker` 是独立的阿里云 ICE/OSS 适配服务，负责 CineFlow 产生的新媒体文件，不替代现有 pyVideoTrans 的 OSS 上传和字幕消除代码。
+`cineflow.media_worker` 是独立的阿里云 ICE/OSS 适配服务，位于新项目完整流程的中后段。原视频上传和字幕消除也已经在本项目中实现，但由不同 Worker 负责：
 
-## 边界
+```text
+Upload Worker       STS、multipart、断点续传、对象校验
+Subtitle Worker     VideoDetext、Caca、本地模型、恢复和清理
+Media Worker        音频准备、MusicDemix、Azure 片段、最终合成
+```
 
-现有客户端继续负责：
+这种拆分避免单一服务同时承担大文件上传、外部视频任务和最终合成，便于独立扩缩容和故障隔离。
 
-- 原视频上传 OSS；
-- STS、私有 Bucket、分片上传、断点续传和对象校验；
-- 本地、Caca 或阿里云 IMS 原字幕消除；
-- 字幕消除任务恢复、结果校验与临时对象清理。
+## 输入
 
-Media Worker 只接收这些上游 URL：
+Media Worker 接收：
 
 ```text
 input_url
-clean_video_url（可选，优先用于最终画面）
-source_audio_url（可选，优先用于 ASR 和声伴分离）
+clean_video_url（可选，Subtitle Worker 的去字幕结果）
+source_audio_url（可选，已有音频时直接复用）
 ```
 
-它自己的 OSS 配置仅用于保存：
+它自己的 OSS 配置用于保存：
 
 - 云端抽取的音频；
 - `MusicDemix` 输出；
-- Azure TTS 生成的音频片段；
+- Azure TTS WAV 片段；
 - 最终视频；
 - 单独交付的 SRT。
 
-因此，后续把 `projects/cineflow-cloud` 整体移动到新仓库，不会改变当前客户端上传或字幕消除流程。
+原片通常位于 `cineflow/sources`，去字幕结果位于 `cineflow/subtitle-removal`，Media Worker 生成物建议位于 `cineflow/generated`。
 
-## 功能
-
-### `/v1/prepare`
+## `/v1/prepare`
 
 输入完整 `JobRequest`，返回 `MediaArtifacts`。
 
@@ -53,15 +52,13 @@ source_audio_url（可选，优先用于 ASR 和声伴分离）
   "vocal_url": "https://bucket.oss-cn-beijing.aliyuncs.com/demix-vocal.wav",
   "background_url": "https://bucket.oss-cn-beijing.aliyuncs.com/demix-accompaniment.wav",
   "provider": "aliyun_ice",
-  "task_ids": {
-    "music_demix": "job-id"
-  },
+  "task_ids": {"music_demix": "job-id"},
   "metadata": {},
   "degraded_features": []
 }
 ```
 
-### `/v1/artifacts/base64`
+## `/v1/artifacts/base64`
 
 控制平面将 Azure TTS 返回的单条 RIFF PCM WAV 写入 Media Worker：
 
@@ -72,16 +69,16 @@ source_audio_url（可选，优先用于 ASR 和声伴分离）
 }
 ```
 
-Worker 将其写入私有 OSS，并返回：
+Worker 写入私有 OSS，并返回：
 
-- `url`：无查询参数的内部规范 URL，供同账号 ICE Timeline 使用；
-- `download_url`：有时效签名地址；
+- `url`：无查询参数的规范 URL，供同账号 ICE Timeline 使用；
+- `download_url`：短时效签名地址；
 - `oss_uri`；
 - `object_key`。
 
-接口有单文件大小上限，默认 32 MiB。日志不得输出音频 Base64。
+接口默认单文件上限为 32 MiB，日志不得输出音频 Base64。
 
-### `/v1/assemble`
+## `/v1/assemble`
 
 输入：
 
@@ -94,17 +91,24 @@ DubbingArtifact
 
 Worker 构造 ICE Timeline：
 
-- 视频轨使用干净视频，并把原视频音量设为 0；
+- 视频轨使用干净视频，并将原视频音量设为 0；
 - 有 `background_url` 时按 `CINEFLOW_MEDIA_BACKGROUND_GAIN` 混入背景；
 - 每条 Azure TTS 片段按字幕 `start_ms` 设置 `TimelineIn`；
-- 音频轨分配使用 WAV 实测 `duration_ms`，不是字幕长度估算；
-- 相互重叠的配音片段自动分配到不同音频轨；
+- 音频轨分配使用 WAV 实测 `duration_ms`；
+- 相互重叠的配音自动分配到不同音频轨；
 - 硬字幕使用 `SubtitleTracks[].SubtitleTrackClips`；
+- `soft` 模式当前单独交付 SRT；
 - 最终输出到私有 OSS；
-- `soft` 模式当前单独交付 SRT，不把 mov_text 字幕轨封装进 MP4；
-- 返回最终视频签名 URL、字幕 URL、ICE 任务 ID 和输出元数据。
+- 返回视频签名 URL、字幕 URL、ICE JobId 和输出元数据。
 
-Azure 时长测量、SSML 语速重试和残余溢出字段见 `docs/azure-tts.md`。
+Azure TTS 已实现：
+
+- RIFF PCM WAV 时长测量；
+- 根据时间槽计算 SSML `prosody rate`；
+- 有界二次生成；
+- 残余超时保留完整音频并产生 `timing_warning`。
+
+尚未完成的下一层闭环是：残余超时自动调用 DeepSeek 缩句，再由 Azure 重合成。
 
 ## 运行
 
@@ -145,7 +149,7 @@ CINEFLOW_MEDIA_ALIYUN_SECURITY_TOKEN=
 
 CINEFLOW_MEDIA_OSS_ENDPOINT=https://oss-cn-beijing.aliyuncs.com
 CINEFLOW_MEDIA_OSS_BUCKET=your-private-bucket
-CINEFLOW_MEDIA_OSS_PREFIX=cineflow
+CINEFLOW_MEDIA_OSS_PREFIX=cineflow/generated
 CINEFLOW_MEDIA_OSS_SIGNED_URL_TTL_SECONDS=86400
 
 CINEFLOW_MEDIA_BACKGROUND_GAIN=0.25
@@ -154,7 +158,7 @@ CINEFLOW_MEDIA_HARD_SUBTITLE_FONT=Alibaba PuHuiTi
 CINEFLOW_MEDIA_HARD_SUBTITLE_FONT_SIZE=54
 ```
 
-也支持阿里云标准凭据环境变量：
+也支持标准阿里云凭据环境变量：
 
 ```text
 ALIBABA_CLOUD_ACCESS_KEY_ID
@@ -162,45 +166,45 @@ ALIBABA_CLOUD_ACCESS_KEY_SECRET
 ALIBABA_CLOUD_SECURITY_TOKEN
 ```
 
-## 地域与 OSS 要求
+生产环境优先使用实例 RAM 角色或密钥管理服务，不使用主账号 AccessKey。
 
-ICE 输入和输出应满足：
+## 地域与 OSS
 
-- OSS Bucket 与 ICE 服务位于兼容地域；
-- 输出 Bucket 已按阿里云要求注册或授权给智能媒体服务；
-- Media Worker 的 RAM 身份有最小化的 ICE 调用权限和指定前缀 OSS 读写权限；
-- 上游签名 URL 的有效期覆盖排队和处理时间；
-- 对同账号 OSS 输入，Worker 会去除易过期的查询参数，交由 ICE 使用服务端权限读取。
+ICE 输入输出应满足：
 
-不要使用阿里云主账号 AccessKey。
+- Bucket 与 ICE 位于兼容地域；
+- 输出 Bucket 已授权智能媒体服务；
+- RAM 身份具有 ICE 调用权限和指定 OSS 前缀读写权限；
+- 上游签名 URL 有效期覆盖排队与处理时间；
+- 同账号 OSS 输入可去除易过期查询参数，由 ICE 使用服务端权限读取。
 
 ## 300 秒目标
 
-Media Worker 的 `job_timeout_seconds` 和控制平面 HTTP timeout 是单个云任务的异常保护，不是全流程 300 秒硬截止。
+`job_timeout_seconds` 和控制平面 HTTP timeout 是单个云任务异常保护，不是全流程 300 秒硬截止：
 
-- 300 秒仍是优化目标；
-- 超过目标时继续等待有效的 ICE 任务完成；
-- 控制平面通过阶段指标与 `target_exceeded=true` 记录慢任务；
-- 不因达到 300 秒自动取消、丢弃或伪造结果。
+- 300 秒是优化目标；
+- 超过目标继续等待有效 ICE 任务；
+- 控制平面记录阶段耗时和 `target_exceeded=true`；
+- 不因达到 300 秒取消、丢弃或伪造结果。
 
 ## 当前限制
 
-这是可运行的 Media Worker MVP，但生产上线前仍需完成以下验证：
+生产上线前仍需完成：
 
-1. **真实 ICE 返回结构**：不同地域/版本的 `MusicDemix` 结果字段需要用正式账号做契约测试；无法分类时系统保留全部输出到 `metadata` 并标记降级；
-2. **残余配音超时处理**：当前已测量 WAV 时长，并允许 Azure 用有界 `prosody rate` 重生成；达到最大语速后仍超时的音频会完整保留、分轨并标记 `timing_warning`，尚未自动触发 DeepSeek 缩句或 post-TTS time-stretch；
-3. **软字幕封装**：当前返回独立 SRT；需要内嵌软字幕时应增加专门封装步骤；
-4. **任务持久化**：当前一次 HTTP 请求内完成提交和轮询；生产版应把 `JobId` 写入 Redis/PostgreSQL，以便 Worker 重启后继续查询；
-5. **火山 Media 后备**：控制平面已有 `SECONDARY_MEDIA_WORKER_URL`，但真实火山媒体适配器尚未实现；
-6. **实测性能和费用**：必须用真实 30 秒、2 分钟和 5 分钟素材记录 p50/p95、声伴分离耗时、TTS 二次生成率、合成耗时和实际账单。
+1. 使用正式账号验证不同地域的 `MusicDemix` 与 Timeline 返回结构；
+2. 完成“DeepSeek 缩句 → Azure 重合成”的残余超时闭环；
+3. 需要时增加 MP4 内嵌软字幕，目前交付独立 SRT；
+4. 将 Media 云 JobId 写入共享数据库，实现 Worker 重启后的跨进程恢复；
+5. 实现真实火山 Media 后备；
+6. 用 30 秒、2 分钟、5 分钟素材测量 p50/p95、TTS 二次生成率、合成耗时和实际账单。
 
 ## 接口安全
 
-可设置：
+设置：
 
 ```text
 CINEFLOW_MEDIA_BEARER_TOKEN=...
 CINEFLOW_WORKER_BEARER_TOKEN=同一个值
 ```
 
-除 `/healthz` 外，Media Worker 的写接口会验证 `Authorization: Bearer ...`。生产环境还应只暴露在私网，并通过安全组或服务网格限制调用方。
+除 `/healthz` 外，写接口验证 `Authorization: Bearer ...`。生产环境还应使用私网、安全组、mTLS 或服务网格身份，并限制 Base64 大小与调用速率。
