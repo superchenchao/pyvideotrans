@@ -6,6 +6,10 @@ on:
       - agent/cineflow-cloud-realtime-5m
     paths:
       - '.github/workflows/cineflow-discover-upstream.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/cineflow-discover-upstream.yml'
 
 permissions:
   contents: write
