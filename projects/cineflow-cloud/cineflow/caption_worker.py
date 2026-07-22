@@ -82,9 +82,7 @@ def create_extractor(settings: CaptionWorkerSettings) -> AliyunCaptionExtractor:
             security_token=security_token,
             connect_timeout_seconds=settings.aliyun_connect_timeout_seconds,
             request_timeout_seconds=settings.aliyun_request_timeout_seconds,
-            poll_interval_seconds=settings.aliyyun_poll_interval_seconds
-            if hasattr(settings, "aliyyun_poll_interval_seconds")
-            else settings.aliyun_poll_interval_seconds,
+            poll_interval_seconds=settings.aliyun_poll_interval_seconds,
             job_timeout_seconds=settings.aliyun_job_timeout_seconds,
         )
     )
