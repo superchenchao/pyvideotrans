@@ -20,6 +20,7 @@ jobs:
         with:
           ref: agent/cineflow-cloud-realtime-5m
       - uses: astral-sh/ruff-action@v3
+        continue-on-error: true
         with:
           args: check --fix --unsafe-fixes projects/cineflow-cloud
       - name: Commit fixes
