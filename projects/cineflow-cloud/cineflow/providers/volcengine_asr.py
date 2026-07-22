@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import shutil
 import subprocess
@@ -184,17 +185,16 @@ class VolcengineFlashASRClient:
             transport=self.transport,
             follow_redirects=True,
             trust_env=False,
-        ) as client:
-            async with client.stream("GET", url) as response:
-                response.raise_for_status()
-                with destination.open("wb") as output:
-                    async for chunk in response.aiter_bytes():
-                        total += len(chunk)
-                        if total > self.config.max_download_bytes:
-                            raise ASRProviderError(
-                                "Volcengine ASR source exceeds configured download limit"
-                            )
-                        output.write(chunk)
+        ) as client, client.stream("GET", url) as response:
+            response.raise_for_status()
+            with destination.open("wb") as output:
+                async for chunk in response.aiter_bytes():
+                    total += len(chunk)
+                    if total > self.config.max_download_bytes:
+                        raise ASRProviderError(
+                            "Volcengine ASR source exceeds configured download limit"
+                        )
+                    output.write(chunk)
         if total <= 0:
             raise ASRProviderError(
                 "Volcengine ASR downloaded an empty source file"
@@ -281,10 +281,8 @@ class VolcengineFlashASRClient:
                 }
                 for word in item.get("words", []) or []
             ]
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 max_end_ms = max(max_end_ms, int(item.get("end_time", 0)))
-            except (TypeError, ValueError):
-                pass
             rows.append(
                 {
                     "start_ms": item.get("start_time", 0),
