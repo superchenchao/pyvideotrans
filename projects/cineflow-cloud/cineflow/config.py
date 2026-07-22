@@ -52,6 +52,10 @@ class Settings(BaseSettings):
     azure_speech_secondary_key: str = ""
     azure_speech_secondary_region: str = ""
     azure_tts_concurrency: int = Field(default=8, ge=1, le=20)
+    azure_tts_max_fit_rate_percent: int = Field(default=55, ge=0, le=100)
+    azure_tts_duration_tolerance_ratio: float = Field(default=1.08, ge=1.0, le=1.5)
+    azure_tts_max_fit_attempts: int = Field(default=2, ge=1, le=4)
+    azure_tts_request_timeout_seconds: float = Field(default=25.0, ge=5, le=120)
 
     # Conservative billing guardrails. OSS upload and burned-subtitle removal
     # remain upstream and therefore are intentionally excluded from this quote.
