@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 from dataclasses import dataclass
 from typing import Any
@@ -33,7 +34,9 @@ class AliyunVideoDetextProvider:
 
     @property
     def detail(self) -> str:
-        return "Alibaba ICE VideoDetext ready" if self.configured else "ICE or OSS is not configured"
+        return (
+            "Alibaba ICE VideoDetext ready" if self.configured else "ICE or OSS is not configured"
+        )
 
     @staticmethod
     def _job_params(request: SubtitleRemovalRequest) -> dict[str, object]:
@@ -92,12 +95,8 @@ class AliyunVideoDetextProvider:
             if text.startswith(("http://", "https://", "oss://")):
                 urls.append(text)
             elif text.startswith(("{", "[")):
-                try:
-                    urls.extend(
-                        AliyunVideoDetextProvider._walk_urls(json.loads(text))
-                    )
-                except json.JSONDecodeError:
-                    pass
+                with contextlib.suppress(json.JSONDecodeError):
+                    urls.extend(AliyunVideoDetextProvider._walk_urls(json.loads(text)))
         return urls
 
     async def wait(self, submission: ProviderSubmission) -> ProviderSubmission:
@@ -112,8 +111,7 @@ class AliyunVideoDetextProvider:
             (
                 value
                 for value in candidates
-                if submission.output_object_key
-                and submission.output_object_key in value
+                if submission.output_object_key and submission.output_object_key in value
             ),
             expected,
         )

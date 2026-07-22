@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -34,7 +34,7 @@ class TemporaryCredentials:
     @property
     def expiration_epoch(self) -> int:
         text = self.expiration.replace("Z", "+00:00")
-        return int(datetime.fromisoformat(text).astimezone(timezone.utc).timestamp())
+        return int(datetime.fromisoformat(text).astimezone(UTC).timestamp())
 
 
 class AliyunSTSClient:

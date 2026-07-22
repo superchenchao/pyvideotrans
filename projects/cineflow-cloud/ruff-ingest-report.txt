@@ -1,0 +1,36 @@
+SIM102 Use a single `if` statement instead of nested `if` statements
+   --> projects/cineflow-cloud/cineflow/media_probe.py:149:5
+    |
+147 |               f"generated height differs: expected {request.expected_height}, got {result.height}"
+148 |           )
+149 | /     if request.expected_fps is not None and result.fps is not None:
+150 | |         if abs(result.fps - request.expected_fps) > fps_tolerance:
+    | |__________________________________________________________________^
+151 |               valid = False
+152 |               warnings.append(
+    |
+help: Combine `if` statements using `and`
+
+E501 Line too long (105 > 100)
+   --> projects/cineflow-cloud/cineflow/upload_client.py:205:101
+    |
+203 |     if len(content) != length:
+204 |         raise UploadClientError(
+205 |             f"local file changed while reading part {part_number}: expected {length}, got {len(content)}"
+    |                                                                                                     ^^^^^
+206 |         )
+207 |     result = bucket.upload_part(object_key, upload_id, part_number, content)
+    |
+
+E501 Line too long (103 > 100)
+  --> projects/cineflow-cloud/scripts/patch_ingest_runtime.py:59:101
+   |
+57 |         insertion = [
+58 |             f"{indent}task = self.tasks.get(job_id)",
+59 |             f"{indent}if task is not None and task is not asyncio.current_task() and not task.done():",
+   |                                                                                                     ^^^
+60 |             f"{indent}    task.cancel()",
+61 |             f"{indent}    await asyncio.gather(task, return_exceptions=True)",
+   |
+
+Found 3 errors.

@@ -164,17 +164,12 @@ class DeepSeekTranslator:
                     "target_duration_ms": target_ms,
                     "actual_duration_ms": actual_ms,
                     "overflow_ms": max(0, actual_ms - target_ms),
-                    "applied_rate_percent": int(
-                        measurement.get("rate_percent", 0)
-                    ),
+                    "applied_rate_percent": int(measurement.get("rate_percent", 0)),
                     "suggested_length_ratio": round(
                         min(0.95, max(0.25, target_ms / actual_ms * 0.9)),
                         3,
                     ),
-                    "context": [
-                        {"line_id": item.line_id, "text": item.text}
-                        for item in context
-                    ],
+                    "context": [{"line_id": item.line_id, "text": item.text} for item in context],
                 }
             )
 
@@ -220,9 +215,7 @@ class DeepSeekTranslator:
                 raise ValueError(f"DeepSeek timing rewrite returned empty line {line_id}")
             original = originals[line_id]
             if len(text) > len(original):
-                raise ValueError(
-                    f"DeepSeek timing rewrite made line {line_id} longer"
-                )
+                raise ValueError(f"DeepSeek timing rewrite made line {line_id} longer")
             if text != original:
                 rewrites[line_id] = text
         return rewrites
@@ -251,9 +244,7 @@ class DeepSeekTranslator:
             line = transcript.lines[index]
             row = by_line.get(line_id, LineEvidence(line_id=line_id))
             candidates = {
-                item.character_id
-                for item in [*row.audio, *row.visual]
-                if item.character_id
+                item.character_id for item in [*row.audio, *row.visual] if item.character_id
             }
             if not candidates:
                 continue
@@ -263,10 +254,7 @@ class DeepSeekTranslator:
                 {
                     "line_id": line_id,
                     "text": line.text,
-                    "context": [
-                        {"line_id": item.line_id, "text": item.text}
-                        for item in context
-                    ],
+                    "context": [{"line_id": item.line_id, "text": item.text} for item in context],
                     "candidates": sorted(candidates),
                     "audio": [item.model_dump() for item in row.audio],
                     "visual": [item.model_dump() for item in row.visual],
@@ -290,9 +278,7 @@ class DeepSeekTranslator:
                 "lines": [
                     {
                         "line_id": 1,
-                        "candidates": [
-                            {"character_id": "character_001", "score": 0.7}
-                        ],
+                        "candidates": [{"character_id": "character_001", "score": 0.7}],
                     }
                 ]
             },
@@ -311,11 +297,7 @@ class DeepSeekTranslator:
         )
         output = parsed.get("lines")
         expected_ids = [row["line_id"] for row in rows]
-        output_ids = (
-            [int(item["line_id"]) for item in output]
-            if isinstance(output, list)
-            else []
-        )
+        output_ids = [int(item["line_id"]) for item in output] if isinstance(output, list) else []
         if output_ids != expected_ids:
             raise ValueError("DeepSeek speaker reasoning changed line IDs or ordering")
 

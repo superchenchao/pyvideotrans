@@ -7,7 +7,7 @@ import shutil
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path, PurePosixPath
 
 import httpx
@@ -16,7 +16,7 @@ from fastapi import FastAPI, Header, HTTPException, Query, status
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .media_probe import MediaProbeError, probe_media, validate_probe
+from .media_probe import probe_media, validate_probe
 from .providers.aliyun_ice import AliyunICEClient, AliyunICEConfig
 from .providers.aliyun_oss import AliyunOSSConfig, AliyunOSSError, AliyunOSSStore
 from .providers.subtitle_aliyun import AliyunSubtitleConfig, AliyunVideoDetextProvider
@@ -40,11 +40,11 @@ _SAFE_NAME = re.compile(r"[^0-9A-Za-z._-]+")
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def parse_utc(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
 def safe_name(value: str, fallback: str = "clean.mp4") -> str:
@@ -265,7 +265,7 @@ class SubtitleRuntime:
         job_id = uuid.uuid4().hex
         now = utc_now()
         output_key = self.store.key(
-            datetime.now(timezone.utc).strftime("%Y/%m/%d"),
+            datetime.now(UTC).strftime("%Y/%m/%d"),
             job_id,
             safe_name(request.output_filename),
         )
@@ -330,9 +330,7 @@ class SubtitleRuntime:
             update={
                 "state": SubtitleJobState.RUNNING,
                 "external_job_id": submission.external_job_id,
-                "canonical_output_url": (
-                    submission.output_url or job.canonical_output_url
-                ),
+                "canonical_output_url": (submission.output_url or job.canonical_output_url),
                 "updated_at": utc_now(),
                 "metadata": metadata,
             }
@@ -353,11 +351,14 @@ class SubtitleRuntime:
         with tempfile.TemporaryDirectory(prefix="cineflow-detext-copy-") as directory:
             target = Path(directory) / "output.mp4"
             total = 0
-            async with httpx.AsyncClient(
-                timeout=600.0,
-                follow_redirects=True,
-                trust_env=False,
-            ) as client, client.stream("GET", source_url) as response:
+            async with (
+                httpx.AsyncClient(
+                    timeout=600.0,
+                    follow_redirects=True,
+                    trust_env=False,
+                ) as client,
+                client.stream("GET", source_url) as response,
+            ):
                 response.raise_for_status()
                 with target.open("wb") as output:
                     async for chunk in response.aiter_bytes():
@@ -432,18 +433,20 @@ class SubtitleRuntime:
                 await self._save(job)
 
                 submission = self._submission_from_job(job)
-                has_existing_submission = bool(
-                    submission.external_job_id
-                    or submission.completed
-                    or (
-                        submission.output_object_key
-                        and await asyncio.to_thread(
-                            self.store.object_exists,
-                            submission.output_object_key,
-                        )
+                output_exists = bool(
+                    submission.output_object_key
+                    and await asyncio.to_thread(
+                        self.store.object_exists,
+                        submission.output_object_key,
                     )
                 )
-                if not has_existing_submission or provider.name == "local":
+                if provider.name == "local":
+                    has_existing_submission = output_exists and submission.completed
+                else:
+                    has_existing_submission = bool(
+                        submission.external_job_id or submission.completed or output_exists
+                    )
+                if not has_existing_submission:
                     submission = await provider.submit(
                         job.request,
                         job_id=job.job_id,
@@ -478,9 +481,7 @@ class SubtitleRuntime:
                 warnings = [*job.warnings, *validation.warnings]
                 completed_at = utc_now()
                 final_state = (
-                    SubtitleJobState.DEGRADED
-                    if validation.warnings
-                    else SubtitleJobState.SUCCEEDED
+                    SubtitleJobState.DEGRADED if validation.warnings else SubtitleJobState.SUCCEEDED
                 )
                 completed = job.model_copy(
                     update={
@@ -518,6 +519,10 @@ class SubtitleRuntime:
         delete_input: bool,
     ) -> SubtitleCleanupResult:
         job = await self._load(job_id)
+        task = self.tasks.get(job_id)
+        if task is not None and task is not asyncio.current_task() and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         provider = self.providers.get(job.selected_provider)
         warnings: list[str] = []
         submission = self._submission_from_job(job)
@@ -574,7 +579,7 @@ class SubtitleRuntime:
         older_than_seconds: int,
         delete_successful_outputs: bool,
     ) -> dict[str, object]:
-        threshold = datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+        threshold = datetime.now(UTC) - timedelta(seconds=older_than_seconds)
         cleaned: list[str] = []
         failed: dict[str, str] = {}
         for payload in await self.state.list(_NAMESPACE):
@@ -582,17 +587,22 @@ class SubtitleRuntime:
             try:
                 timestamp = parse_utc(job.updated_at)
             except ValueError:
-                timestamp = datetime.min.replace(tzinfo=timezone.utc)
+                timestamp = datetime.min.replace(tzinfo=UTC)
             if timestamp > threshold:
                 continue
-            delete_output = delete_successful_outputs or job.state not in {
-                SubtitleJobState.SUCCEEDED,
-                SubtitleJobState.DEGRADED,
-            }
+            if (
+                job.state
+                in {
+                    SubtitleJobState.SUCCEEDED,
+                    SubtitleJobState.DEGRADED,
+                }
+                and not delete_successful_outputs
+            ):
+                continue
             try:
                 await self.cancel(
                     job.job_id,
-                    delete_output=delete_output,
+                    delete_output=True,
                     delete_input=False,
                 )
                 cleaned.append(job.job_id)

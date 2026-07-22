@@ -72,11 +72,14 @@ class LocalSubtitleProvider:
 
         total = 0
         try:
-            async with httpx.AsyncClient(
-                timeout=self.config.download_timeout_seconds,
-                follow_redirects=True,
-                trust_env=False,
-            ) as client, client.stream("GET", url) as response:
+            async with (
+                httpx.AsyncClient(
+                    timeout=self.config.download_timeout_seconds,
+                    follow_redirects=True,
+                    trust_env=False,
+                ) as client,
+                client.stream("GET", url) as response,
+            ):
                 response.raise_for_status()
                 with destination.open("wb") as output:
                     async for chunk in response.aiter_bytes():

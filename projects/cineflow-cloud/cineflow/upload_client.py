@@ -285,8 +285,7 @@ def resumable_upload(
         worker.register_multipart(session_id, upload_id)
 
     completed = {
-        int(number): str(etag)
-        for number, etag in dict(manifest.data.get("parts", {})).items()
+        int(number): str(etag) for number, etag in dict(manifest.data.get("parts", {})).items()
     }
     plan = part_plan(fingerprint.size_bytes, part_size)
     pending = [item for item in plan if item[0] not in completed]

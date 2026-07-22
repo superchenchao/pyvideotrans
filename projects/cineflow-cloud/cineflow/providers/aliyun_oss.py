@@ -171,13 +171,11 @@ class AliyunOSSStore:
             "object_key": object_key,
             "content_length": int(content_length or 0),
             "content_type": str(
-                getattr(result, "content_type", "")
-                or headers.get("content-type", "")
+                getattr(result, "content_type", "") or headers.get("content-type", "")
             ),
             "etag": str(getattr(result, "etag", "") or headers.get("etag", "")),
             "last_modified": str(
-                getattr(result, "last_modified", "")
-                or headers.get("last-modified", "")
+                getattr(result, "last_modified", "") or headers.get("last-modified", "")
             ),
             "headers": headers,
             "metadata": {
@@ -191,9 +189,7 @@ class AliyunOSSStore:
         try:
             return bool(self._bucket().object_exists(object_key))
         except Exception as exc:
-            raise AliyunOSSError(
-                f"failed to check OSS object {object_key}: {exc}"
-            ) from exc
+            raise AliyunOSSError(f"failed to check OSS object {object_key}: {exc}") from exc
 
     def delete_object(self, object_key: str) -> None:
         try:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cineflow.ingest_models import (
     MultipartRegistration,
@@ -169,7 +169,7 @@ async def test_stale_cleanup_does_not_delete_completed_session_by_default(tmp_pa
     session = await runtime.create_session(
         UploadSessionRequest(filename="done.mp4", size_bytes=100)
     )
-    old = (datetime.now(timezone.utc) - timedelta(days=2)).isoformat()
+    old = (datetime.now(UTC) - timedelta(days=2)).isoformat()
     completed = session.model_copy(
         update={
             "credentials": None,

@@ -5,7 +5,7 @@ import mimetypes
 import os
 import re
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import PurePosixPath
 
 import uvicorn
@@ -31,11 +31,11 @@ _NAMESPACE = "upload-sessions"
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
 
 
 def parse_utc(value: str) -> datetime:
-    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+    return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
 
 
 def safe_filename(value: str) -> str:
@@ -191,7 +191,7 @@ class UploadRuntime:
         session_id = uuid.uuid4().hex
         now = utc_now()
         object_key = self.oss.key(
-            datetime.now(timezone.utc).strftime("%Y/%m/%d"),
+            datetime.now(UTC).strftime("%Y/%m/%d"),
             safe_filename(request.project_id),
             session_id,
             safe_filename(request.filename),
@@ -222,7 +222,9 @@ class UploadRuntime:
         if session.state in {UploadState.ABORTED, UploadState.FAILED}:
             raise ValueError(f"upload session is {session.state.value}")
         if session.state == UploadState.COMPLETED:
-            return session.model_copy(update={"download_url": self.oss.signed_url(session.object_key)})
+            return session.model_copy(
+                update={"download_url": self.oss.signed_url(session.object_key)}
+            )
         credentials = await self._credentials(session)
         return session.model_copy(update={"credentials": credentials})
 
@@ -349,7 +351,7 @@ class UploadRuntime:
         older_than_seconds: int,
         delete_completed: bool,
     ) -> dict[str, object]:
-        threshold = datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+        threshold = datetime.now(UTC) - timedelta(seconds=older_than_seconds)
         cleaned: list[str] = []
         failed: dict[str, str] = {}
         for payload in await self.state.list(_NAMESPACE):
@@ -357,7 +359,7 @@ class UploadRuntime:
             try:
                 updated_at = parse_utc(session.updated_at)
             except ValueError:
-                updated_at = datetime.min.replace(tzinfo=timezone.utc)
+                updated_at = datetime.min.replace(tzinfo=UTC)
             if updated_at > threshold:
                 continue
             if session.state == UploadState.COMPLETED and not delete_completed:

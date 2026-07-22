@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from cineflow.media_probe import MediaProbeResult, validate_probe
 from cineflow.providers.subtitle_aliyun import AliyunVideoDetextProvider
@@ -169,7 +169,7 @@ async def test_recovery_resumes_existing_external_job_without_resubmission(tmp_p
         "metadata": {},
         "etag": "etag",
     }
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     submission = ProviderSubmission(
         provider="aliyun",
         external_job_id="existing-cloud-job",
@@ -214,7 +214,7 @@ async def test_cleanup_keeps_old_successful_output_unless_explicitly_requested(t
     )
     output_key = "detext/old/output.mp4"
     store.objects[output_key] = {"content_length": 100, "metadata": {}}
-    old = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+    old = (datetime.now(UTC) - timedelta(days=10)).isoformat()
     job = SubtitleRemovalJob(
         job_id="old-success",
         state=SubtitleJobState.SUCCEEDED,

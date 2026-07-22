@@ -54,9 +54,7 @@ class CacaSubtitleProvider:
     @property
     def configured(self) -> bool:
         return bool(
-            self.config.base_url.strip()
-            and self.config.api_key.strip()
-            and self.store.configured
+            self.config.base_url.strip() and self.config.api_key.strip() and self.store.configured
         )
 
     @property
