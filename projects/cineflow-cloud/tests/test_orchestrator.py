@@ -14,7 +14,6 @@ async def wait_for_terminal(store, job_id):
             JobState.SUCCEEDED,
             JobState.DEGRADED,
             JobState.FAILED,
-            JobState.TIMED_OUT,
         }:
             return job
         await asyncio.sleep(0.01)
@@ -29,6 +28,7 @@ async def test_demo_pipeline_completes_and_preserves_multispeaker_mapping():
     )
     request = JobRequest(
         input_url="https://example.com/input.mp4",
+        clean_video_url="https://example.com/already-cleaned.mp4",
         probe=VideoProbe(duration_seconds=120, input_bytes=20_000_000),
         target_language="en-US",
         target_voice="en-US-AvaMultilingualNeural",
@@ -37,6 +37,8 @@ async def test_demo_pipeline_completes_and_preserves_multispeaker_mapping():
     completed = await wait_for_terminal(store, accepted.job_id)
     assert completed.state == JobState.SUCCEEDED
     assert completed.result is not None
+    assert completed.target_exceeded is False
+    assert completed.request.translation_engine == "deepseek"
     assert [item.character_id for item in completed.decisions] == [
         "character_001",
         "character_002",
