@@ -4,6 +4,7 @@ from cineflow.speaker_worker import (
     AudioTurn,
     VisualTrack,
     associate_audio_speakers_with_faces,
+    audio_turns_from_transcript,
     build_line_evidence,
 )
 
@@ -22,6 +23,31 @@ def test_audio_speaker_is_associated_with_active_face():
         ],
     )
     assert mapping == {"spk0": "character_001"}
+
+
+def test_cloud_asr_speaker_labels_become_audio_turns():
+    transcript = Transcript(
+        language="zh-CN",
+        provider="aliyun_fun_asr",
+        lines=[
+            SubtitleLine(
+                line_id=1,
+                start_ms=100,
+                end_ms=900,
+                text="你好",
+                speaker_id="spk2",
+            )
+        ],
+    )
+    turns = audio_turns_from_transcript(transcript, confidence=0.92)
+    assert turns == [
+        AudioTurn(
+            start_ms=100,
+            end_ms=900,
+            speaker_id="spk2",
+            confidence=0.92,
+        )
+    ]
 
 
 def test_line_evidence_uses_same_identity_for_audio_and_visual():
