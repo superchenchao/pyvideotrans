@@ -64,7 +64,60 @@
 自建云端 Worker
 ```
 
-`MEDIA/ASR/SPEAKER_WORKER_URL` 是首选端点，建议指向阿里云实现；对应的 `SECONDARY_*` 端点用于火山引擎或其他后备实现。控制平面会先调用首选端点，失败后再调用后备端点。
+`MEDIA/ASR/SPEAKER_WORKER_URL` 是首选端点；对应的 `SECONDARY_*` 端点是后备端点。控制平面会先调用首选端点，失败后再调用后备端点。
+
+## 已完成的云 ASR
+
+当前已经实现真实的独立 ASR Worker，而不是只有接口占位：
+
+### 首选：阿里云 Fun-ASR
+
+- 直接提交 `source_audio_url`、`clean_video_url` 或 `input_url`；
+- 异步提交、轮询和结果下载；
+- 句级时间戳；
+- 词级时间戳；
+- `speaker_id`；
+- 可选 `speaker_count` 提示；
+- 返回实际计费语音秒数和任务 ID。
+
+### 后备：火山引擎豆包语音大模型极速版
+
+- Worker 内下载签名 URL；
+- FFmpeg 转为 16kHz、单声道、64kbps MP3；
+- 新版 API Key 或旧版 AppID + Access Token；
+- 短重试；
+- 句级时间戳与说话人标签；
+- 保留 trace ID。
+
+统一输出：
+
+```json
+{
+  "language": "zh-CN",
+  "provider": "aliyun_fun_asr",
+  "task_id": "...",
+  "usage_seconds": 42.5,
+  "lines": [
+    {
+      "line_id": 1,
+      "start_ms": 0,
+      "end_ms": 1260,
+      "text": "你怎么来了？",
+      "speaker_id": "spk1",
+      "words": []
+    }
+  ]
+}
+```
+
+默认部署：
+
+```text
+CINEFLOW_ASR_WORKER_URL=http://asr-aliyun:8091
+CINEFLOW_SECONDARY_ASR_WORKER_URL=http://asr-volcengine:8091
+```
+
+详见 `docs/asr-worker.md`。
 
 ## 翻译：默认且仅使用 DeepSeek
 
@@ -101,12 +154,15 @@ thinking: disabled
 
 不再把 ali_CAM 作为唯一决策模型。CineFusion Worker 汇总：
 
-1. pyannote Community-1 音频分段；
-2. Light-ASD/LR-ASD 主动说话人分数；
-3. ArcFace 等跨镜头人脸身份；
-4. 画外音、重叠说话和音画同步状态；
-5. DeepSeek 低置信度文本软证据；
-6. 动态权重和 Viterbi 式序列解码。
+1. 阿里云/火山 ASR 返回的说话人标签；
+2. ASR 不返回标签时的 pyannote Community-1 后备分段；
+3. Light-ASD/LR-ASD 主动说话人分数；
+4. ArcFace 等跨镜头人脸身份；
+5. 画外音、重叠说话和音画同步状态；
+6. DeepSeek 低置信度文本软证据；
+7. 动态权重和 Viterbi 式序列解码。
+
+默认 `CINEFLOW_SPEAKER_AUDIO_BACKEND=auto`：优先使用云 ASR `speaker_id`，只有云 ASR 没有返回人物标签时才运行 pyannote。这样减少 GPU 音频模型开销，同时保留质量兜底和 A/B 基线。
 
 Light-ASD/LR-ASD 模型本体不复制进本仓库，部署时按许可证挂载，并通过统一 JSON 命令适配器连接。
 
@@ -118,14 +174,15 @@ Light-ASD/LR-ASD 模型本体不复制进本仓库，部署时按许可证挂载
 - 有界并发和等待队列；
 - `/readyz` 与 Worker 健康检查；
 - SSE 任务进度；
+- 阿里云 Fun-ASR Worker；
+- 火山引擎 ASR 后备 Worker；
 - 多模态融合与序列解码；
 - 独立 DeepSeek JSON 翻译客户端；
 - Azure Speech REST TTS；
-- Media、ASR、CineFusion Worker HTTP 契约；
 - 可部署的 CineFusion GPU Worker；
 - Docker、Kubernetes 示例和性能基准脚本。
 
-> 当前是控制平面和 CineFusion Worker MVP。正式上线仍需接入真实 Media/ASR Worker、对象存储结果写入和主动说话人模型，并在目标云实例上做真实素材 p50/p95 测试。
+> 当前已经落地真实 ASR 适配器。正式上线仍需完成 Media Worker、对象存储结果写入、主动说话人模型部署，并用真实凭据和代表性素材做 p50/p95 与人物准确率测试。
 
 ## 本地运行
 
@@ -138,6 +195,26 @@ uvicorn cineflow.api:app --host 0.0.0.0 --port 8080
 
 默认 `CINEFLOW_MODE=demo`，不会调用付费 API。
 
+### 启动 ASR Worker
+
+```bash
+# 阿里云首选
+CINEFLOW_ASR_BACKEND=aliyun \
+CINEFLOW_ASR_ALIYUN_API_KEY='...' \
+uvicorn cineflow.asr_worker:app --host 0.0.0.0 --port 8091
+
+# 火山后备
+CINEFLOW_ASR_BACKEND=volcengine \
+CINEFLOW_ASR_VOLCENGINE_API_KEY='...' \
+uvicorn cineflow.asr_worker:app --host 0.0.0.0 --port 8092
+```
+
+或：
+
+```bash
+docker compose --profile asr up -d asr-aliyun asr-volcengine
+```
+
 ## 准入预估
 
 ```bash
@@ -146,6 +223,7 @@ curl -X POST http://127.0.0.1:8080/v1/admission \
   -d '{
     "input_url": "https://example.com/oss-source.mp4",
     "clean_video_url": "https://example.com/oss-cleaned.mp4",
+    "source_audio_url": "https://example.com/oss-source.wav",
     "probe": {
       "duration_seconds": 300,
       "input_bytes": 180000000,
@@ -207,13 +285,11 @@ curl -N http://127.0.0.1:8080/v1/jobs/JOB_ID/events
 CINEFLOW_MODE=production
 CINEFLOW_TARGET_PROCESSING_SECONDS=300
 
-# 首选阿里云适配器，后备火山引擎适配器
 CINEFLOW_MEDIA_WORKER_URL=https://aliyun-media.internal
 CINEFLOW_SECONDARY_MEDIA_WORKER_URL=https://volc-media.internal
 CINEFLOW_ASR_WORKER_URL=https://aliyun-asr.internal
 CINEFLOW_SECONDARY_ASR_WORKER_URL=https://volc-asr.internal
-CINEFLOW_SPEAKER_WORKER_URL=https://aliyun-or-private-speaker.internal
-CINEFLOW_SECONDARY_SPEAKER_WORKER_URL=https://volc-or-private-speaker.internal
+CINEFLOW_SPEAKER_WORKER_URL=https://speaker.internal
 
 CINEFLOW_DEEPSEEK_API_KEY=...
 CINEFLOW_DEEPSEEK_MODEL=deepseek-v4-flash
@@ -228,6 +304,7 @@ CINEFLOW_AZURE_SPEECH_SECONDARY_REGION=southeastasia
 详细内容见：
 
 - `docs/architecture.md`
+- `docs/asr-worker.md`
 - `docs/sla.md`
 - `docs/speaker-worker.md`
 - `docs/deployment.md`
