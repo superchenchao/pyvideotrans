@@ -1,0 +1,47 @@
+name: Temporary CineFlow Upstream Discovery
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+    paths:
+      - '.github/workflows/cineflow-discover-upstream.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  discover:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - name: Build discovery report
+        shell: bash
+        run: |
+          set -euo pipefail
+          report='projects/cineflow-cloud/upstream-discovery.txt'
+          {
+            echo '=== matching filenames ==='
+            find . -type f \
+              ! -path './.git/*' \
+              ! -path './projects/cineflow-cloud/*' \
+              | grep -Ei '(oss|sts|subtitle|detext|caca|remove.*sub|aliyun|upload)' \
+              | sort || true
+            echo
+            echo '=== matching code lines ==='
+            grep -RInE --exclude-dir=.git --exclude-dir=projects \
+              '(VideoDetext|Caca|caca|oss2|multipart|upload_part|STS|AssumeRole|subtitle.?remov|remove.?subtitle|去字幕|断点续传|签名URL|signed.?url)' \
+              . | head -n 2000 || true
+          } > "$report"
+      - name: Commit report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add projects/cineflow-cloud/upstream-discovery.txt
+          git commit -m 'Capture upstream OSS and subtitle implementation paths'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m
