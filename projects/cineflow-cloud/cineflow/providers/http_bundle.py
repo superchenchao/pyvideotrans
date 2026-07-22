@@ -60,7 +60,9 @@ class HttpWorkerClient:
     async def post(self, path: str, payload: dict, timeout: float) -> dict:
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.post(
-                f"{self.base_url}{path}", headers=self.headers, json=payload
+                f"{self.base_url}{path}",
+                headers=self.headers,
+                json=payload,
             )
             response.raise_for_status()
             return response.json()
@@ -106,14 +108,7 @@ class FailoverWorkerClient:
 
 
 class ProductionProviders:
-    """Standalone composition root.
-
-    Media, ASR and speaker workers use a preferred endpoint plus an optional
-    fallback. Deployment policy should point preferred endpoints at Alibaba Cloud
-    implementations first and fallback endpoints at Volcengine when needed.
-    DeepSeek is the only/default translation engine in this release; Azure TTS is
-    retained for multilingual role dubbing.
-    """
+    """Standalone composition root using cloud APIs and HTTP worker contracts."""
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -144,6 +139,22 @@ class ProductionProviders:
             else None
         )
         self.asr = FailoverWorkerClient(primary_asr, secondary_asr)
+
+        self.caption: FailoverWorkerClient | None = None
+        if settings.caption_worker_url:
+            primary_caption = HttpWorkerClient(
+                settings.caption_worker_url,
+                settings.worker_bearer_token,
+            )
+            secondary_caption = (
+                HttpWorkerClient(
+                    settings.secondary_caption_worker_url,
+                    settings.worker_bearer_token,
+                )
+                if settings.secondary_caption_worker_url
+                else None
+            )
+            self.caption = FailoverWorkerClient(primary_caption, secondary_caption)
 
         primary_speaker = HttpWorkerClient(
             settings.speaker_worker_url,
@@ -177,24 +188,41 @@ class ProductionProviders:
             ),
             concurrency=settings.azure_tts_concurrency,
             max_fit_rate_percent=settings.azure_tts_max_fit_rate_percent,
-            duration_tolerance_ratio=(settings.azure_tts_duration_tolerance_ratio),
+            duration_tolerance_ratio=settings.azure_tts_duration_tolerance_ratio,
             max_fit_attempts=settings.azure_tts_max_fit_attempts,
-            request_timeout_seconds=(settings.azure_tts_request_timeout_seconds),
+            request_timeout_seconds=settings.azure_tts_request_timeout_seconds,
         )
 
     def _worker_timeout(self, field: str, default: float = 300.0) -> float:
-        settings = getattr(self, "settings", None)
-        return float(getattr(settings, field, default))
+        return float(getattr(self.settings, field, default))
 
     async def health(self) -> list[ProviderHealth]:
-        media, asr, speaker = await asyncio.gather(
-            self.media.health("media"),
-            self.asr.health("asr"),
-            self.speaker.health("speaker"),
+        media_task = self.media.health("media")
+        asr_task = self.asr.health("asr")
+        speaker_task = self.speaker.health("speaker")
+        caption_task = (
+            self.caption.health("caption")
+            if self.caption is not None
+            else asyncio.sleep(
+                0,
+                result=ProviderHealth(
+                    name="caption",
+                    healthy=False,
+                    warm=False,
+                    detail="caption worker URL is not configured",
+                ),
+            )
+        )
+        media, asr, caption, speaker = await asyncio.gather(
+            media_task,
+            asr_task,
+            caption_task,
+            speaker_task,
         )
         return [
             media,
             asr,
+            caption,
             speaker,
             ProviderHealth(
                 name="deepseek",
@@ -226,6 +254,16 @@ class ProductionProviders:
         )
         return Transcript.model_validate(data)
 
+    async def extract_visual_subtitles(self, request: JobRequest) -> Transcript:
+        if self.caption is None:
+            raise RuntimeError("cloud OCR caption worker is not configured")
+        data = await self.caption.post(
+            "/v1/extract",
+            request.model_dump(mode="json"),
+            self._worker_timeout("caption_worker_timeout_seconds"),
+        )
+        return Transcript.model_validate(data)
+
     async def analyze_speakers(
         self, request: JobRequest, transcript: Transcript
     ) -> list[LineEvidence]:
@@ -254,7 +292,6 @@ class ProductionProviders:
                 ambiguous,
             )
         except Exception:
-            # Text reasoning is weak evidence and must never block delivery.
             return evidence
         return merge_evidence(evidence, text_evidence)
 
