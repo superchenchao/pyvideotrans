@@ -5,22 +5,31 @@ on:
     branches:
       - agent/cineflow-cloud-realtime-5m
 
+permissions:
+  contents: write
+
 jobs:
   report:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
-      - name: Report remaining Ruff errors
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - name: Generate Ruff report
         shell: bash
         run: |
           set -euo pipefail
-          git clone --quiet --depth 1 --branch agent/cineflow-cloud-realtime-5m \
-            https://github.com/superchenchao/pyvideotrans.git /tmp/pyvideotrans
-          cd /tmp/pyvideotrans/projects/cineflow-cloud
           python -m pip install --quiet 'ruff>=0.9'
-          set +e
-          ruff check . --output-format=concise > /tmp/ruff-report.txt
-          status=$?
-          set -e
-          sed -n '1,80p' /tmp/ruff-report.txt
-          exit "$status"
+          cd projects/cineflow-cloud
+          ruff check . --output-format=concise > ruff-report.txt || true
+      - name: Commit report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add projects/cineflow-cloud/ruff-report.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Capture remaining CineFlow Ruff report'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m
