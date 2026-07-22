@@ -25,7 +25,15 @@ def test_cost_guard_accepts_five_minute_default_profile():
     _, quote = controller.quote(request_for())
     assert quote.total_cny < 5.0
     assert quote.breakdown["azure_tts"] > 0
+    assert quote.breakdown["cloud_ocr"] == 0.5
     assert "subtitle_removal" not in quote.breakdown
+
+
+def test_asr_only_mode_does_not_quote_cloud_ocr():
+    controller = AdmissionController(Settings())
+    _, quote = controller.quote(request_for(subtitle_recognition_mode="asr"))
+    assert quote.breakdown["cloud_ocr"] == 0
+    assert quote.breakdown["asr"] > 0
 
 
 def test_cost_guard_rejects_job_before_billing():
@@ -39,6 +47,7 @@ def test_cold_speaker_worker_warns_but_does_not_reject():
     health = [
         ProviderHealth(name="media", healthy=True, warm=True),
         ProviderHealth(name="asr", healthy=True, warm=True),
+        ProviderHealth(name="caption", healthy=True, warm=True),
         ProviderHealth(name="speaker", healthy=True, warm=False),
         ProviderHealth(name="deepseek", healthy=True, warm=True),
         ProviderHealth(name="azure_tts", healthy=True, warm=True),
@@ -53,12 +62,28 @@ def test_unhealthy_mandatory_provider_is_rejected():
     health = [
         ProviderHealth(name="media", healthy=True),
         ProviderHealth(name="asr", healthy=False),
+        ProviderHealth(name="caption", healthy=True),
         ProviderHealth(name="speaker", healthy=True),
         ProviderHealth(name="deepseek", healthy=True),
         ProviderHealth(name="azure_tts", healthy=True),
     ]
     with pytest.raises(ProviderUnavailable, match="asr"):
         controller.validate_provider_health(request_for(), health)
+
+
+def test_asr_only_mode_does_not_require_caption_health():
+    controller = AdmissionController(Settings())
+    health = [
+        ProviderHealth(name="media", healthy=True),
+        ProviderHealth(name="asr", healthy=True),
+        ProviderHealth(name="caption", healthy=False),
+        ProviderHealth(name="speaker", healthy=True),
+        ProviderHealth(name="deepseek", healthy=True),
+        ProviderHealth(name="azure_tts", healthy=True),
+    ]
+    assert controller.validate_provider_health(
+        request_for(subtitle_recognition_mode="asr"), health
+    ) == []
 
 
 async def test_capacity_waits_instead_of_rejecting_a_valid_job():
