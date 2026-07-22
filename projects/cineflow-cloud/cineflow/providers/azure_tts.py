@@ -185,10 +185,13 @@ class AzureTTSClient:
             rate=f"{normalized_rate:+d}%",
         )
         errors: list[str] = []
-        async with self.semaphore, httpx.AsyncClient(
-            timeout=self.request_timeout_seconds,
-            transport=self.transport,
-        ) as client:
+        async with (
+            self.semaphore,
+            httpx.AsyncClient(
+                timeout=self.request_timeout_seconds,
+                transport=self.transport,
+            ) as client,
+        ):
             for endpoint in self.endpoints:
                 try:
                     response: httpx.Response | None = None
