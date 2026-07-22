@@ -1,0 +1,39 @@
+name: Temporary CineFlow Test Report
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+    paths:
+      - 'projects/cineflow-cloud/**'
+      - '.github/workflows/cineflow-cloud-test-report.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - shell: bash
+        run: |
+          set -euo pipefail
+          cd projects/cineflow-cloud
+          python -m pip install --quiet -e '.[dev]'
+          set +e
+          pytest -q -W error > test-report.txt 2>&1
+          set -e
+          cd ../..
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add projects/cineflow-cloud/test-report.txt
+          git diff --cached --quiet && exit 0
+          git commit -m 'Capture CineFlow pytest diagnostics'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m
