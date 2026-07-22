@@ -343,8 +343,8 @@
 ./videotrans/subtitle_removal/aliyun_ims.py:112:                "FunctionName": "VideoDetext",
 ./videotrans/subtitle_removal/__init__.py:3:from .engine import EngineSpec, find_subtitle_remover_engine
 ./videotrans/subtitle_removal/__init__.py:29:    "find_subtitle_remover_engine",
-./.github/workflows/cineflow-discover-upstream.yml:31:              | grep -Ei '(oss|sts|subtitle|detext|caca|remove.*sub|aliyun|upload)' \
-./.github/workflows/cineflow-discover-upstream.yml:36:              '(VideoDetext|Caca|caca|oss2|multipart|upload_part|STS|AssumeRole|subtitle.?remov|remove.?subtitle|去字幕|断点续传|签名URL|signed.?url)' \
+./.github/workflows/cineflow-discover-upstream.yml:35:              | grep -Ei '(oss|sts|subtitle|detext|caca|remove.*sub|aliyun|upload)' \
+./.github/workflows/cineflow-discover-upstream.yml:40:              '(VideoDetext|Caca|caca|oss2|multipart|upload_part|STS|AssumeRole|subtitle.?remov|remove.?subtitle|去字幕|断点续传|签名URL|signed.?url)' \
 ./启动pyVideoTrans.cmd:4:set "PYVIDEOTRANS_SUBTITLE_REMOVER_HOME=%~dp0video-subtitle-remover"
 ./pyproject.toml:144:    "oss2==2.19.1",
 ./scripts/benchmark_first_episode.py:93:            "subtitle_removal_rect": [
