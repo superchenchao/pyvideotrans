@@ -207,6 +207,8 @@ Light-ASD/LR-ASD 模型本体不复制进仓库，部署时按许可证挂载，
 - Azure Speech REST TTS；
 - Docker、Kubernetes、测试和性能脚本。
 
+GitHub Actions 已验证包安装、Ruff 和完整 pytest 套件。该验证覆盖本地契约与编排逻辑，不代表真实云账号已完成端到端验收。
+
 > 目前已落地 ASR 和阿里云 Media Worker。正式上线仍需要部署真实主动说话人模型、完成跨进程任务持久化、验证 ICE 的正式账号返回结构，并用代表性素材测量 p50/p95、人物准确率和实际账单。
 
 ## 本地运行
