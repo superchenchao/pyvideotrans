@@ -10,7 +10,10 @@
 - Added separate SRT delivery for soft-subtitle mode and signed OSS URLs for final artifacts.
 - Added Docker Compose and Kubernetes deployment examples for the Alibaba Media Worker.
 - Extended media and output contracts with provider, task IDs, vocal URL, metadata, and degradation reporting.
-- Added Media Worker contract, timeline, demix, artifact, SRT, and standalone-deployment tests.
+- Added Media Worker contract, timeline, demix, output-normalization, artifact, SRT, and standalone-deployment tests.
+- Replaced dynamic asyncio importing with direct `asyncio.to_thread` calls and made intelligent-production output parsing tolerate list, mapping, and JSON-string forms.
+- Kept source OSS upload and original-subtitle removal outside this project.
+- Validated package installation, Ruff, and the full pytest suite in GitHub Actions.
 - Documented that true TTS time fitting, persistent cloud job recovery, a real Volcengine Media fallback, and production p50/p95 measurements remain before launch.
 
 ## 0.3.0
