@@ -194,7 +194,8 @@ class ProductionProviders:
         )
 
     def _worker_timeout(self, field: str, default: float = 300.0) -> float:
-        return float(getattr(self.settings, field, default))
+        settings = getattr(self, "settings", None)
+        return float(getattr(settings, field, default))
 
     async def health(self) -> list[ProviderHealth]:
         media_task = self.media.health("media")
