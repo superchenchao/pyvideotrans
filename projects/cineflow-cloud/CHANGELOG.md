@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- Added a standalone Alibaba ICE Media Worker with `/v1/prepare`, `/v1/artifacts/base64`, and `/v1/assemble`.
+- Added cloud audio extraction through `SubmitMediaProducingJob` when the upstream client does not provide `source_audio_url`.
+- Added Alibaba `MusicDemix` submission, polling, output discovery, vocal/background classification, and task metadata.
+- Added a private OSS store for CineFlow-generated artifacts and final outputs without replacing the existing desktop OSS upload implementation.
+- Added ICE Timeline assembly that mutes the original audio, mixes a configurable background track, schedules Azure TTS clips, allocates overlapping dialogue to multiple tracks, and supports hard subtitle rendering.
+- Added separate SRT delivery for soft-subtitle mode and signed OSS URLs for final artifacts.
+- Added Docker Compose and Kubernetes deployment examples for the Alibaba Media Worker.
+- Extended media and output contracts with provider, task IDs, vocal URL, metadata, and degradation reporting.
+- Added Media Worker contract, timeline, demix, artifact, SRT, and standalone-deployment tests.
+- Documented that true TTS time fitting, persistent cloud job recovery, a real Volcengine Media fallback, and production p50/p95 measurements remain before launch.
+
 ## 0.3.0
 
 - Added a standalone Alibaba Cloud Fun-ASR worker with asynchronous task polling, sentence timestamps, word timestamps, speaker labels, task metadata, and speech-duration usage.
