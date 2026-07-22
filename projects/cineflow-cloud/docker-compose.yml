@@ -6,6 +6,16 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  media-aliyun:
+    profiles: ["media"]
+    build:
+      context: .
+      dockerfile: Dockerfile.media
+    env_file: .env
+    ports:
+      - "8093:8093"
+    restart: unless-stopped
+
   asr-aliyun:
     profiles: ["asr"]
     build:
