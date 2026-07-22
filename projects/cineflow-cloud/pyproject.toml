@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "cineflow-cloud"
-version = "0.1.0"
-description = "Cloud-first, deadline-aware video translation orchestration for videos up to five minutes."
+version = "0.2.0"
+description = "Standalone cloud video translation orchestration with a soft five-minute performance target."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "GPL-3.0-or-later" }
