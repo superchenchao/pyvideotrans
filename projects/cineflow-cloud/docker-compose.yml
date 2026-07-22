@@ -1,0 +1,106 @@
+services:
+  api:
+    build: .
+    env_file: .env
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  upload-aliyun:
+    profiles: ["ingest"]
+    build:
+      context: .
+      dockerfile: Dockerfile.upload
+    env_file: .env
+    environment:
+      CINEFLOW_UPLOAD_STATE_DIR: /var/lib/cineflow/uploads
+    ports:
+      - "8094:8094"
+    volumes:
+      - cineflow-upload-state:/var/lib/cineflow/uploads
+    restart: unless-stopped
+
+  subtitle-removal:
+    profiles: ["ingest"]
+    build:
+      context: .
+      dockerfile: Dockerfile.subtitle
+    env_file: .env
+    environment:
+      CINEFLOW_SUBTITLE_STATE_DIR: /var/lib/cineflow/subtitles
+    ports:
+      - "8095:8095"
+    volumes:
+      - cineflow-subtitle-state:/var/lib/cineflow/subtitles
+      - ./external-subtitle-models:/opt/subtitle-models:ro
+    restart: unless-stopped
+
+  caption-aliyun:
+    profiles: ["recognition"]
+    build:
+      context: .
+      dockerfile: Dockerfile.caption
+    env_file: .env
+    ports:
+      - "8096:8096"
+    restart: unless-stopped
+
+  media-aliyun:
+    profiles: ["media"]
+    build:
+      context: .
+      dockerfile: Dockerfile.media
+    env_file: .env
+    ports:
+      - "8093:8093"
+    restart: unless-stopped
+
+  asr-aliyun:
+    profiles: ["recognition"]
+    build:
+      context: .
+      dockerfile: Dockerfile.asr
+    env_file: .env
+    environment:
+      CINEFLOW_ASR_BACKEND: aliyun
+      CINEFLOW_ASR_PORT: "8091"
+    ports:
+      - "8091:8091"
+    restart: unless-stopped
+
+  asr-volcengine:
+    profiles: ["recognition"]
+    build:
+      context: .
+      dockerfile: Dockerfile.asr
+    env_file: .env
+    environment:
+      CINEFLOW_ASR_BACKEND: volcengine
+      CINEFLOW_ASR_PORT: "8091"
+    ports:
+      - "8092:8091"
+    restart: unless-stopped
+
+  speaker-worker:
+    profiles: ["gpu"]
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu
+    env_file: .env
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./models:/root/.cache
+      - ./external-models:/opt/asd:ro
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  cineflow-upload-state:
+  cineflow-subtitle-state:

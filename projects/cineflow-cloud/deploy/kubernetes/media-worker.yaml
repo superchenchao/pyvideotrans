@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cineflow-media-aliyun
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cineflow-media-aliyun
+  template:
+    metadata:
+      labels:
+        app: cineflow-media-aliyun
+    spec:
+      containers:
+        - name: media
+          image: ghcr.io/OWNER/cineflow-cloud-media:latest
+          args:
+            - uvicorn
+            - cineflow.media_worker:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8093"
+          ports:
+            - containerPort: 8093
+          envFrom:
+            - secretRef:
+                name: cineflow-secrets
+            - configMapRef:
+                name: cineflow-config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8093
+            periodSeconds: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8093
+            periodSeconds: 10
+            timeoutSeconds: 2
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cineflow-media-aliyun
+spec:
+  selector:
+    app: cineflow-media-aliyun
+  ports:
+    - port: 8093
+      targetPort: 8093

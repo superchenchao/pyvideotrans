@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cineflow-asr-aliyun
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cineflow-asr-aliyun
+  template:
+    metadata:
+      labels:
+        app: cineflow-asr-aliyun
+    spec:
+      containers:
+        - name: asr
+          image: ghcr.io/OWNER/cineflow-cloud-asr:latest
+          args:
+            - uvicorn
+            - cineflow.asr_worker:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8091"
+          ports:
+            - containerPort: 8091
+          env:
+            - name: CINEFLOW_ASR_BACKEND
+              value: aliyun
+          envFrom:
+            - secretRef:
+                name: cineflow-secrets
+            - configMapRef:
+                name: cineflow-config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8091
+            periodSeconds: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8091
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "2"
+              memory: "1Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cineflow-asr-aliyun
+spec:
+  selector:
+    app: cineflow-asr-aliyun
+  ports:
+    - port: 8091
+      targetPort: 8091
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cineflow-asr-volcengine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cineflow-asr-volcengine
+  template:
+    metadata:
+      labels:
+        app: cineflow-asr-volcengine
+    spec:
+      containers:
+        - name: asr
+          image: ghcr.io/OWNER/cineflow-cloud-asr:latest
+          args:
+            - uvicorn
+            - cineflow.asr_worker:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8091"
+          ports:
+            - containerPort: 8091
+          env:
+            - name: CINEFLOW_ASR_BACKEND
+              value: volcengine
+          envFrom:
+            - secretRef:
+                name: cineflow-secrets
+            - configMapRef:
+                name: cineflow-config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8091
+            periodSeconds: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8091
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "4"
+              memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cineflow-asr-volcengine
+spec:
+  selector:
+    app: cineflow-asr-volcengine
+  ports:
+    - port: 8091
+      targetPort: 8091
