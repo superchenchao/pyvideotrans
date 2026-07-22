@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0
+
+- Added a standalone Alibaba STS broker that issues short-lived, object-scoped OSS credentials without exposing permanent AccessKeys to desktop clients.
+- Added a resumable multipart OSS upload client with concurrent parts, local checkpoints, STS refresh, server-side multipart registration, abort, and resume.
+- Added upload-session persistence, object-size and SHA-256 metadata validation, signed delivery URLs, stale-session cleanup, and partial-upload cleanup.
+- Added a durable subtitle-removal worker with automatic Alibaba VideoDetext, Caca, and trusted server-side local-command routing.
+- Added normalized subtitle regions and time ranges, Alibaba `LimitRegion`/`Time` conversion, configurable VideoDetext model ID, external JobId persistence, and restart recovery.
+- Added a configurable Caca adapter with flexible task, status, output, authentication, and endpoint fields; real account contract validation remains required.
+- Added a trusted local subtitle-removal command adapter with signed-input download, region/time JSON files, bounded execution, and OSS result upload.
+- Added `ffprobe` output validation for non-empty video, duration, resolution, FPS, codec, and audio presence.
+- Added cancellation, invalid-result deletion, input/output cleanup, and successful-output retention by default.
+- Added atomic file-backed worker state, Dockerfiles, Docker Compose services, Kubernetes manifests, documentation, and tests for upload and subtitle-removal flows.
+- Corrected the standalone product boundary: source upload, STS, multipart resume, object validation, local/Caca/Alibaba subtitle removal, recovery, and cleanup now belong to this project.
+- Kept DeepSeek as the default/only translator, Azure Speech as multilingual role TTS, and 300 seconds as a soft processing target rather than a cancellation deadline.
+
 ## 0.5.0
 
 - Changed Azure Speech output to RIFF 24kHz 16-bit mono PCM so every generated line has a measurable duration.
@@ -15,26 +30,21 @@
 ## 0.4.0
 
 - Added a standalone Alibaba ICE Media Worker with `/v1/prepare`, `/v1/artifacts/base64`, and `/v1/assemble`.
-- Added cloud audio extraction through `SubmitMediaProducingJob` when the upstream client does not provide `source_audio_url`.
+- Added cloud audio extraction through `SubmitMediaProducingJob` when `source_audio_url` is absent.
 - Added Alibaba `MusicDemix` submission, polling, output discovery, vocal/background classification, and task metadata.
-- Added a private OSS store for CineFlow-generated artifacts and final outputs without replacing the existing desktop OSS upload implementation.
-- Added ICE Timeline assembly that mutes the original audio, mixes a configurable background track, schedules Azure TTS clips, allocates overlapping dialogue to multiple tracks, and supports hard subtitle rendering.
+- Added a private OSS store for generated artifacts and final outputs.
+- Added ICE Timeline assembly that mutes original audio, mixes background, schedules Azure clips, allocates overlapping dialogue to multiple tracks, and renders hard subtitles.
 - Added separate SRT delivery for soft-subtitle mode and signed OSS URLs for final artifacts.
 - Added Docker Compose and Kubernetes deployment examples for the Alibaba Media Worker.
 - Extended media and output contracts with provider, task IDs, vocal URL, metadata, and degradation reporting.
 - Added Media Worker contract, timeline, demix, output-normalization, artifact, SRT, and standalone-deployment tests.
-- Replaced dynamic asyncio importing with direct `asyncio.to_thread` calls and made intelligent-production output parsing tolerate list, mapping, and JSON-string forms.
-- Kept source OSS upload and original-subtitle removal outside this project.
-- Validated package installation, Ruff, and the full pytest suite in GitHub Actions.
-- Documented that persistent cloud job recovery, a real Volcengine Media fallback, and production p50/p95 measurements remain before launch.
 
 ## 0.3.0
 
-- Added a standalone Alibaba Cloud Fun-ASR worker with asynchronous task polling, sentence timestamps, word timestamps, speaker labels, task metadata, and speech-duration usage.
-- Added a standalone Volcengine BigModel Flash fallback worker with signed-URL download, FFmpeg audio preparation, retry handling, speaker labels, and trace metadata.
+- Added a standalone Alibaba Cloud Fun-ASR worker with asynchronous polling, sentence timestamps, word timestamps, speaker labels, task metadata, and speech-duration usage.
+- Added a standalone Volcengine BigModel Flash fallback with signed-URL download, FFmpeg audio preparation, retries, speaker labels, and trace metadata.
 - Extended the normalized transcript contract with provider, task, usage, speaker, and word-timing fields.
 - Changed CineFusion audio evidence to prefer cloud ASR speaker labels and use pyannote only as a fallback or explicit A/B backend.
 - Added Docker Compose and Kubernetes deployment examples for separate Alibaba and Volcengine ASR services.
-- Kept OSS upload and burned-subtitle removal outside this standalone project.
 - Kept DeepSeek as the only/default translator and Azure Speech as the dubbing provider.
 - Kept 300 seconds as a soft performance target rather than a hard cancellation deadline.
