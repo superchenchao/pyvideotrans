@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cineflow-speaker-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cineflow-speaker-worker
+  template:
+    metadata:
+      labels:
+        app: cineflow-speaker-worker
+    spec:
+      containers:
+        - name: speaker-worker
+          image: ghcr.io/OWNER/cineflow-cloud-gpu:latest
+          ports:
+            - containerPort: 8090
+          envFrom:
+            - secretRef:
+                name: cineflow-speaker-secrets
+            - configMapRef:
+                name: cineflow-speaker-config
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8090
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 20
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8090
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "4"
+              memory: "12Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "12"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: active-speaker-models
+              mountPath: /opt/asd
+              readOnly: true
+      volumes:
+        - name: active-speaker-models
+          persistentVolumeClaim:
+            claimName: cineflow-asd-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cineflow-speaker-worker
+spec:
+  selector:
+    app: cineflow-speaker-worker
+  ports:
+    - port: 8090
+      targetPort: 8090

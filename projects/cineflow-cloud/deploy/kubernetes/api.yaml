@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cineflow-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: cineflow-api
+  template:
+    metadata:
+      labels:
+        app: cineflow-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/OWNER/cineflow-cloud:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: cineflow-secrets
+            - configMapRef:
+                name: cineflow-config
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 3
+            timeoutSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cineflow-api
+spec:
+  selector:
+    app: cineflow-api
+  ports:
+    - port: 80
+      targetPort: 8080

@@ -1,0 +1,169 @@
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Field, HttpUrl, model_validator
+
+
+class JobState(StrEnum):
+    ACCEPTED = "accepted"
+    RUNNING = "running"
+    SUCCEEDED = "succeeded"
+    DEGRADED = "degraded"
+    REJECTED = "rejected"
+    FAILED = "failed"
+    TIMED_OUT = "timed_out"
+
+
+class VideoProbe(BaseModel):
+    duration_seconds: Annotated[float, Field(gt=0, le=300)]
+    input_bytes: Annotated[int, Field(gt=0)]
+    codec: str = "h264"
+    width: Annotated[int, Field(gt=0, le=3840)] = 1920
+    height: Annotated[int, Field(gt=0, le=3840)] = 1080
+    fps: Annotated[float, Field(gt=0, le=60)] = 25.0
+
+
+class JobRequest(BaseModel):
+    input_url: HttpUrl
+    probe: VideoProbe
+    source_language: str = "zh-CN"
+    target_language: str
+    target_voice: str = ""
+    character_voices: dict[str, str] = Field(default_factory=dict)
+    character_names: dict[str, str] = Field(default_factory=dict)
+    glossary: dict[str, str] = Field(default_factory=dict)
+    subtitle_mode: Literal["soft", "hard", "none"] = "soft"
+    remove_burned_subtitles: bool = False
+    separate_background: bool = True
+    multi_speaker: bool = True
+    strict_sla: bool = True
+    max_cost_cny: Annotated[float, Field(gt=0, le=100)] = 5.0
+    estimated_tts_characters: Annotated[int, Field(ge=0)] | None = None
+    expected_speakers: Annotated[int, Field(ge=1, le=20)] | None = None
+
+    @model_validator(mode="after")
+    def validate_languages(self) -> "JobRequest":
+        if self.source_language.casefold() == self.target_language.casefold():
+            raise ValueError("target_language must differ from source_language")
+        return self
+
+
+class SubtitleLine(BaseModel):
+    line_id: int
+    start_ms: int
+    end_ms: int
+    text: str
+
+    @model_validator(mode="after")
+    def validate_time_range(self) -> "SubtitleLine":
+        if self.end_ms <= self.start_ms:
+            raise ValueError("end_ms must be greater than start_ms")
+        return self
+
+
+class Transcript(BaseModel):
+    language: str
+    lines: list[SubtitleLine]
+
+
+class CandidateScore(BaseModel):
+    character_id: str
+    score: Annotated[float, Field(ge=0.0, le=1.0)]
+
+
+class LineEvidence(BaseModel):
+    line_id: int
+    audio: list[CandidateScore] = Field(default_factory=list)
+    visual: list[CandidateScore] = Field(default_factory=list)
+    text: list[CandidateScore] = Field(default_factory=list)
+    offscreen: bool = False
+    overlap_speech: bool = False
+    av_sync_confidence: Annotated[float, Field(ge=0.0, le=1.0)] = 1.0
+
+
+class SpeakerDecision(BaseModel):
+    line_id: int
+    character_id: str
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+    needs_review: bool = False
+
+
+class MediaArtifacts(BaseModel):
+    video_url: str
+    background_url: str | None = None
+    source_audio_url: str | None = None
+    degraded_features: list[str] = Field(default_factory=list)
+
+
+class DubbingClip(BaseModel):
+    line_id: int
+    character_id: str
+    audio_url: str
+    duration_ms: int | None = None
+
+
+class DubbingArtifact(BaseModel):
+    clips: list[DubbingClip]
+
+
+class OutputArtifact(BaseModel):
+    video_url: str
+    subtitle_url: str | None = None
+
+
+class AdmissionResult(BaseModel):
+    accepted: bool
+    predicted_seconds: float
+    estimated_cost_cny: float = 0.0
+    cost_breakdown: dict[str, float] = Field(default_factory=dict)
+    hard_sla_seconds: int
+    reserve_seconds: int
+    reason: str = ""
+
+
+class ProviderHealth(BaseModel):
+    name: str
+    healthy: bool
+    warm: bool = True
+    detail: str = ""
+    latency_ms: float = 0.0
+
+
+class CostQuote(BaseModel):
+    total_cny: float
+    breakdown: dict[str, float] = Field(default_factory=dict)
+
+
+class JobEvent(BaseModel):
+    event_type: str
+    stage: str = ""
+    progress: int | None = None
+    message: str = ""
+    data: dict[str, object] = Field(default_factory=dict)
+
+
+class StageMetric(BaseModel):
+    stage: str
+    elapsed_seconds: float
+    degraded: bool = False
+    detail: str = ""
+
+
+class JobRecord(BaseModel):
+    job_id: str
+    state: JobState
+    accepted_at_monotonic: float
+    deadline_seconds: int
+    request: JobRequest
+    predicted_seconds: float
+    estimated_cost_cny: float = 0.0
+    cost_breakdown: dict[str, float] = Field(default_factory=dict)
+    progress: int = 0
+    current_stage: str = "accepted"
+    result: OutputArtifact | None = None
+    decisions: list[SpeakerDecision] = Field(default_factory=list)
+    metrics: list[StageMetric] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    error: str = ""
