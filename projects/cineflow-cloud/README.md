@@ -284,6 +284,8 @@ docker compose --profile gpu up -d speaker-worker
 | Upload | 8094 |
 | Subtitle Removal | 8095 |
 
+Upload、Subtitle、Media、ASR 和 CineFusion 是同一个独立项目中的不同服务，不是父项目功能。控制平面目前不反向代理这些端点，部署时由 API 网关统一暴露，或由桌面端分别调用公开入口。
+
 ## 验证状态
 
 自动化测试覆盖：
