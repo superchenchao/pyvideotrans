@@ -88,6 +88,22 @@ def associate_audio_speakers_with_faces(
     return mapping
 
 
+def _candidate_scores(
+    values: dict[str, float], duration_ms: int
+) -> list[CandidateScore]:
+    if not values:
+        return []
+    return [
+        CandidateScore(
+            character_id=character_id,
+            score=min(1.0, max(0.001, value / duration_ms)),
+        )
+        for character_id, value in sorted(
+            values.items(), key=lambda pair: (-pair[1], pair[0])
+        )
+    ]
+
+
 def build_line_evidence(
     transcript: Transcript,
     audio_turns: list[AudioTurn],
@@ -120,24 +136,11 @@ def build_line_evidence(
             visual_scores[track.face_id] += overlap * track.score
             av_sync = max(av_sync, track.av_sync_confidence)
 
-        def candidates(values: dict[str, float]) -> list[CandidateScore]:
-            if not values:
-                return []
-            return [
-                CandidateScore(
-                    character_id=character_id,
-                    score=min(1.0, max(0.001, value / duration)),
-                )
-                for character_id, value in sorted(
-                    values.items(), key=lambda item: (-item[1], item[0])
-                )
-            ]
-
-        visual_candidates = candidates(visual_scores)
+        visual_candidates = _candidate_scores(visual_scores, duration)
         rows.append(
             LineEvidence(
                 line_id=line.line_id,
-                audio=candidates(audio_scores),
+                audio=_candidate_scores(audio_scores, duration),
                 visual=visual_candidates,
                 offscreen=(
                     not visual_candidates
@@ -215,12 +218,14 @@ class SpeakerRuntime:
             shutil.copy2(source, destination)
             return destination
         if parsed.scheme in {"http", "https"}:
-            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-                async with client.stream("GET", url) as response:
-                    response.raise_for_status()
-                    with destination.open("wb") as output:
-                        async for chunk in response.aiter_bytes():
-                            output.write(chunk)
+            async with (
+                httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client,
+                client.stream("GET", url) as response,
+            ):
+                response.raise_for_status()
+                with destination.open("wb") as output:
+                    async for chunk in response.aiter_bytes():
+                        output.write(chunk)
             return destination
         source = Path(url)
         if source.is_file():
