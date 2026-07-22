@@ -138,13 +138,14 @@ class MediaRuntime:
         service: AliyunMediaService | None = None,
     ) -> None:
         self.settings = settings
+        self._service_injected = service is not None
         self.service = service or create_service(settings)
         self.semaphore = asyncio.Semaphore(settings.max_concurrency)
 
     def health(self) -> dict[str, object]:
         ice_ready = bool(self.service.ice.configured)
         oss_ready = bool(self.service.store.configured)
-        sdk_ready = bool(
+        sdk_ready = self._service_injected or bool(
             importlib.util.find_spec("aliyunsdkcore")
             and importlib.util.find_spec("oss2")
         )
