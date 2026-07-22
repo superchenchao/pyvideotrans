@@ -1,184 +1,202 @@
 # 架构
 
-CineFlow Cloud 是可独立移动的控制平面和 Worker 集合。它不导入父项目，也不在用户电脑运行模型或整片编码。
+CineFlow Cloud 是可以整体移动到独立仓库的完整视频翻译系统。它不导入父项目，不读取父项目配置、缓存或数据库；普通电脑只负责选择文件、上传、查看进度和下载结果。
 
-## 上游边界
-
-现有客户端继续负责：
+## 完整数据流
 
 ```text
-原视频
-  ↓
-现有 OSS 上传、STS、断点续传、对象校验
-  ↓
-可选：现有本地 / Caca / 阿里云 IMS 字幕消除
-  ↓
-input_url + clean_video_url + 可选 source_audio_url
-  ↓
-CineFlow Cloud
+桌面端/CLI
+  │
+  ├─ 计算 SHA-256
+  ├─ 向 Upload Worker 申请对象级 STS
+  └─ 直接并发分片上传 OSS，可断点续传
+          │
+          ▼
+Upload Worker
+  ├─ 持久化 session / multipart upload ID
+  ├─ HEAD 校验大小、Content-Type、SHA-256 元数据
+  ├─ 中止遗留分片
+  └─ 返回规范 URL 与签名 URL
+          │
+          ▼
+Subtitle Removal Worker
+  ├─ 阿里云 ICE VideoDetext
+  ├─ Caca API
+  └─ 服务端本地字幕消除命令
+          │
+          ├─ 持久化外部 JobId
+          ├─ Worker 重启恢复
+          ├─ 结果复制到项目 OSS
+          └─ ffprobe 校验时长/画面/FPS/音轨
+          │
+          ▼
+CineFlow Control Plane
+  ├─ Media Worker：音频抽取、MusicDemix
+  ├─ ASR Worker：阿里云 Fun-ASR，火山后备
+  └─ ASR 完成后并行
+       ├─ CineFusion：speaker_id、主动说话人、人脸、上下文
+       └─ DeepSeek：字幕翻译
+              │
+              ▼
+       Azure 多角色 TTS
+       ├─ RIFF PCM WAV
+       ├─ 真实时长测量
+       └─ 有界 SSML 语速拟合
+              │
+              ▼
+       Alibaba ICE Timeline
+       ├─ 原音轨静音
+       ├─ 背景声混合
+       ├─ 按真实时长放置多角色配音
+       ├─ 硬字幕或独立 SRT
+       └─ 私有 OSS 成片
 ```
 
-本项目只认识 URL 和 JSON，不认识父项目的类、配置文件、缓存目录或数据库。整个 `projects/cineflow-cloud` 目录可以直接移动到新仓库。
+## 服务边界
 
-## 云端流水线
+| 服务 | 默认端口 | 责任 |
+|---|---:|---|
+| Control Plane | 8080 | 费用预估、队列、编排、SSE、结果状态 |
+| CineFusion Worker | 8090 | 音频与视觉人物证据、多模态融合 |
+| ASR Worker | 8091/8092 | 阿里云 Fun-ASR 与火山后备 |
+| Media Worker | 8093 | 音频准备、MusicDemix、Azure 片段存储、最终合成 |
+| Upload Worker | 8094 | STS、上传会话、验证、中止、清理 |
+| Subtitle Worker | 8095 | VideoDetext、Caca、本地模型、恢复和输出校验 |
+
+每个 Worker 通过 HTTP 契约解耦，后续可独立扩缩容，也可以把文件状态存储替换为 Redis/PostgreSQL，而不改业务请求模型。
+
+## 上传架构
+
+### 为什么原片不经过控制平面
+
+原片直接从桌面端上传 OSS：
+
+- 避免控制平面双倍占用公网带宽；
+- 避免大文件落到 API 节点临时磁盘；
+- 允许 `oss2` 原生 multipart、并发和断点续传；
+- 桌面端只持有短期、单对象权限；
+- 上传会话和 upload ID 由服务端持久化，方便中止与清理。
+
+客户端检查点保存：
 
 ```text
-已上传的 OSS URL → CineFlow API
-                        ├─ Media Worker：音频准备、可选声伴分离
-                        ├─ 首选 ASR：阿里云 Fun-ASR
-                        │      └─ 句级/词级时间戳 + speaker_id
-                        └─ 后备 ASR：火山引擎大模型极速版
-                               └─ utterances + speaker 标签
-                                      ↓
-                                ASR 完成后并行
-                             ┌────────┴─────────┐
-                             │                  │
-                      CineFusion Worker     DeepSeek 翻译
-                             │
-              ┌──────────────┼─────────────────┐
-              │              │                 │
-        ASR speaker_id   Light-ASD/LR-ASD   人脸身份/上下文
-              │              │                 │
-              └──────────────┴─────────────────┘
-                                      ↓
-                           动态融合 + 序列解码
-                                      ↓
-                           Azure TTS 并发配音
-                                      ↓
-                           Media Worker 对齐合成 → OSS
+本地文件路径/大小/mtime
+SHA-256
+session_id
+object_key
+multipart upload_id
+已完成 part_number → ETag
 ```
 
-`clean_video_url` 存在时，人物视觉分析和最终合成优先使用现有字幕消除流程产生的干净视频；不存在时使用 `input_url`。ASR 按 `source_audio_url → clean_video_url → input_url` 选择输入。
+检查点不保存永久云密钥。STS 过期后，客户端刷新凭据并继续相同 `object_key` 和 multipart upload。
 
-## Provider 优先级
+## 字幕消除架构
 
-Media、ASR 和 Speaker 均采用首选/后备契约：
-
-1. `*_WORKER_URL`：首选，优先连接阿里云 API 适配器；
-2. `SECONDARY_*_WORKER_URL`：后备，连接火山引擎适配器；
-3. 两者都不满足时，同一 HTTP 契约可以指向自建云端 Worker。
-
-控制平面依次调用，不把厂商 SDK 写死到任务编排层。
-
-翻译是明确的例外：当前版本固定使用独立 DeepSeek 客户端。配音固定保留 Azure TTS。
-
-## ASR Worker
-
-`cineflow.asr_worker` 是独立进程，环境变量决定后端：
+Subtitle Worker 使用统一 `SubtitleRemovalProvider` 契约：
 
 ```text
-CINEFLOW_ASR_BACKEND=aliyun
-CINEFLOW_ASR_BACKEND=volcengine
+submit(request, job_id, output_object_key)
+wait(submission)
+cancel(submission)
 ```
 
-两套适配器都输出相同的 `Transcript`：
+### 自动路由
+
+默认：
 
 ```text
-language
-provider
-task_id
-usage_seconds
-metadata
-lines[]
-  ├─ line_id
-  ├─ start_ms / end_ms
-  ├─ text
-  ├─ speaker_id
-  └─ words[]
+aliyun → caca → local
 ```
 
-### 阿里云首选路径
+- `provider=auto`：选择第一个已配置后端；
+- 指定 provider：不可用时直接报错，不静默换服务；
+- Alibaba/Caca 外部 JobId 会写入状态文件；
+- Worker 启动时扫描非终态任务并恢复；
+- 本地命令无法从模型内部进度恢复，崩溃后会重新执行；
+- 所有输出最终归一化到新项目自己的 OSS 前缀并统一校验。
 
-```text
-OSS 签名 URL
-  ↓
-提交 Fun-ASR 异步任务
-  ↓
-轮询 task_id
-  ↓
-下载 transcription_url
-  ↓
-归一化句子、词和 speaker_id
-```
+## 云 Provider 优先级
 
-该路径无需在 CineFlow 控制平面下载原视频。
+除 DeepSeek 与 Azure TTS 是产品明确保留的例外外：
 
-### 火山后备路径
+1. 阿里云 API 或 Worker；
+2. 阿里能力、效果或速度不满足时使用火山引擎；
+3. 两边都不合适时使用自建云端 Worker。
 
-```text
-OSS 签名 URL
-  ↓
-ASR Worker 下载
-  ↓
-FFmpeg 16kHz / mono / 64kbps MP3
-  ↓
-豆包语音大模型极速版
-  ↓
-归一化 utterances 和 speaker
-```
+当前落地情况：
 
-火山路径需要媒体下载和轻量转码，因此默认作为后备。
+- ASR：阿里云 Fun-ASR 主路径，火山 BigModel Flash 后备；
+- 字幕消除：阿里 VideoDetext 主路径，Caca 和本地后备；
+- Media：阿里 ICE 已实现，火山 Media 后备仍待实现；
+- Speaker：优先云 ASR speaker 标签，视觉主动说话人仍由可替换外部模型提供；
+- 翻译：固定 DeepSeek；
+- TTS：固定 Azure Speech，支持第二地域容灾。
 
-## 五分钟目标和队列
+## 标准契约
 
-300 秒是性能目标而不是硬截止：
+### Upload Worker
 
-- 忙碌任务进入队列；
-- 预测超时不拒绝；
-- 冷 Worker 不因速度目标被拒绝；
-- 超过 300 秒继续运行；
-- 通过阶段检查点和 `target_exceeded` 记录性能。
+- `POST /v1/uploads/sessions`
+- `POST /v1/uploads/{id}/credentials`
+- `POST /v1/uploads/{id}/multipart`
+- `POST /v1/uploads/{id}/validate`
+- `POST /v1/uploads/{id}/complete`
+- `DELETE /v1/uploads/{id}`
+- `POST /v1/uploads/cleanup`
 
-预热 Worker 仍然重要，因为它能提高 300 秒内成功率，但它不再是接单的硬前提。
+### Subtitle Worker
 
-## 外部 Worker 契约
+- `POST /v1/subtitles/jobs`
+- `GET /v1/subtitles/jobs/{id}`
+- `POST /v1/subtitles/jobs/{id}/resume`
+- `DELETE /v1/subtitles/jobs/{id}`
+- `POST /v1/subtitles/recover`
+- `POST /v1/subtitles/cleanup`
 
-- `POST /v1/prepare`：输入 `JobRequest`，返回 `MediaArtifacts`；
-- `POST /v1/transcribe`：输入 `JobRequest`，返回 `Transcript`；
-- `POST /v1/analyze`：输入任务和字幕，返回逐行 `LineEvidence`；
-- `POST /v1/artifacts/base64`：保存 Azure TTS 片段并返回 URL；
-- `POST /v1/assemble`：完成配音对齐、背景音混合和视频合成。
+### 翻译流水线 Worker
 
-## 当前 CineFusion Worker
+- `POST /v1/prepare`
+- `POST /v1/transcribe`
+- `POST /v1/analyze`
+- `POST /v1/artifacts/base64`
+- `POST /v1/assemble`
 
-说话人 Worker 返回证据，不直接决定人物。控制平面的 `fusion.py` 根据画内/画外、音画同步、重叠说话等状态动态调整权重，再用序列解码抑制短句误切。
+## CineFusion
 
-`CINEFLOW_SPEAKER_AUDIO_BACKEND` 支持：
+人物归因不是单一声纹模型的输出，而是证据融合：
 
-- `auto`：优先 ASR `speaker_id`，缺失时用 pyannote；
-- `asr`：强制要求 ASR 提供人物标签；
-- `pyannote`：强制使用 pyannote，供 A/B 和质量兜底。
+- 云 ASR `speaker_id`；
+- pyannote 后备音频分段；
+- Light-ASD/LR-ASD/TalkNet 等主动说话人；
+- 跨镜头人脸身份；
+- 画外音、重叠说话和 AV 同步状态；
+- 仅对低置信度句子调用 DeepSeek 文本软证据；
+- 序列解码抑制短句误切。
 
-当前实现包括：
+DeepSeek 只能在已有候选角色中排序，不能创造角色 ID。
 
-- 云 ASR speaker 标签到音频时间段的转换；
-- pyannote Community-1 后备；
-- 外部 Light-ASD/LR-ASD/人脸跟踪命令适配；
-- 音频 speaker 与主动人脸的一对一关联；
-- 按字幕时间窗生成 audio/visual/offscreen/overlap 证据；
-- `clean_video_url` 视觉输入优先；
-- `source_audio_url` 音频复用。
+## 五分钟性能目标
 
-主动说话人模型保持为外部命令，方便在 Light-ASD、LR-ASD、TalkNet 或后续模型之间做 A/B，而不修改控制平面。
+300 秒是优化目标而不是截止时间：
 
-## DeepSeek 低置信度复核
+- 上传耗时单独统计，不计入服务端处理目标；
+- 视频已上传并创建处理任务后开始统计；
+- 无执行槽时排队，不拒绝；
+- 预测慢或 Worker 冷启动只产生警告；
+- 超过 300 秒继续执行；
+- 用阶段检查点、`target_exceeded` 和 p50/p90/p95衡量效果。
 
-CineFusion Worker 先返回音频和视觉证据。控制平面做初步融合，只把低置信度台词批量交给 DeepSeek。DeepSeek 只能在该行已有候选角色中分配软概率，不能创造新角色；调用失败时保留音视频证据，不阻断交付。
+## 持久化策略
 
-字幕翻译同样由本项目自己的 DeepSeek HTTP 客户端完成，默认 `deepseek-v4-flash`、关闭思考模式、JSON Output。
+当前：
 
-## 角色音色
+- Upload 和 Subtitle Worker 使用原子 JSON 文件，可挂载持久卷；
+- 控制平面任务、事件和队列仍是进程内 MVP；
+- Media/ASR 云 JobId 的跨进程恢复仍需继续完善。
 
-任务可传入：
+生产多副本：
 
-```json
-{
-  "target_voice": "en-US-AvaMultilingualNeural",
-  "character_voices": {
-    "character_001": "en-US-AvaMultilingualNeural",
-    "character_002": "en-US-AndrewMultilingualNeural"
-  }
-}
-```
-
-`character_voices` 优先，`target_voice` 是后备。跨集角色库可在独立角色服务或调用方维护，再随任务传入。
+- PostgreSQL 保存任务、会话、外部 JobId、成本和结果；
+- Redis Streams 或云消息队列承载任务事件；
+- 分布式锁确保一个外部 JobId 只由一个 Worker 接管；
+- OSS 生命周期只作为兜底，业务清理仍由任务状态驱动。
