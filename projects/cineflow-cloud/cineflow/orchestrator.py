@@ -19,9 +19,11 @@ from .models import (
     OutputArtifact,
     SpeakerDecision,
     StageMetric,
+    Transcript,
 )
 from .providers.contracts import PipelineProviders
 from .sla import AdmissionController, TargetTimer
+from .subtitle_recognition import fuse_asr_and_ocr
 
 T = TypeVar("T")
 
@@ -46,6 +48,8 @@ class PipelineOrchestrator:
     # These are performance checkpoints, not cancellation deadlines.
     PREPARE_TARGET = 130.0
     ASR_TARGET = 60.0
+    OCR_TARGET = 90.0
+    RECOGNITION_TARGET = 105.0
     SPEAKER_AND_TRANSLATION_TARGET = 170.0
     TTS_TARGET = 245.0
     ASSEMBLY_TARGET = 290.0
@@ -95,12 +99,13 @@ class PipelineOrchestrator:
                 event_type="accepted",
                 stage="accepted",
                 progress=0,
-                message=("job accepted; 300 seconds is an optimization target, not a hard timeout"),
+                message="job accepted; 300 seconds is an optimization target, not a hard timeout",
                 data={
                     "predicted_seconds": record.predicted_seconds,
                     "target_seconds": record.target_seconds,
                     "likely_within_target": record.likely_within_target,
                     "estimated_cost_cny": record.estimated_cost_cny,
+                    "subtitle_recognition_mode": request.subtitle_recognition_mode,
                 },
             ),
         )
@@ -188,8 +193,79 @@ class PipelineOrchestrator:
             await asyncio.gather(*pending, return_exceptions=True)
         finished = [task for task in tasks if task.done()]
         if finished:
-            # Retrieve exceptions so the event loop never reports an orphaned task.
             await asyncio.gather(*finished, return_exceptions=True)
+
+    async def _recognize_subtitles(
+        self,
+        record: JobRecord,
+        timer: TargetTimer,
+        tasks: set[asyncio.Task[object]],
+    ) -> Transcript:
+        mode = record.request.subtitle_recognition_mode
+        asr_task: asyncio.Task[Transcript] | None = None
+        ocr_task: asyncio.Task[Transcript] | None = None
+
+        if mode in {"asr", "hybrid"}:
+            asr_task = asyncio.create_task(
+                self._stage(
+                    record,
+                    timer,
+                    "cloud_asr",
+                    self.ASR_TARGET,
+                    self.providers.transcribe(record.request),
+                )
+            )
+            tasks.add(asr_task)
+        if mode in {"ocr", "hybrid"}:
+            ocr_task = asyncio.create_task(
+                self._stage(
+                    record,
+                    timer,
+                    "cloud_ocr",
+                    self.OCR_TARGET,
+                    self.providers.extract_visual_subtitles(record.request),
+                )
+            )
+            tasks.add(ocr_task)
+
+        if mode == "asr" and asr_task is not None:
+            return await asr_task
+        if mode == "ocr" and ocr_task is not None:
+            return await ocr_task
+        if asr_task is None or ocr_task is None:
+            raise RuntimeError("hybrid subtitle recognition did not create both cloud tasks")
+
+        asr_result, ocr_result = await asyncio.gather(
+            asr_task,
+            ocr_task,
+            return_exceptions=True,
+        )
+        asr_error = asr_result if isinstance(asr_result, BaseException) else None
+        ocr_error = ocr_result if isinstance(ocr_result, BaseException) else None
+        if ocr_error is not None and record.request.ocr_required:
+            raise RuntimeError(f"required cloud OCR failed: {ocr_error}") from ocr_error
+        if asr_error is not None and ocr_error is not None:
+            raise RuntimeError(
+                f"both cloud subtitle recognition paths failed; ASR={asr_error}; OCR={ocr_error}"
+            )
+        if ocr_error is not None:
+            record.warnings.append(f"cloud OCR degraded to audio ASR: {ocr_error}")
+            if isinstance(asr_result, Transcript):
+                return asr_result
+        if asr_error is not None:
+            record.warnings.append(f"cloud ASR degraded to OCR-only recognition: {asr_error}")
+            if isinstance(ocr_result, Transcript):
+                return ocr_result
+        if not isinstance(asr_result, Transcript) or not isinstance(ocr_result, Transcript):
+            raise RuntimeError("cloud recognition returned an unexpected transcript result")
+
+        return await self._stage(
+            record,
+            timer,
+            "subtitle_fusion",
+            self.RECOGNITION_TARGET,
+            asyncio.to_thread(fuse_asr_and_ocr, asr_result, ocr_result),
+        )
 
     async def _report_timing_overflow(
         self,
@@ -274,13 +350,7 @@ class PipelineOrchestrator:
             )
             tasks.add(media_task)
 
-            transcript = await self._stage(
-                record,
-                timer,
-                "asr",
-                self.ASR_TARGET,
-                self.providers.transcribe(record.request),
-            )
+            transcript = await self._recognize_subtitles(record, timer, tasks)
             record.progress = 25
 
             speaker_task = asyncio.create_task(
@@ -336,7 +406,7 @@ class PipelineOrchestrator:
             try:
                 media = await media_task
             except Exception as exc:
-                record.warnings.append(f"media preparation failed; upstream video retained: {exc}")
+                record.warnings.append(f"media preparation failed; uploaded video retained: {exc}")
                 fallback_video = record.request.clean_video_url or record.request.input_url
                 media = MediaArtifacts(
                     video_url=str(fallback_video),
@@ -360,7 +430,15 @@ class PipelineOrchestrator:
                     dubbing,
                 ),
             )
-            record.result = result
+            result_metadata = dict(result.metadata)
+            result_metadata.update(
+                {
+                    "source_transcript_provider": transcript.provider,
+                    "source_transcript_task_id": transcript.task_id,
+                    "source_transcript_metadata": transcript.metadata,
+                }
+            )
+            record.result = result.model_copy(update={"metadata": result_metadata})
             record.progress = 100
             record.current_stage = "done"
             quality_degraded = any(
@@ -369,6 +447,8 @@ class PipelineOrchestrator:
                         "speaker fusion",
                         "media preparation",
                         "azure tts timing",
+                        "cloud OCR",
+                        "cloud ASR",
                     )
                 )
                 for warning in record.warnings
