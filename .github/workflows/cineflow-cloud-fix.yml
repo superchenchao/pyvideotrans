@@ -25,12 +25,25 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Patch subtitle recovery and cleanup semantics
+      - name: Patch ingest runtime semantics and long upload error
         shell: bash
         run: |
           set +e
           python projects/cineflow-cloud/scripts/patch_ingest_runtime.py
           cat projects/cineflow-cloud/patch-report.txt
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('projects/cineflow-cloud/cineflow/upload_client.py')
+          text = path.read_text(encoding='utf-8')
+          old = '            f"local file changed while reading part {part_number}: expected {length}, got {len(content)}"\n'
+          new = (
+              '            "local file changed while reading part "\n'
+              '            f"{part_number}: expected {length}, got {len(content)}"\n'
+          )
+          if old in text:
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
           exit 0
       - name: Format and lint-fix
         shell: bash
