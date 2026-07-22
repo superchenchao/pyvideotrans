@@ -1602,15 +1602,29 @@ class TransCreate(BaseTask):
                         preferred_voices, locked_speakers = (
                             self._series_voice_preferences()
                         )
+                        gender_audio_file = self.cfg.source_wav
+                        gender_audio_source = 'source_wav'
+                        separated_vocal = getattr(self.cfg, 'vocal', None)
+                        recognition_vocal = getattr(self, 'recogn_vocal', None)
+                        if tools.vail_file(separated_vocal):
+                            gender_audio_file = separated_vocal
+                            gender_audio_source = 'separated_vocal'
+                        elif tools.vail_file(recognition_vocal):
+                            gender_audio_file = recognition_vocal
+                            gender_audio_source = 'recognition_vocal'
                         self.auto_line_roles, report = build_auto_line_roles(
                             speakers=speakers,
                             subtitles=source_subs,
                             available_voices=available_voices,
                             default_voice=self.cfg.voice_role,
-                            audio_file=self.cfg.source_wav,
+                            audio_file=gender_audio_file,
                             preferred_voices=preferred_voices,
                             locked_speakers=locked_speakers,
                         )
+                        report['gender_audio_source'] = gender_audio_source
+                        logger.info(
+                            f'角色性别判断使用音轨:{gender_audio_source} '
+                            f'({gender_audio_file})')
                     else:
                         speaker = unique_speakers[0]
                         voice = str(self.cfg.voice_role or '').strip()

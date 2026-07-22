@@ -467,13 +467,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _open_multifolder_tasks(self):
         window = self._get_multifolder_tasks_window()
-        pending_projects = {
-            request.project_id
-            for request in window.review_center.requests.values()
-        }
-        if len(pending_projects) == 1:
-            window.review_center.open_for(next(iter(pending_projects)), "*")
-            return window
         window.show()
         window.raise_()
         window.activateWindow()

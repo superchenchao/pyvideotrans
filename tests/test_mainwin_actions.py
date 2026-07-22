@@ -7,6 +7,50 @@ pure logic in isolation without instantiating the class.
 import re
 
 
+def test_main_review_entry_always_opens_task_list_first():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from videotrans.mainwin.main_win import MainWindow
+
+    class ReviewCenter:
+        requests = {"r1": object()}
+
+        def open_for(self, *_args):
+            raise AssertionError("不应从主入口直接打开具体校对界面")
+
+    class TaskWindow:
+        review_center = ReviewCenter()
+
+        def __init__(self):
+            self.shown = False
+            self.raised = False
+            self.activated = False
+
+        def show(self):
+            self.shown = True
+
+        def raise_(self):
+            self.raised = True
+
+        def activateWindow(self):
+            self.activated = True
+
+    window = TaskWindow()
+
+    class Host:
+        @staticmethod
+        def _get_multifolder_tasks_window():
+            return window
+
+    result = MainWindow._open_multifolder_tasks(Host())
+
+    assert result is window
+    assert window.shown is True
+    assert window.raised is True
+    assert window.activated is True
+
+
 def test_single_folder_manual_review_starts_without_showing_task_center(
         tmp_path, monkeypatch):
     import os

@@ -8,8 +8,10 @@ import json
 import os
 import shutil
 import threading
+import time
 import traceback
 import uuid as uuid_lib
+from collections import deque
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -46,6 +48,11 @@ from videotrans.task.taskcfg import TaskCfgVTT
 from videotrans.task.trans_create import TransCreate
 from videotrans.util import tools
 from videotrans.util.subtitle_import import normalized_path_key
+
+try:
+    import psutil
+except ImportError:  # pragma: no cover - psutil is a declared dependency
+    psutil = None
 
 
 STATE_FILE = Path(ROOT_DIR, "videotrans", "multifolder_tasks.json")
@@ -102,6 +109,7 @@ class ConcurrencyPlan:
     """Upper-bound worker counts for the multi-folder pipeline."""
 
     source: int
+    recognition: int
     translation: int
     dubbing: int
     alignment: int
@@ -138,6 +146,7 @@ class ConcurrencyPlan:
 
         return cls(
             source=max(1, source_workers),
+            recognition=_source_recognition_limit(base_cfg, source_workers),
             translation=max(1, min(cpu_count, 8)),
             dubbing=max(1, min(cpu_count, 2)),
             alignment=max(1, min(cpu_count, 2)),
@@ -146,7 +155,7 @@ class ConcurrencyPlan:
 
     def summary(self) -> str:
         return (
-            f"识别 {self.source} / 翻译 {self.translation} / "
+            f"预处理 {self.source} / 识别 {self.recognition} / 翻译 {self.translation} / "
             f"配音 {self.dubbing} / 对齐 {self.alignment} / 合成 {self.assembly}"
         )
 
@@ -202,8 +211,57 @@ def _source_recognition_limit(base_cfg: dict, source_workers: int) -> int:
         return 1
 
 
+PIPELINE_STAGE_ORDER = (
+    "assembly", "alignment", "dubbing", "translation", "recognition", "source",
+)
+PIPELINE_STAGE_LABELS = {
+    "source": "预处理",
+    "recognition": "识别",
+    "translation": "翻译",
+    "dubbing": "配音",
+    "alignment": "对齐",
+    "assembly": "合成",
+}
+PIPELINE_DOWNSTREAM = {
+    "source": "recognition",
+    "recognition": "translation",
+    "translation": "dubbing",
+    "dubbing": "alignment",
+    "alignment": "assembly",
+}
+
+
+class _ResourcePressureGuard:
+    """Pause new upstream work only when system memory is critically low."""
+
+    def __init__(self, minimum_free_gb: float = 4.0, maximum_percent: float = 92.0):
+        self.minimum_free_bytes = int(max(1.0, minimum_free_gb) * 1024 ** 3)
+        self.maximum_percent = max(80.0, min(99.0, maximum_percent))
+        self._last_check = 0.0
+        self._blocked = False
+        self._reason = ""
+
+    def status(self) -> tuple[bool, str]:
+        if psutil is None:
+            return True, ""
+        now = time.monotonic()
+        if now - self._last_check >= 0.5:
+            memory = psutil.virtual_memory()
+            self._blocked = (
+                int(memory.available) < self.minimum_free_bytes
+                or float(memory.percent) >= self.maximum_percent
+            )
+            self._reason = (
+                f"内存保护（可用 {memory.available / 1024 ** 3:.1f} GB）"
+                if self._blocked else ""
+            )
+            self._last_check = now
+        return not self._blocked, self._reason
+
+
 class MultiFolderScheduler(QThread):
     status_changed = Signal(str, str, str)
+    pipeline_stats_changed = Signal(object)
     review_ready = Signal(object)
     run_finished = Signal(bool, str)
 
@@ -215,7 +273,7 @@ class MultiFolderScheduler(QThread):
             self.base_cfg["remove_burned_subtitles"] = True
         self.concurrency = ConcurrencyPlan.for_machine(self.base_cfg)
         self._source_recognition_gate = threading.BoundedSemaphore(
-            _source_recognition_limit(self.base_cfg, self.concurrency.source)
+            self.concurrency.recognition
         )
         self._condition = threading.Condition()
         self._pending: Dict[str, ReviewRequest] = {}
@@ -226,6 +284,25 @@ class MultiFolderScheduler(QThread):
         self._pipeline_pending = 0
         self._pipeline_failures = 0
         self._pipeline_executors: Dict[str, ThreadPoolExecutor] = {}
+        self._stage_waiting = {stage: deque() for stage in PIPELINE_STAGE_ORDER}
+        self._stage_active = {stage: 0 for stage in PIPELINE_STAGE_ORDER}
+        self._stage_blocked = {stage: "" for stage in PIPELINE_STAGE_ORDER}
+        try:
+            minimum_free_gb = float(
+                settings.get("multifolder_min_free_memory_gb", 4)
+            )
+        except (TypeError, ValueError):
+            minimum_free_gb = 4.0
+        try:
+            maximum_memory_percent = float(
+                settings.get("multifolder_max_memory_percent", 92)
+            )
+        except (TypeError, ValueError):
+            maximum_memory_percent = 92.0
+        self._resource_guard = _ResourcePressureGuard(
+            minimum_free_gb=minimum_free_gb,
+            maximum_percent=maximum_memory_percent,
+        )
         self._source_tasks: Dict[tuple, TransCreate] = {}
         self._language_tasks: Dict[tuple, TransCreate] = {}
 
@@ -271,6 +348,11 @@ class MultiFolderScheduler(QThread):
             app_cfg.stoped_uuid_set.update(self._active_uuids)
             self._pending.clear()
             self._review_continuations.clear()
+            abandoned = sum(len(queue) for queue in self._stage_waiting.values())
+            for queue in self._stage_waiting.values():
+                queue.clear()
+            self._pipeline_pending = max(0, self._pipeline_pending - abandoned)
+            self._emit_pipeline_stats_locked()
             self._condition.notify_all()
 
     def skip_language_stage_reviews(
@@ -342,7 +424,8 @@ class MultiFolderScheduler(QThread):
             while (
                     self._pipeline_pending > 0 or self._pending
             ) and not self._cancelled:
-                self._condition.wait()
+                self._pump_pipeline_locked()
+                self._condition.wait(timeout=0.5)
         if self._cancelled:
             raise InterruptedError("任务已停止")
 
@@ -355,7 +438,9 @@ class MultiFolderScheduler(QThread):
         if task_uuid:
             app_cfg.rm_uuid(task_uuid)
 
-    def _source_task(self, project: ProjectSpec, video: str, work_root: Path) -> TransCreate:
+    def _build_source_task(
+            self, project: ProjectSpec, video: str, work_root: Path,
+    ) -> TransCreate:
         episode_key = _task_uuid(video, "source")
         app_cfg.rm_uuid(episode_key)
         self._active_uuids.add(episode_key)
@@ -388,18 +473,15 @@ class MultiFolderScheduler(QThread):
             ),
         )
         task.cancel_checker = lambda: self._cancelled
+        return task
+
+    def _prepare_source_task(
+            self, project: ProjectSpec, video: str, work_root: Path,
+    ) -> TransCreate:
+        task = self._build_source_task(project, video, work_root)
         try:
             self._ensure_running(task)
             task.prepare()
-            with self._source_recognition_gate:
-                self._ensure_running(task)
-                task.recogn()
-                self._ensure_running(task)
-                if not tools.vail_file(task.cfg.source_sub):
-                    raise SpeechToTextError(
-                        f"{Path(video).name} 识别结束，但没有生成原文字幕"
-                    )
-                task.diariz()
             self._ensure_running(task)
         except InterruptedError:
             raise
@@ -407,6 +489,30 @@ class MultiFolderScheduler(QThread):
             self._end_failed_task(task)
             raise
         return task
+
+    def _recognize_source_task(self, task: TransCreate, video: str) -> TransCreate:
+        try:
+            self._ensure_running(task)
+            task.recogn()
+            self._ensure_running(task)
+            if not tools.vail_file(task.cfg.source_sub):
+                raise SpeechToTextError(
+                    f"{Path(video).name} 识别结束，但没有生成原文字幕"
+                )
+            task.diariz()
+            self._ensure_running(task)
+        except InterruptedError:
+            raise
+        except Exception:
+            self._end_failed_task(task)
+            raise
+        return task
+
+    def _source_task(self, project: ProjectSpec, video: str, work_root: Path) -> TransCreate:
+        """Compatibility wrapper for direct callers outside the staged scheduler."""
+        task = self._prepare_source_task(project, video, work_root)
+        with self._source_recognition_gate:
+            return self._recognize_source_task(task, video)
 
     def _language_task(
             self, project: ProjectSpec, language: LanguageSpec, video: str,
@@ -544,23 +650,111 @@ class MultiFolderScheduler(QThread):
             "language": language.code,
         })
 
+    def _pipeline_limits(self) -> Dict[str, int]:
+        return {
+            "source": self.concurrency.source,
+            "recognition": self.concurrency.recognition,
+            "translation": self.concurrency.translation,
+            "dubbing": self.concurrency.dubbing,
+            "alignment": self.concurrency.alignment,
+            "assembly": self.concurrency.assembly,
+        }
+
+    def _downstream_high_water(self, stage: str) -> int:
+        downstream = PIPELINE_DOWNSTREAM.get(stage)
+        if not downstream:
+            return 0
+        limits = self._pipeline_limits()
+        if stage == "source":
+            return max(limits[stage] * 2, limits[downstream] * 4)
+        return max(limits[stage], limits[downstream] * 4)
+
+    def _can_dispatch_locked(self, stage: str) -> tuple[bool, str]:
+        downstream = PIPELINE_DOWNSTREAM.get(stage)
+        if downstream:
+            downstream_wip = (
+                self._stage_active[downstream] + len(self._stage_waiting[downstream])
+            )
+            high_water = self._downstream_high_water(stage)
+            if downstream_wip >= high_water:
+                return False, (
+                    f"等待{PIPELINE_STAGE_LABELS[downstream]}消化 "
+                    f"{downstream_wip}/{high_water}"
+                )
+        if stage in {"source", "recognition", "translation"}:
+            allowed, reason = self._resource_guard.status()
+            if not allowed:
+                return False, reason
+        return True, ""
+
+    def _pipeline_stats_snapshot_locked(self) -> dict:
+        limits = self._pipeline_limits()
+        provider = str(
+            self.base_cfg.get("subtitle_removal_provider", "local") or "local"
+        ).strip().lower()
+        source_label = {
+            "aliyun_ims": "IMS预处理",
+            "caca_link": "Caca预处理",
+        }.get(provider, "预处理")
+        return {
+            stage: {
+                "label": source_label if stage == "source" else PIPELINE_STAGE_LABELS[stage],
+                "active": self._stage_active[stage],
+                "waiting": len(self._stage_waiting[stage]),
+                "limit": limits[stage],
+                "blocked": self._stage_blocked[stage],
+            }
+            for stage in reversed(PIPELINE_STAGE_ORDER)
+        }
+
+    def _emit_pipeline_stats_locked(self) -> None:
+        self.pipeline_stats_changed.emit(self._pipeline_stats_snapshot_locked())
+
+    def _pump_pipeline_locked(self) -> None:
+        if self._cancelled or not self._pipeline_executors:
+            return
+        limits = self._pipeline_limits()
+        made_progress = True
+        while made_progress and not self._cancelled:
+            made_progress = False
+            for stage in PIPELINE_STAGE_ORDER:
+                queue = self._stage_waiting[stage]
+                self._stage_blocked[stage] = ""
+                while queue and self._stage_active[stage] < limits[stage]:
+                    allowed, reason = self._can_dispatch_locked(stage)
+                    if not allowed:
+                        self._stage_blocked[stage] = reason
+                        break
+                    callback, args = queue.popleft()
+                    self._stage_active[stage] += 1
+                    try:
+                        future = self._pipeline_executors[stage].submit(callback, *args)
+                    except BaseException:
+                        self._stage_active[stage] -= 1
+                        self._pipeline_pending -= 1
+                        self._pipeline_failures += 1
+                        logger.exception("提交%s阶段失败", PIPELINE_STAGE_LABELS[stage])
+                        continue
+                    future.add_done_callback(
+                        lambda completed, current_stage=stage:
+                        self._pipeline_future_done(current_stage, completed)
+                    )
+                    made_progress = True
+        self._emit_pipeline_stats_locked()
+
     def _submit_pipeline(self, stage: str, callback, *args) -> None:
-        """Submit one stage while accounting for dynamically-created work."""
+        """Queue one bounded stage and let the downstream-first pump dispatch it."""
         with self._condition:
             if self._cancelled:
                 return
-            executor = self._pipeline_executors[stage]
+            if stage not in self._stage_waiting:
+                raise KeyError(f"未知流水阶段：{stage}")
+            self._stage_waiting[stage].append((callback, args))
             self._pipeline_pending += 1
-        try:
-            future = executor.submit(callback, *args)
-        except BaseException:
-            with self._condition:
-                self._pipeline_pending -= 1
-                self._condition.notify_all()
-            raise
-        future.add_done_callback(self._pipeline_future_done)
+            self._pump_pipeline_locked()
+            self._condition.notify_all()
 
-    def _pipeline_future_done(self, future: Future) -> None:
+    def _pipeline_future_done(self, stage: str, future: Future) -> None:
         try:
             future.result()
         except InterruptedError:
@@ -571,7 +765,9 @@ class MultiFolderScheduler(QThread):
             logger.exception("多文件夹流水线出现未处理异常", exc_info=True)
         finally:
             with self._condition:
+                self._stage_active[stage] = max(0, self._stage_active[stage] - 1)
                 self._pipeline_pending -= 1
+                self._pump_pipeline_locked()
                 self._condition.notify_all()
 
     def _pipeline_failed(
@@ -592,9 +788,27 @@ class MultiFolderScheduler(QThread):
         task = None
         try:
             self._emit_status(
+                project.project_id, "_source", f"预处理中 · {Path(video).name}"
+            )
+            task = self._prepare_source_task(project, video, work_root)
+            self._submit_pipeline(
+                "recognition", self._run_recognition_stage, project, video, task
+            )
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, "_source", task, error, "多文件夹预处理阶段失败"
+            )
+
+    def _run_recognition_stage(
+            self, project: ProjectSpec, video: str, task: TransCreate,
+    ) -> None:
+        try:
+            self._emit_status(
                 project.project_id, "_source", f"识别中 · {Path(video).name}"
             )
-            task = self._source_task(project, video, work_root)
+            task = self._recognize_source_task(task, video)
             with self._condition:
                 self._source_tasks[(project.project_id, video)] = task
             continuation = lambda: self._schedule_languages(project, video, task)
@@ -611,7 +825,7 @@ class MultiFolderScheduler(QThread):
             raise
         except Exception as error:
             self._pipeline_failed(
-                project, "_source", task, error, "多文件夹原文阶段失败"
+                project, "_source", task, error, "多文件夹原文识别阶段失败"
             )
 
     def _schedule_languages(
@@ -701,9 +915,8 @@ class MultiFolderScheduler(QThread):
             Path(task.cfg.cache_folder, "queue_tts.json").write_text(
                 json.dumps(task.queue_tts, ensure_ascii=False), encoding="utf-8"
             )
-            continuation = lambda: self._submit_pipeline(
-                "alignment", self._run_alignment_stage,
-                project, language, video, task,
+            continuation = lambda: self._schedule_after_dubbing_review(
+                project, language, video, task
             )
             if (
                     project.manual_review and not task.ignore_align
@@ -723,6 +936,45 @@ class MultiFolderScheduler(QThread):
         except Exception as error:
             self._pipeline_failed(
                 project, language.code, task, error, "多文件夹配音阶段失败"
+            )
+
+    def _schedule_after_dubbing_review(
+            self, project: ProjectSpec, language: LanguageSpec,
+            video: str, task: TransCreate,
+    ) -> None:
+        if getattr(task, "review_dubbing_dirty", False):
+            task.review_dubbing_dirty = False
+            self._submit_pipeline(
+                "dubbing", self._run_dubbing_refresh_stage,
+                project, language, video, task,
+            )
+            return
+        self._submit_pipeline(
+            "alignment", self._run_alignment_stage,
+            project, language, video, task,
+        )
+
+    def _run_dubbing_refresh_stage(
+            self, project: ProjectSpec, language: LanguageSpec,
+            video: str, task: TransCreate,
+    ) -> None:
+        try:
+            self._emit_status(
+                project.project_id, language.code,
+                f"更新配音中 · {Path(video).name}",
+            )
+            self._ensure_running(task)
+            task.dubbing()
+            self._ensure_running(task)
+            self._submit_pipeline(
+                "alignment", self._run_alignment_stage,
+                project, language, video, task,
+            )
+        except InterruptedError:
+            raise
+        except Exception as error:
+            self._pipeline_failed(
+                project, language.code, task, error, "多文件夹配音更新失败"
             )
 
     def _run_alignment_stage(
@@ -788,12 +1040,19 @@ class MultiFolderScheduler(QThread):
     def run(self) -> None:
         self._pipeline_pending = 0
         self._pipeline_failures = 0
+        self._stage_waiting = {stage: deque() for stage in PIPELINE_STAGE_ORDER}
+        self._stage_active = {stage: 0 for stage in PIPELINE_STAGE_ORDER}
+        self._stage_blocked = {stage: "" for stage in PIPELINE_STAGE_ORDER}
         self._source_tasks = {}
         self._language_tasks = {}
         self._pipeline_executors = {
             "source": ThreadPoolExecutor(
                 max_workers=self.concurrency.source,
                 thread_name_prefix="pyvt-source",
+            ),
+            "recognition": ThreadPoolExecutor(
+                max_workers=self.concurrency.recognition,
+                thread_name_prefix="pyvt-recognition",
             ),
             "translation": ThreadPoolExecutor(
                 max_workers=self.concurrency.translation,
@@ -1005,10 +1264,28 @@ class ReviewCenter(QDialog):
                     self.main, task.cfg.target_sub, countdown_enabled=False
                 )
         elif request.stage == "dubbing":
-            from videotrans.component.onlyone_set_editdubb import EditDubbingResultDialog
-            editor = EditDubbingResultDialog(
-                self.main, task.cfg.target_language_code,
-                task.cfg.cache_folder, countdown_enabled=False,
+            from videotrans.component.onlyone_set_role import SpeakerAssignmentDialog
+            editor = SpeakerAssignmentDialog(
+                parent=self.main,
+                target_sub=task.cfg.target_sub,
+                all_voices=tools.role_menu(
+                    task.cfg.tts_type, task.cfg.target_language_code
+                ),
+                source_sub=task.cfg.source_sub,
+                source_audio=task.cfg.source_wav,
+                cache_folder=task.cfg.cache_folder,
+                target_language=task.cfg.target_language_code,
+                source_language=task.cfg.source_language_code,
+                tts_type=task.cfg.tts_type,
+                default_role=task.cfg.voice_role,
+                video_path=task.cfg.name,
+                series_folder=task.cfg.dirname,
+                series_video_paths=task.cfg.series_video_paths,
+                series_output_dir=Path(task.cfg.target_dir).parent.as_posix(),
+                countdown_enabled=False,
+                dubbing_review=True,
+                dubbing_queue=task.queue_tts,
+                dubbing_task=task,
             )
         else:
             from videotrans.component.onlyone_set_recogn2 import EditRecognResultDialog2
@@ -1121,15 +1398,18 @@ class MultiFolderTaskWindow(QDialog):
         self.stop_button = QPushButton("停止")
         self.stop_button.setEnabled(False)
         self.stop_button.clicked.connect(self._stop)
-        self.summary = QLabel(
-            "任务按单集流水推进；一集校对通过后会立即进入下一阶段。"
-            "校对窗口不会自动弹出，也不会自动通过。"
+        self.pipeline_summary = QLabel("流水线：尚未开始")
+        self.pipeline_summary.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.pipeline_summary.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.pipeline_summary.setToolTip(
+            "每个阶段显示：运行中数量/并发上限，以及尚未进入执行器的等待数量。"
+            "出现“暂停投放”表示下游积压或内存保护正在生效。"
         )
         toolbar.addWidget(add_folders)
         toolbar.addWidget(self.start_button)
         toolbar.addWidget(self.stop_button)
         toolbar.addStretch()
-        toolbar.addWidget(self.summary)
+        toolbar.addWidget(self.pipeline_summary)
         layout.addLayout(toolbar)
 
         self.tree = QTreeWidget()
@@ -1333,7 +1613,7 @@ class MultiFolderTaskWindow(QDialog):
         self._save_projects()
         self._render()
         if added:
-            self.summary.setText(
+            self.pipeline_summary.setText(
                 f"已添加 {added} 个文件夹；请为每个文件夹添加目标语言并确认音色。"
             )
         if not added:
@@ -1427,7 +1707,7 @@ class MultiFolderTaskWindow(QDialog):
         self._render()
         total_videos = sum(len(values) for values in grouped.values())
         language_text = "、".join(language_names)
-        self.summary.setText(
+        self.pipeline_summary.setText(
             f"已加入 {total_videos} 个视频；目标语言：{language_text}。"
             "即将自动开始处理。"
         )
@@ -1591,11 +1871,12 @@ class MultiFolderTaskWindow(QDialog):
             return
         self.scheduler = MultiFolderScheduler(runnable, base_cfg, self)
         self.scheduler.status_changed.connect(self._status_changed)
+        self.scheduler.pipeline_stats_changed.connect(self._pipeline_stats_changed)
         self.scheduler.review_ready.connect(self._review_ready)
         self.scheduler.run_finished.connect(self._run_finished)
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
-        self.summary.setText(f"全速并行 · {self.scheduler.concurrency.summary()}")
+        self.pipeline_summary.setText("流水线：正在启动…")
         self.main.win_action.update_status("ing")
         self.scheduler.start()
         for project in runnable:
@@ -1688,6 +1969,26 @@ class MultiFolderTaskWindow(QDialog):
         if item:
             item.setText(4, text)
 
+    def _pipeline_stats_changed(self, stats: dict) -> None:
+        parts = []
+        for stage in (
+                "source", "recognition", "translation",
+                "dubbing", "alignment", "assembly",
+        ):
+            value = stats.get(stage, {})
+            text = (
+                f"{value.get('label', PIPELINE_STAGE_LABELS[stage])} "
+                f"{value.get('active', 0)}/{value.get('limit', 0)}"
+            )
+            waiting = int(value.get("waiting", 0) or 0)
+            if waiting:
+                text += f" 等待{waiting}"
+            blocked = str(value.get("blocked", "") or "")
+            if blocked:
+                text += f"（暂停投放：{blocked}）"
+            parts.append(text)
+        self.pipeline_summary.setText("流水线：" + "｜".join(parts))
+
     def _review_ready(self, request: ReviewRequest) -> None:
         key = (request.project_id, request.language_code)
         self.review_counts[key] = self.review_counts.get(key, 0) + 1
@@ -1764,7 +2065,9 @@ class MultiFolderTaskWindow(QDialog):
         self.start_button.setText("开始处理" if succeed else "重试未完成")
         self.start_button.setEnabled(True)
         self.stop_button.setEnabled(False)
-        self.summary.setText(message.splitlines()[0])
+        self.pipeline_summary.setText(
+            f"流水线：已结束 · {message.splitlines()[0]}"
+        )
         self.main.win_action.update_status("end" if succeed else "stop")
         for project in self.projects:
             for language in project.languages:

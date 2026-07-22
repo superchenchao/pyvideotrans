@@ -95,10 +95,11 @@ def test_imported_multilanguage_project_is_expanded_and_visible(tmp_path, monkey
         "Auto Voice",
         "Auto Voice",
     ]
-    assert window.summary.text() == (
+    assert window.pipeline_summary.text() == (
         "已加入 1 个视频；目标语言：英语、法语。"
         "即将自动开始处理。"
     )
+    assert not hasattr(window, "summary")
     window.close()
     main.close()
     app.processEvents()
@@ -390,7 +391,10 @@ def test_scheduler_runs_episode_languages_concurrently(tmp_path, monkeypatch):
             active -= 1
         return FakeTask()
 
-    monkeypatch.setattr(scheduler, "_source_task", source_task)
+    monkeypatch.setattr(scheduler, "_prepare_source_task", source_task)
+    monkeypatch.setattr(
+        scheduler, "_recognize_source_task", lambda task, _video: task
+    )
     monkeypatch.setattr(scheduler, "_language_task", language_task)
     scheduler.run()
 
@@ -449,7 +453,10 @@ def test_approved_episode_starts_languages_before_other_source_finishes(
             cfg=SimpleNamespace(),
         )
 
-    monkeypatch.setattr(scheduler, "_source_task", source_task)
+    monkeypatch.setattr(scheduler, "_prepare_source_task", source_task)
+    monkeypatch.setattr(
+        scheduler, "_recognize_source_task", lambda task, _video: task
+    )
     monkeypatch.setattr(scheduler, "_language_task", language_task)
     runner = threading.Thread(target=scheduler.run)
     runner.start()
@@ -499,10 +506,13 @@ def test_approved_language_starts_dubbing_while_other_language_waits(
 
     monkeypatch.setattr(
         scheduler,
-        "_source_task",
+        "_prepare_source_task",
         lambda *_args: SimpleNamespace(
             uuid="source-01", hasend=False, cfg=SimpleNamespace()
         ),
+    )
+    monkeypatch.setattr(
+        scheduler, "_recognize_source_task", lambda task, _video: task
     )
 
     def language_task(_project, language, *_args):
@@ -576,10 +586,13 @@ def test_pipeline_keeps_other_languages_running_after_one_translation_fails(
 
     monkeypatch.setattr(
         scheduler,
-        "_source_task",
+        "_prepare_source_task",
         lambda *_args: SimpleNamespace(
             uuid="source-01", hasend=False, cfg=SimpleNamespace()
         ),
+    )
+    monkeypatch.setattr(
+        scheduler, "_recognize_source_task", lambda task, _video: task
     )
 
     class FakeTask:
@@ -629,10 +642,13 @@ def test_pipeline_never_exceeds_translation_concurrency(tmp_path, monkeypatch):
 
     monkeypatch.setattr(
         scheduler,
-        "_source_task",
+        "_prepare_source_task",
         lambda *_args: SimpleNamespace(
             uuid="source-01", hasend=False, cfg=SimpleNamespace()
         ),
+    )
+    monkeypatch.setattr(
+        scheduler, "_recognize_source_task", lambda task, _video: task
     )
 
     class FakeTask:
@@ -671,6 +687,51 @@ def test_pipeline_never_exceeds_translation_concurrency(tmp_path, monkeypatch):
     assert peak == scheduler.concurrency.translation == 8
 
 
+def test_changed_second_dubbing_review_regenerates_before_alignment(monkeypatch):
+    scheduler = MultiFolderScheduler([], {})
+    project = ProjectSpec("p1", "C:/series", [])
+    language = LanguageSpec("English", "en")
+    task = SimpleNamespace(review_dubbing_dirty=True)
+    submitted = []
+
+    monkeypatch.setattr(
+        scheduler,
+        "_submit_pipeline",
+        lambda stage, callback, *args: submitted.append((stage, callback, args)),
+    )
+
+    scheduler._schedule_after_dubbing_review(
+        project, language, "C:/series/01.mp4", task
+    )
+
+    assert task.review_dubbing_dirty is False
+    assert len(submitted) == 1
+    assert submitted[0][0] == "dubbing"
+    assert submitted[0][1] == scheduler._run_dubbing_refresh_stage
+
+
+def test_unchanged_second_dubbing_review_continues_to_alignment(monkeypatch):
+    scheduler = MultiFolderScheduler([], {})
+    project = ProjectSpec("p1", "C:/series", [])
+    language = LanguageSpec("English", "en")
+    task = SimpleNamespace(review_dubbing_dirty=False)
+    submitted = []
+
+    monkeypatch.setattr(
+        scheduler,
+        "_submit_pipeline",
+        lambda stage, callback, *args: submitted.append((stage, callback, args)),
+    )
+
+    scheduler._schedule_after_dubbing_review(
+        project, language, "C:/series/01.mp4", task
+    )
+
+    assert len(submitted) == 1
+    assert submitted[0][0] == "alignment"
+    assert submitted[0][1] == scheduler._run_alignment_stage
+
+
 def test_concurrency_plan_uses_configured_upper_bounds(monkeypatch):
     monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
     monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
@@ -679,6 +740,7 @@ def test_concurrency_plan_uses_configured_upper_bounds(monkeypatch):
     plan = ConcurrencyPlan.for_machine({"is_cuda": True})
 
     assert plan.source == 3
+    assert plan.recognition == 2
     assert plan.translation == 8
     assert plan.dubbing == 2
     assert plan.alignment == 2
@@ -695,6 +757,8 @@ def test_concurrency_plan_uses_configured_upper_bounds(monkeypatch):
 def test_concurrency_plan_uses_cloud_task_limit(
         monkeypatch, provider, setting_name, setting_value, expected):
     monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
+    monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
+    monkeypatch.setitem(multifolder_tasks.settings, "process_max_gpu", 2)
     monkeypatch.setitem(multifolder_tasks.settings, setting_name, setting_value)
 
     plan = ConcurrencyPlan.for_machine({
@@ -704,6 +768,7 @@ def test_concurrency_plan_uses_cloud_task_limit(
     })
 
     assert plan.source == expected
+    assert plan.recognition == 2
 
 
 def test_cloud_source_concurrency_does_not_raise_gpu_recognition_limit(monkeypatch):
@@ -712,6 +777,256 @@ def test_cloud_source_concurrency_does_not_raise_gpu_recognition_limit(monkeypat
 
     assert _source_recognition_limit({"is_cuda": True}, 8) == 2
     assert _source_recognition_limit({"is_cuda": False}, 8) == 8
+
+
+def test_cloud_preparation_keeps_running_while_gpu_recognition_is_full(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 32)
+    monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
+    monkeypatch.setitem(multifolder_tasks.settings, "process_max_gpu", 2)
+    monkeypatch.setitem(multifolder_tasks.settings, "subtitle_ims_concurrency", 5)
+    folder = tmp_path / "series"
+    folder.mkdir()
+    videos = []
+    for index in range(10):
+        video = folder / f"{index:02d}.mp4"
+        video.write_bytes(b"video")
+        videos.append(video.as_posix())
+    project = ProjectSpec(
+        "p1", folder.as_posix(), videos, manual_review=False,
+        remove_burned_subtitles=True,
+    )
+    scheduler = MultiFolderScheduler([project], {
+        "is_cuda": True,
+        "remove_burned_subtitles": True,
+        "subtitle_removal_provider": "aliyun_ims",
+    })
+    prepared = []
+    preparation_done = threading.Event()
+    recognition_release = threading.Event()
+    recognition_active = 0
+    recognition_peak = 0
+    lock = threading.Lock()
+
+    def prepare_source(_project, video, _work_root):
+        with lock:
+            prepared.append(Path(video).name)
+            if len(prepared) == len(videos):
+                preparation_done.set()
+        return SimpleNamespace(
+            uuid=f"source-{Path(video).stem}", hasend=False,
+            cfg=SimpleNamespace(),
+        )
+
+    def recognize_source(task, _video):
+        nonlocal recognition_active, recognition_peak
+        with lock:
+            recognition_active += 1
+            recognition_peak = max(recognition_peak, recognition_active)
+        recognition_release.wait(timeout=5)
+        with lock:
+            recognition_active -= 1
+        return task
+
+    monkeypatch.setattr(scheduler, "_prepare_source_task", prepare_source)
+    monkeypatch.setattr(scheduler, "_recognize_source_task", recognize_source)
+    runner = threading.Thread(target=scheduler.run)
+    runner.start()
+    try:
+        assert preparation_done.wait(timeout=3) is True
+        assert len(prepared) == 10
+        assert recognition_peak == scheduler.concurrency.recognition == 2
+    finally:
+        recognition_release.set()
+        runner.join(timeout=5)
+        assert runner.is_alive() is False
+
+
+def test_ten_episodes_four_languages_flow_through_all_stages(
+        tmp_path, monkeypatch):
+    monkeypatch.setattr(multifolder_tasks.os, "cpu_count", lambda: 20)
+    monkeypatch.setattr(app_cfg, "NVIDIA_GPU_NUMS", 1)
+    monkeypatch.setitem(multifolder_tasks.settings, "process_max_gpu", 2)
+    monkeypatch.setitem(multifolder_tasks.settings, "subtitle_ims_concurrency", 5)
+    folder = tmp_path / "series"
+    folder.mkdir()
+    videos = []
+    for index in range(10):
+        video = folder / f"{index:02d}.mp4"
+        video.write_bytes(b"video")
+        videos.append(video.as_posix())
+    languages = [
+        LanguageSpec("English", "en", "voice"),
+        LanguageSpec("German", "de", "voice"),
+        LanguageSpec("Japanese", "ja", "voice"),
+        LanguageSpec("Spanish", "es", "voice"),
+    ]
+    project = ProjectSpec(
+        "p1", folder.as_posix(), videos, manual_review=False,
+        languages=languages, remove_burned_subtitles=True,
+    )
+    scheduler = MultiFolderScheduler([project], {
+        "is_cuda": True,
+        "remove_burned_subtitles": True,
+        "subtitle_removal_provider": "aliyun_ims",
+        "subtitle_type": 1,
+    })
+    active = {stage: 0 for stage in multifolder_tasks.PIPELINE_STAGE_LABELS}
+    peaks = {stage: 0 for stage in active}
+    overlap_seen = threading.Event()
+    completed = []
+    lock = threading.Lock()
+
+    def work(stage, callback=None):
+        with lock:
+            active[stage] += 1
+            peaks[stage] = max(peaks[stage], active[stage])
+            if sum(value > 0 for value in active.values()) >= 2:
+                overlap_seen.set()
+        time.sleep(0.003)
+        if callback:
+            callback()
+        with lock:
+            active[stage] -= 1
+
+    def prepare_source(_project, video, _work_root):
+        work("source")
+        return SimpleNamespace(
+            uuid=f"source-{Path(video).stem}", hasend=False,
+            cfg=SimpleNamespace(),
+        )
+
+    def recognize_source(task, _video):
+        work("recognition")
+        return task
+
+    class FakeLanguageTask:
+        should_dubbing = True
+        should_recogn2 = False
+        ignore_align = True
+        hasend = False
+        queue_tts = []
+
+        def __init__(self, video, language):
+            self.video = Path(video).name
+            self.language = language.code
+            self.uuid = f"{Path(video).stem}-{language.code}"
+            cache = tmp_path / "cache" / self.uuid
+            cache.mkdir(parents=True, exist_ok=True)
+            self.cfg = SimpleNamespace(cache_folder=cache.as_posix())
+
+        def dubbing(self):
+            work("dubbing")
+
+        def align(self):
+            work("alignment")
+
+        def recogn2pass(self):
+            pass
+
+        def assembling(self):
+            work("assembly")
+
+        def task_done(self):
+            completed.append((self.video, self.language))
+
+    def language_task(_project, language, video, *_args):
+        work("translation")
+        return FakeLanguageTask(video, language)
+
+    monkeypatch.setattr(scheduler, "_prepare_source_task", prepare_source)
+    monkeypatch.setattr(scheduler, "_recognize_source_task", recognize_source)
+    monkeypatch.setattr(scheduler, "_language_task", language_task)
+
+    scheduler.run()
+
+    assert len(completed) == 40
+    assert len(set(completed)) == 40
+    assert overlap_seen.is_set() is True
+    limits = scheduler._pipeline_limits()
+    assert all(peaks[stage] <= limits[stage] for stage in peaks)
+    assert peaks["source"] == 5
+    assert peaks["recognition"] == 2
+
+
+def test_memory_pressure_pauses_upstream_but_not_assembly(monkeypatch):
+    scheduler = MultiFolderScheduler([], {})
+    scheduler._resource_guard.status = lambda: (False, "内存保护")
+
+    allowed, reason = scheduler._can_dispatch_locked("source")
+    assembly_allowed, assembly_reason = scheduler._can_dispatch_locked("assembly")
+
+    assert allowed is False
+    assert reason == "内存保护"
+    assert assembly_allowed is True
+    assert assembly_reason == ""
+
+
+def test_cancel_discards_waiting_work_and_review_continuations():
+    scheduler = MultiFolderScheduler([], {})
+    scheduler._stage_waiting["source"].append((lambda: None, ()))
+    scheduler._stage_waiting["translation"].append((lambda: None, ()))
+    scheduler._pipeline_pending = 2
+    scheduler._pending["review"] = object()
+    scheduler._review_continuations["review"] = lambda: None
+
+    previous_status = app_cfg.current_status
+    try:
+        scheduler.cancel()
+
+        assert scheduler._pipeline_pending == 0
+        assert all(not queue for queue in scheduler._stage_waiting.values())
+        assert scheduler._pending == {}
+        assert scheduler._review_continuations == {}
+    finally:
+        app_cfg.current_status = previous_status
+
+
+def test_pipeline_stats_report_active_waiting_limit_and_backpressure():
+    scheduler = MultiFolderScheduler([], {})
+    scheduler._stage_active["recognition"] = 2
+    scheduler._stage_waiting["recognition"].extend([object(), object(), object()])
+    scheduler._stage_blocked["source"] = "等待识别消化 5/5"
+
+    stats = scheduler._pipeline_stats_snapshot_locked()
+
+    assert stats["recognition"] == {
+        "label": "识别",
+        "active": 2,
+        "waiting": 3,
+        "limit": scheduler.concurrency.recognition,
+        "blocked": "",
+    }
+    assert stats["source"]["blocked"] == "等待识别消化 5/5"
+
+
+def test_task_window_formats_realtime_pipeline_stats(tmp_path, monkeypatch):
+    app = QApplication.instance() or QApplication([])
+    monkeypatch.setattr(multifolder_tasks, "STATE_FILE", tmp_path / "tasks.json")
+    main = QWidget()
+    window = MultiFolderTaskWindow(main)
+    stats = {
+        stage: {
+            "label": label, "active": 0, "waiting": 0, "limit": 2,
+            "blocked": "",
+        }
+        for stage, label in multifolder_tasks.PIPELINE_STAGE_LABELS.items()
+    }
+    stats["source"].update({
+        "label": "IMS预处理", "active": 5, "waiting": 3, "limit": 5,
+    })
+    stats["recognition"].update({
+        "active": 2, "waiting": 4, "blocked": "等待翻译消化 16/16",
+    })
+
+    window._pipeline_stats_changed(stats)
+
+    text = window.pipeline_summary.text()
+    assert "IMS预处理 5/5 等待3" in text
+    assert "识别 2/2 等待4（暂停投放：等待翻译消化 16/16）" in text
+    window.close()
+    main.close()
+    app.processEvents()
 
 
 def test_scheduler_uses_project_cloud_removal_when_building_concurrency(monkeypatch):

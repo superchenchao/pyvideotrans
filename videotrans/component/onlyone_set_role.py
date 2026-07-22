@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from PySide6.QtCore import Qt, QTimer, QSize, QUrl, QPoint
 from PySide6.QtGui import QIcon, QDesktopServices, QColor
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit, QLabel, QCheckBox,
     QComboBox, QPushButton, QWidget, QGroupBox,
@@ -113,6 +114,9 @@ class SpeakerAssignmentDialog(QDialog):
             series_video_paths=None,
             series_output_dir=None,
             countdown_enabled: bool = True,
+            dubbing_review: bool = False,
+            dubbing_queue=None,
+            dubbing_task=None,
     ):
         super().__init__()
         self.parent = parent
@@ -126,6 +130,13 @@ class SpeakerAssignmentDialog(QDialog):
         self.tts_type = tts_type
         self.default_role = default_role
         self.countdown_enabled = countdown_enabled
+        self.dubbing_review = bool(dubbing_review)
+        self.dubbing_queue = dubbing_queue if isinstance(dubbing_queue, list) else []
+        self.dubbing_task = dubbing_task
+        self.dubbing_by_line = {
+            str(item.get("line")): item for item in self.dubbing_queue
+            if isinstance(item, dict) and item.get("line") is not None
+        }
         from videotrans.process.series_speakers import voice_scope_key
         self.voice_scope = voice_scope_key(tts_type, target_language)
         self.video_path = video_path
@@ -160,6 +171,19 @@ class SpeakerAssignmentDialog(QDialog):
         self.current_character_map = {}
         self.sidebar_checks = {}
         self.sidebar_scope = "series" if self.has_series_scope else "episode"
+        self.speaker_profiles = self._load_speaker_profiles()
+
+        self.audio_player = QMediaPlayer(self)
+        self.audio_output = QAudioOutput(self)
+        self.audio_output.setVolume(0.8)
+        self.audio_player.setAudioOutput(self.audio_output)
+        self.audio_stop_timer = QTimer(self)
+        self.audio_stop_timer.setSingleShot(True)
+        self.audio_stop_timer.timeout.connect(self._stop_audio_preview)
+        self.audio_player.playbackStateChanged.connect(
+            self._audio_playback_state_changed
+        )
+        self._active_audio_button = None
 
         if source_sub:
             sour_pt = Path(source_sub)
@@ -485,7 +509,9 @@ class SpeakerAssignmentDialog(QDialog):
                 widget.hide()
                 widget.deleteLater()
 
-    def _add_sidebar_row(self, *, key, name, stats, voice, tooltip=""):
+    def _add_sidebar_row(
+            self, *, key, name, stats, voice, gender="unknown", tooltip="",
+    ):
         row = QFrame()
         row.setObjectName("speakerRow")
         row.setToolTip(tooltip)
@@ -516,7 +542,11 @@ class SpeakerAssignmentDialog(QDialog):
         name_label = QLabel(name)
         name_label.setStyleSheet("font-weight:600;color:#eef5fb")
         text_layout.addWidget(name_label)
-        stats_label = QLabel(stats)
+        gender_text = {
+            "female": "女",
+            "male": "男",
+        }.get(str(gender or "").lower(), "未知")
+        stats_label = QLabel(f"{gender_text} · {stats}")
         stats_label.setStyleSheet("color:#8195a9;font-size:12px")
         text_layout.addWidget(stats_label)
         identity_layout.addLayout(text_layout, stretch=1)
@@ -543,6 +573,15 @@ class SpeakerAssignmentDialog(QDialog):
         voice_layout = QHBoxLayout()
         voice_layout.setContentsMargins(68, 0, 0, 0)
         voice_layout.addWidget(voice_button, stretch=1)
+        listen_button = QPushButton("试听")
+        listen_button.setObjectName("characterVoicePreviewButton")
+        listen_button.setCursor(Qt.PointingHandCursor)
+        listen_button.setToolTip("试听该角色当前分配的音色")
+        listen_button.clicked.connect(
+            lambda checked=False, identity=key, button=listen_button:
+                self._listen_sidebar_voice(identity, button)
+        )
+        voice_layout.addWidget(listen_button)
         row_layout.addLayout(voice_layout)
         self.sidebar_list_layout.addWidget(row)
         self.sidebar_checks[checkbox] = key
@@ -560,6 +599,60 @@ class SpeakerAssignmentDialog(QDialog):
             from videotrans.process.series_speakers import character_voice
             return character_voice(character, self.voice_scope)
         return ""
+
+    def _load_speaker_profiles(self):
+        report_path = Path(f'{self.cache_folder}/speaker_roles.json')
+        if not report_path.is_file():
+            return {}
+        try:
+            report = json.loads(report_path.read_text(encoding='utf-8'))
+            profiles = report.get('speaker_profiles', {})
+            return profiles if isinstance(profiles, dict) else {}
+        except (OSError, TypeError, ValueError, json.JSONDecodeError):
+            return {}
+
+    def _gender_for_sidebar_key(self, key, voice=""):
+        kind, value = key
+        if kind == "speaker":
+            speakers = [str(value)]
+        else:
+            character_id = str(value)
+            speakers = [
+                speaker for speaker, mapped_id in self.current_character_map.items()
+                if mapped_id == character_id
+            ]
+        genders = [
+            str(self.speaker_profiles.get(speaker, {}).get("gender", "unknown"))
+            for speaker in speakers
+        ]
+        known = [gender for gender in genders if gender in {"male", "female"}]
+        if known:
+            return Counter(known).most_common(1)[0][0]
+        from videotrans.process.speaker_roles import voice_gender
+        return voice_gender(voice)
+
+    def _preview_text_for_sidebar_key(self, key):
+        kind, value = key
+        if kind == "speaker":
+            speakers = {str(value)}
+        else:
+            character_id = str(value)
+            speakers = {
+                speaker for speaker, mapped_id in self.current_character_map.items()
+                if mapped_id == character_id
+            }
+        for data in getattr(self, "display_data", []):
+            if str(data.get("spk", "")) in speakers and data.get("text"):
+                return str(data["text"])
+        return self.display_data[0]["text"] if getattr(self, "display_data", []) else ""
+
+    def _listen_sidebar_voice(self, key, button):
+        self._listen_role_value(
+            self._voice_for_sidebar_key(key),
+            self._preview_text_for_sidebar_key(key),
+            button,
+            "试听",
+        )
 
     def open_character_voice_selector(self, key):
         from videotrans.component.voice_selector import VoiceSelectorDialog
@@ -636,7 +729,10 @@ class SpeakerAssignmentDialog(QDialog):
                     key=("speaker", speaker),
                     name=name,
                     stats=f"{line_count}句 · {percent}%",
-                    voice=self._role_label(voice) if voice else "",
+                    voice=voice,
+                    gender=self._gender_for_sidebar_key(
+                        ("speaker", speaker), voice
+                    ),
                     tooltip=tooltip,
                 )
         else:
@@ -658,12 +754,14 @@ class SpeakerAssignmentDialog(QDialog):
                 )
                 confirmed = bool(character.get('name_confirmed'))
                 match_text = "已确认" if confirmed else "待确认"
+                voice = character_voice(character, self.voice_scope)
                 self._add_sidebar_row(
                     key=("character", character.get('id')),
                     name=character_display_name(character),
                     stats=f"{len(episodes)}集 · {line_count}句 · {match_text}",
-                    voice=self._role_label(
-                        character_voice(character, self.voice_scope)
+                    voice=voice,
+                    gender=self._gender_for_sidebar_key(
+                        ("character", character.get('id')), voice
                     ),
                     tooltip=str(character.get('id', '')),
                 )
@@ -992,10 +1090,16 @@ class SpeakerAssignmentDialog(QDialog):
             self.row_character_buttons = {}
             
             # 2. 【极致性能配置】禁用所有非必要功能
-            self.table.setColumnCount(5)
-            self.table.setHorizontalHeaderLabels([
-                "选择", "行号 / 时间", "角色", "原文", "译文（可编辑）"
-            ])
+            self.target_text_column = 5
+            self.target_audio_column = 6 if self.dubbing_review else None
+            headers = [
+                "选择", "行号 / 时间", "角色", "原文", "原音",
+                "译文（可编辑）",
+            ]
+            if self.dubbing_review:
+                headers.append("译音")
+            self.table.setColumnCount(len(headers))
+            self.table.setHorizontalHeaderLabels(headers)
             
             # 禁用所有视觉效果
             self.table.setAlternatingRowColors(False)
@@ -1018,11 +1122,17 @@ class SpeakerAssignmentDialog(QDialog):
             header.setSectionResizeMode(1, QHeaderView.Fixed)  # ID
             header.setSectionResizeMode(2, QHeaderView.Fixed)  # Spk
             header.setSectionResizeMode(3, QHeaderView.Stretch)  # Source
-            header.setSectionResizeMode(4, QHeaderView.Stretch)  # Target
+            header.setSectionResizeMode(4, QHeaderView.Fixed)  # Source audio
+            header.setSectionResizeMode(5, QHeaderView.Stretch)  # Target
+            if self.dubbing_review:
+                header.setSectionResizeMode(6, QHeaderView.Fixed)  # Target audio
             
             self.table.setColumnWidth(0, 30)
             self.table.setColumnWidth(1, 175)
             self.table.setColumnWidth(2, 120)
+            self.table.setColumnWidth(4, 64)
+            if self.dubbing_review:
+                self.table.setColumnWidth(6, 64)
             
             # 最小样式
             self.table.setStyleSheet("""
@@ -1048,6 +1158,10 @@ class SpeakerAssignmentDialog(QDialog):
             
             self.display_data = []
             for i, item in enumerate(self.srt_list_dict):
+                source_item = (
+                    self.source_srt_list[i]
+                    if i < len(self.source_srt_list) else {}
+                )
                 # Speaker ID
                 if self.speakers and i < len(self.speaker_list_sub):
                     spk = self.speaker_list_sub[i]
@@ -1063,9 +1177,12 @@ class SpeakerAssignmentDialog(QDialog):
                     'spk': spk,
                     'time_str': time_str,
                     'text': item['text'],
-                    'source_text': (
-                        self.source_srt_list[i]['text']
-                        if i < len(self.source_srt_list) else ''
+                    'source_text': source_item.get('text', ''),
+                    'source_start_time': source_item.get(
+                        'start_time', item['start_time']
+                    ),
+                    'source_end_time': source_item.get(
+                        'end_time', item['end_time']
                     ),
                     'startraw': item['startraw'],
                     'endraw': item['endraw'],
@@ -1156,11 +1273,36 @@ class SpeakerAssignmentDialog(QDialog):
             source_item.setForeground(QColor("#9fb0c1"))
             self.table.setItem(row, 3, source_item)
 
-            # 第4列：译文（可编辑）
+            # 第4列：播放该句原始音频
+            source_play_button = QPushButton("▶")
+            source_play_button.setObjectName("sourceAudioButton")
+            source_play_button.setCursor(Qt.PointingHandCursor)
+            source_play_button.setToolTip("播放这句原音")
+            source_play_button.clicked.connect(
+                lambda checked=False, current_row=row:
+                    self._play_original_row(current_row)
+            )
+            self.table.setCellWidget(row, 4, source_play_button)
+
+            # 第5列：译文（可编辑）
             text_item = QTableWidgetItem(data['text'])
             text_item.setFlags(Qt.ItemIsEnabled | Qt.ItemIsEditable | Qt.ItemIsSelectable)
             text_item.setBackground(QColor("#172635"))
-            self.table.setItem(row, 4, text_item)
+            self.table.setItem(row, self.target_text_column, text_item)
+
+            # 第二次校对才显示已经生成的逐句译音。
+            if self.dubbing_review:
+                target_play_button = QPushButton("▶")
+                target_play_button.setObjectName("targetAudioButton")
+                target_play_button.setCursor(Qt.PointingHandCursor)
+                target_play_button.setToolTip("播放这句译音")
+                target_play_button.clicked.connect(
+                    lambda checked=False, current_row=row:
+                        self._play_translated_row(current_row)
+                )
+                self.table.setCellWidget(
+                    row, self.target_audio_column, target_play_button
+                )
 
     def _load_remaining_rows(self, start_row):
         """延迟加载剩余行 - 避免界面冻结"""
@@ -1367,6 +1509,7 @@ class SpeakerAssignmentDialog(QDialog):
                 subtitles=self.srt_list_dict,
                 speakers=self.speaker_list_sub,
             )
+            self.speaker_profiles = profiles
             preferred_voices = {}
             locked_speakers = set()
             characters = self._character_index()
@@ -1549,22 +1692,23 @@ class SpeakerAssignmentDialog(QDialog):
             if search_text in data['text']:
                 new_text = data['text'].replace(search_text, replace_text)
                 data['text'] = new_text
-                item = self.table.item(row, 4)
+                item = self.table.item(row, self.target_text_column)
                 if item:
                     item.setText(new_text)
         
         self.table.setUpdatesEnabled(True)  # 恢复更新
 
-    def _listen_combo_role(self, combo: QComboBox, button: QPushButton, reset_text: str):
-        """试听指定下拉框当前选中的配音角色"""
-        selected_role = self._combo_role_value(combo)
-        role_value = None if selected_role == "No" else selected_role
+    def _listen_role_value(
+            self, role, text, button: QPushButton, reset_text: str,
+    ):
+        """使用指定音色试听文本。"""
+        role_value = None if role == "No" else role
         if not role_value:
             return
-
-        first_text = self.display_data[0]['text'] if self.display_data else ''
-        if not first_text:
+        if not text:
             return
+
+        self._stop_audio_preview()
 
         from videotrans.util.ListenVoice import ListenVoice
         
@@ -1575,7 +1719,7 @@ class SpeakerAssignmentDialog(QDialog):
                 tools.show_error(d)
 
         wk = ListenVoice(parent=self, queue_tts=[{
-            "text": first_text,
+            "text": text,
             "role": role_value,
             "filename": config.TEMP_DIR + f"/{time.time()}-onlyone_setrole.wav",
             "tts_type": self.tts_type}],
@@ -1585,6 +1729,76 @@ class SpeakerAssignmentDialog(QDialog):
         wk.start()
         button.setText('试听中...')
         button.setDisabled(True)
+
+    def _listen_combo_role(self, combo: QComboBox, button: QPushButton, reset_text: str):
+        """试听指定下拉框当前选中的配音角色"""
+        selected_role = self._combo_role_value(combo)
+        first_text = self.display_data[0]['text'] if self.display_data else ''
+        self._listen_role_value(selected_role, first_text, button, reset_text)
+
+    def _reset_active_audio_button(self):
+        button = self._active_audio_button
+        self._active_audio_button = None
+        if button is not None:
+            try:
+                button.setText("▶")
+                button.setDisabled(False)
+            except RuntimeError:
+                pass
+
+    def _stop_audio_preview(self):
+        self.audio_stop_timer.stop()
+        self.audio_player.stop()
+        self._reset_active_audio_button()
+
+    def _audio_playback_state_changed(self, state):
+        if state != QMediaPlayer.PlaybackState.PlayingState:
+            self._reset_active_audio_button()
+
+    def _play_audio_file(self, filename, button, *, start_ms=0, end_ms=None):
+        if not tools.vail_file(filename):
+            QMessageBox.information(self, "无法播放", "音频文件不存在")
+            return
+        self._stop_audio_preview()
+        self._active_audio_button = button
+        button.setText("■")
+        self.audio_player.setSource(QUrl.fromLocalFile(Path(filename).resolve().as_posix()))
+        self.audio_player.setPosition(max(0, int(start_ms)))
+        self.audio_player.play()
+        if end_ms is not None:
+            duration = max(100, int(end_ms) - int(start_ms))
+            self.audio_stop_timer.start(duration)
+
+    def _play_original_row(self, row):
+        if row < 0 or row >= len(self.display_data):
+            return
+        data = self.display_data[row]
+        button = self.table.cellWidget(row, 4)
+        self._play_audio_file(
+            self.source_audio,
+            button,
+            start_ms=data.get("source_start_time", data["start_time"]),
+            end_ms=data.get("source_end_time", data["end_time"]),
+        )
+
+    def _play_translated_row(self, row):
+        if not self.dubbing_review or row < 0 or row >= len(self.display_data):
+            return
+        data = self.display_data[row]
+        button = self.table.cellWidget(row, self.target_audio_column)
+        text_item = self.table.item(row, self.target_text_column)
+        current_text = text_item.text().strip() if text_item else data["text"].strip()
+        current_role = self._get_effective_role(data)
+        queue_item = self.dubbing_by_line.get(str(data["line"]))
+        if (
+                queue_item
+                and current_text == str(queue_item.get("text", "")).strip()
+                and current_role == str(queue_item.get("role", "") or "")
+                and tools.vail_file(queue_item.get("filename"))
+        ):
+            self._play_audio_file(queue_item["filename"], button)
+            return
+        self._listen_role_value(current_role, current_text, button, "▶")
 
     def listen_dubbing(self):
         """试听底部字幕配音角色"""
@@ -1599,6 +1813,7 @@ class SpeakerAssignmentDialog(QDialog):
             self.parent.activateWindow()
 
     def cancel_and_close(self):
+        self._stop_audio_preview()
         if hasattr(self, 'timer') and self.timer:
             self.timer.stop()
         self.reject()
@@ -1625,6 +1840,7 @@ class SpeakerAssignmentDialog(QDialog):
         self.prompt_label.setText("你可以完成检查后手动继续")
 
     def save_and_close2(self):
+        self._stop_audio_preview()
         self.accept()
 
     def opendir_sub(self):
@@ -1636,13 +1852,15 @@ class SpeakerAssignmentDialog(QDialog):
     
     def save_and_close(self):
         self.save_button.setDisabled(True)
+        self._stop_audio_preview()
         app_cfg.line_roles = {}
         srt_str_list = []
+        dubbing_changed = False
 
         speaker_keys = list(self.speakers.keys()) if self.speakers else []
         for row, data in enumerate(self.display_data):
             # 获取当前文本（从表格中获取最新值）
-            text_item = self.table.item(row, 4)
+            text_item = self.table.item(row, self.target_text_column)
             text = text_item.text().strip() if text_item else data['text'].strip()
             
             srt_str_list.append(f'{data["line"]}\n{data["startraw"]} --> {data["endraw"]}\n{text}')
@@ -1654,6 +1872,14 @@ class SpeakerAssignmentDialog(QDialog):
 
             if role:
                 app_cfg.line_roles[str(data["line"])] = role
+            if self.dubbing_review:
+                queue_item = self.dubbing_by_line.get(str(data["line"]))
+                if (
+                        not queue_item
+                        or text != str(queue_item.get("text", "")).strip()
+                        or role != str(queue_item.get("role", "") or "")
+                ):
+                    dubbing_changed = True
 
         try:
             Path(self.target_sub).write_text("\n\n".join(srt_str_list), encoding="utf-8")
@@ -1668,6 +1894,8 @@ class SpeakerAssignmentDialog(QDialog):
                 )
             self._sync_episode_line_counts()
             self._save_series_manifest()
+            if self.dubbing_task is not None:
+                self.dubbing_task.review_dubbing_dirty = dubbing_changed
         except Exception as e:
             logger.error(f"Save subtitle failed: {e}")
             QMessageBox.critical(self, "Error", f"Save failed: {e}")

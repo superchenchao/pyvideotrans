@@ -412,6 +412,10 @@ class AppSettings:
             "subtitle_cloud_delete_after_download": True,
             "subtitle_caca_concurrency": 8,
             "subtitle_ims_concurrency": 5,
+            # 多文件夹流水线只在内存压力过高时暂停新增上游任务；
+            # 已进入配音、对齐和合成的任务始终优先排空。
+            "multifolder_min_free_memory_gb": 4.0,
+            "multifolder_max_memory_percent": 92.0,
             "subtitle_caca_base_url": "https://env-00jxh2cj3gfd.dev-hz.cloudbasefunction.cn/http/router",
             "subtitle_caca_mode": "protect",
             "subtitle_caca_timeout_seconds": 60,
