@@ -8,12 +8,12 @@ from pydantic import BaseModel, Field, HttpUrl, model_validator
 
 class JobState(StrEnum):
     ACCEPTED = "accepted"
+    QUEUED = "queued"
     RUNNING = "running"
     SUCCEEDED = "succeeded"
     DEGRADED = "degraded"
     REJECTED = "rejected"
     FAILED = "failed"
-    TIMED_OUT = "timed_out"
 
 
 class VideoProbe(BaseModel):
@@ -26,19 +26,24 @@ class VideoProbe(BaseModel):
 
 
 class JobRequest(BaseModel):
+    # The existing client owns OSS upload and burned-subtitle removal. input_url
+    # is the uploaded source; clean_video_url can point at the already-cleaned
+    # result. CineFlow does not import or call the parent project.
     input_url: HttpUrl
+    clean_video_url: HttpUrl | None = None
+    source_audio_url: HttpUrl | None = None
     probe: VideoProbe
     source_language: str = "zh-CN"
     target_language: str
+    translation_engine: Literal["deepseek"] = "deepseek"
     target_voice: str = ""
     character_voices: dict[str, str] = Field(default_factory=dict)
     character_names: dict[str, str] = Field(default_factory=dict)
     glossary: dict[str, str] = Field(default_factory=dict)
     subtitle_mode: Literal["soft", "hard", "none"] = "soft"
-    remove_burned_subtitles: bool = False
     separate_background: bool = True
     multi_speaker: bool = True
-    strict_sla: bool = True
+    optimize_for_target: bool = True
     max_cost_cny: Annotated[float, Field(gt=0, le=100)] = 5.0
     estimated_tts_characters: Annotated[int, Field(ge=0)] | None = None
     expected_speakers: Annotated[int, Field(ge=1, le=20)] | None = None
@@ -116,10 +121,11 @@ class OutputArtifact(BaseModel):
 class AdmissionResult(BaseModel):
     accepted: bool
     predicted_seconds: float
+    target_seconds: int
+    likely_within_target: bool
     estimated_cost_cny: float = 0.0
     cost_breakdown: dict[str, float] = Field(default_factory=dict)
-    hard_sla_seconds: int
-    reserve_seconds: int
+    warnings: list[str] = Field(default_factory=list)
     reason: str = ""
 
 
@@ -155,11 +161,16 @@ class JobRecord(BaseModel):
     job_id: str
     state: JobState
     accepted_at_monotonic: float
-    deadline_seconds: int
+    processing_started_at_monotonic: float | None = None
+    target_seconds: int
     request: JobRequest
     predicted_seconds: float
+    likely_within_target: bool
     estimated_cost_cny: float = 0.0
     cost_breakdown: dict[str, float] = Field(default_factory=dict)
+    queue_wait_seconds: float = 0.0
+    elapsed_seconds: float = 0.0
+    target_exceeded: bool = False
     progress: int = 0
     current_stage: str = "accepted"
     result: OutputArtifact | None = None
