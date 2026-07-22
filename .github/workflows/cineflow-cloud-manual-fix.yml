@@ -1,0 +1,109 @@
+name: CineFlow Cloud Manual Fix
+
+on:
+  push:
+    branches:
+      - agent/cineflow-cloud-realtime-5m
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/cineflow-cloud-realtime-5m
+      - name: Fix remaining Ruff findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("projects/cineflow-cloud/cineflow/speaker_worker.py")
+          text = path.read_text(encoding="utf-8")
+
+          marker = "def build_line_evidence(\n"
+          helper = '''def _candidate_scores(
+              values: dict[str, float], duration_ms: int
+          ) -> list[CandidateScore]:
+              if not values:
+                  return []
+              return [
+                  CandidateScore(
+                      character_id=character_id,
+                      score=min(1.0, max(0.001, value / duration_ms)),
+                  )
+                  for character_id, value in sorted(
+                      values.items(), key=lambda pair: (-pair[1], pair[0])
+                  )
+              ]
+
+
+          '''
+          if text.count(marker) != 1:
+              raise RuntimeError("build_line_evidence marker not found exactly once")
+          text = text.replace(marker, helper + marker, 1)
+
+          old_candidates = '''        def candidates(values: dict[str, float]) -> list[CandidateScore]:
+              if not values:
+                  return []
+              return [
+                  CandidateScore(
+                      character_id=character_id,
+                      score=min(1.0, max(0.001, value / duration)),
+                  )
+                  for character_id, value in sorted(
+                      values.items(), key=lambda item: (-item[1], item[0])
+                  )
+              ]
+
+          visual_candidates = candidates(visual_scores)
+          '''
+          new_candidates = '''        visual_candidates = _candidate_scores(visual_scores, duration)
+          '''
+          if text.count(old_candidates) != 1:
+              raise RuntimeError("nested candidate helper not found exactly once")
+          text = text.replace(old_candidates, new_candidates, 1)
+          text = text.replace(
+              "audio=candidates(audio_scores),",
+              "audio=_candidate_scores(audio_scores, duration),",
+              1,
+          )
+
+          old_stream = '''            async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+                  async with client.stream("GET", url) as response:
+                      response.raise_for_status()
+                      with destination.open("wb") as output:
+                          async for chunk in response.aiter_bytes():
+                              output.write(chunk)
+          '''
+          new_stream = '''            async with (
+                  httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client,
+                  client.stream("GET", url) as response,
+              ):
+                  response.raise_for_status()
+                  with destination.open("wb") as output:
+                      async for chunk in response.aiter_bytes():
+                          output.write(chunk)
+          '''
+          if text.count(old_stream) != 1:
+              raise RuntimeError("nested async context block not found exactly once")
+          text = text.replace(old_stream, new_stream, 1)
+          path.write_text(text, encoding="utf-8")
+          Path("projects/cineflow-cloud/ruff-report.txt").unlink(missing_ok=True)
+          PY
+          python -m py_compile projects/cineflow-cloud/cineflow/speaker_worker.py
+      - name: Commit fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A projects/cineflow-cloud
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix remaining CineFlow Ruff findings'
+          git push origin HEAD:agent/cineflow-cloud-realtime-5m
