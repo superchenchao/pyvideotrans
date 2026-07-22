@@ -96,9 +96,7 @@ class ASRRuntime:
         }
 
     async def transcribe(self, request: JobRequest) -> Transcript:
-        ready = bool(
-            getattr(self.provider, "ready", bool(self.provider.configured))
-        )
+        ready = bool(getattr(self.provider, "ready", bool(self.provider.configured)))
         if not ready:
             raise ASRProviderError(self.provider.health_detail())
         async with self.semaphore:

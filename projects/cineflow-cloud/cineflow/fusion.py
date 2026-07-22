@@ -122,9 +122,7 @@ def merge_evidence(*groups: list[LineEvidence]) -> list[LineEvidence]:
             target["visual"].extend(row.visual)  # type: ignore[union-attr]
             target["text"].extend(row.text)  # type: ignore[union-attr]
             target["offscreen"] = bool(target["offscreen"] or row.offscreen)
-            target["overlap_speech"] = bool(
-                target["overlap_speech"] or row.overlap_speech
-            )
+            target["overlap_speech"] = bool(target["overlap_speech"] or row.overlap_speech)
             target["av_sync_confidence"] = min(
                 float(target["av_sync_confidence"]), row.av_sync_confidence
             )

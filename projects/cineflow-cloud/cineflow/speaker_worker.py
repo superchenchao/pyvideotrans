@@ -106,10 +106,7 @@ def associate_audio_speakers_with_faces(
             )
             if overlap:
                 scores[(audio.speaker_id, visual.face_id)] += (
-                    overlap
-                    * audio.confidence
-                    * visual.score
-                    * visual.av_sync_confidence
+                    overlap * audio.confidence * visual.score * visual.av_sync_confidence
                 )
 
     mapping: dict[str, str] = {}
@@ -195,12 +192,10 @@ def build_line_evidence(
                 audio=_candidate_scores(audio_scores, duration),
                 visual=visual_candidates,
                 offscreen=(
-                    not visual_candidates
-                    or max(item.score for item in visual_candidates) < 0.2
+                    not visual_candidates or max(item.score for item in visual_candidates) < 0.2
                 ),
                 overlap_speech=(
-                    len(active_audio_speakers) > 1
-                    and total_audio_overlap > duration * 1.05
+                    len(active_audio_speakers) > 1 and total_audio_overlap > duration * 1.05
                 ),
                 av_sync_confidence=av_sync if visual_candidates else 0.0,
             )
@@ -242,8 +237,7 @@ class SpeakerRuntime:
             self.pipeline = await asyncio.to_thread(self._load_pyannote)
             self.warm = True
             self.detail = (
-                "cloud ASR diarization preferred; pyannote and active-speaker "
-                "fallback ready"
+                "cloud ASR diarization preferred; pyannote and active-speaker fallback ready"
                 if self.settings.audio_backend == "auto"
                 else "pyannote and active-speaker command ready"
             )
@@ -272,13 +266,9 @@ class SpeakerRuntime:
             request.transcript,
             confidence=self.settings.asr_turn_confidence,
         )
-        use_asr_turns = (
-            self.settings.audio_backend != "pyannote" and bool(asr_turns)
-        )
+        use_asr_turns = self.settings.audio_backend != "pyannote" and bool(asr_turns)
         if self.settings.audio_backend == "asr" and not use_asr_turns:
-            raise RuntimeError(
-                "ASR audio backend selected but transcript has no speaker_id labels"
-            )
+            raise RuntimeError("ASR audio backend selected but transcript has no speaker_id labels")
 
         with tempfile.TemporaryDirectory(prefix="cineflow-speaker-") as directory:
             work = Path(directory)
@@ -331,9 +321,7 @@ class SpeakerRuntime:
         work: Path,
     ) -> Path:
         if job.source_audio_url is not None:
-            suffix = (
-                Path(urlparse(str(job.source_audio_url)).path).suffix or ".audio"
-            )
+            suffix = Path(urlparse(str(job.source_audio_url)).path).suffix or ".audio"
             return await self._materialize(
                 str(job.source_audio_url),
                 work / f"source{suffix}",
@@ -396,18 +384,20 @@ class SpeakerRuntime:
         audio: Path,
         expected_speakers: int | None,
     ) -> list[AudioTurn]:
-        kwargs = {
-            "num_speakers": expected_speakers,
-        } if expected_speakers else {}
+        kwargs = (
+            {
+                "num_speakers": expected_speakers,
+            }
+            if expected_speakers
+            else {}
+        )
         output = self.pipeline(str(audio), **kwargs)
         annotation = getattr(output, "speaker_diarization", output)
         turns: list[AudioTurn] = []
         if hasattr(annotation, "itertracks"):
             iterator = (
                 (segment, speaker)
-                for segment, _track, speaker in annotation.itertracks(
-                    yield_label=True
-                )
+                for segment, _track, speaker in annotation.itertracks(yield_label=True)
             )
         else:
             iterator = iter(annotation)

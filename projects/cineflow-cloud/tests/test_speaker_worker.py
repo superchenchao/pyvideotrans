@@ -81,11 +81,5 @@ def test_character_specific_azure_voice_overrides_default():
         target_voice="en-US-AvaMultilingualNeural",
         character_voices={"character_002": "en-US-AndrewMultilingualNeural"},
     )
-    assert (
-        resolve_character_voice(request, "character_002")
-        == "en-US-AndrewMultilingualNeural"
-    )
-    assert (
-        resolve_character_voice(request, "character_001")
-        == "en-US-AvaMultilingualNeural"
-    )
+    assert resolve_character_voice(request, "character_002") == "en-US-AndrewMultilingualNeural"
+    assert resolve_character_voice(request, "character_001") == "en-US-AvaMultilingualNeural"

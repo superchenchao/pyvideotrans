@@ -32,9 +32,7 @@ async def test_aliyun_fun_asr_submits_polls_and_preserves_speakers_and_words():
         calls.append(request)
         if request.method == "POST":
             payload = json.loads(request.content)
-            assert payload["input"]["file_urls"] == [
-                "https://oss.example/source.wav"
-            ]
+            assert payload["input"]["file_urls"] == ["https://oss.example/source.wav"]
             assert payload["parameters"]["diarization_enabled"] is True
             assert payload["parameters"]["speaker_count"] == 2
             assert request.headers["X-DashScope-Async"] == "enable"

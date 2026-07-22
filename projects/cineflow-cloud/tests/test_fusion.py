@@ -66,9 +66,7 @@ def test_sequence_decoder_suppresses_one_short_spurious_switch():
 def test_azure_ssml_is_single_prosody_and_escaped():
     from cineflow.providers.azure_tts import AzureTTSClient
 
-    ssml = AzureTTSClient.build_ssml(
-        "en-US", "en-US-AvaMultilingualNeural", "A & B < C"
-    )
+    ssml = AzureTTSClient.build_ssml("en-US", "en-US-AvaMultilingualNeural", "A & B < C")
     assert ssml.count("<prosody") == 1
     assert "A &amp; B &lt; C" in ssml
     assert ssml.endswith("</speak>")

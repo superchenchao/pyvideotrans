@@ -121,9 +121,7 @@ class AliyunOSSStore:
             raise AliyunOSSError(f"failed to upload OSS object {object_key}: {exc}") from exc
         status = int(getattr(result, "status", 200) or 200)
         if status < 200 or status >= 300:
-            raise AliyunOSSError(
-                f"failed to upload OSS object {object_key}: HTTP {status}"
-            )
+            raise AliyunOSSError(f"failed to upload OSS object {object_key}: HTTP {status}")
 
     def signed_url(self, object_key: str) -> str:
         try:
@@ -146,13 +144,9 @@ class AliyunOSSStore:
                     )
                 )
             except Exception as exc:
-                raise AliyunOSSError(
-                    f"failed to sign OSS object {object_key}: {exc}"
-                ) from exc
+                raise AliyunOSSError(f"failed to sign OSS object {object_key}: {exc}") from exc
         except Exception as exc:
-            raise AliyunOSSError(
-                f"failed to sign OSS object {object_key}: {exc}"
-            ) from exc
+            raise AliyunOSSError(f"failed to sign OSS object {object_key}: {exc}") from exc
 
     def object_key_from_url(self, value: str) -> str | None:
         parsed = urlparse(str(value or ""))

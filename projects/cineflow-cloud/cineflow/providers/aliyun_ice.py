@@ -136,9 +136,7 @@ class AliyunICEClient:
         )
         job_id = str(result.get("JobId", "") or "").strip()
         if not job_id:
-            raise AliyunICEError(
-                f"Alibaba ICE {function_name} submit response is missing JobId"
-            )
+            raise AliyunICEError(f"Alibaba ICE {function_name} submit response is missing JobId")
         return job_id
 
     async def query_i_production(self, job_id: str) -> dict[str, Any]:
@@ -201,9 +199,7 @@ class AliyunICEClient:
         )
         job_id = str(result.get("JobId", "") or "").strip()
         if not job_id:
-            raise AliyunICEError(
-                "Alibaba ICE media producing submit response is missing JobId"
-            )
+            raise AliyunICEError("Alibaba ICE media producing submit response is missing JobId")
         return job_id
 
     async def get_media_producing(self, job_id: str) -> dict[str, Any]:
@@ -225,13 +221,10 @@ class AliyunICEClient:
                 return job
             if status in {"failed", "fail", "canceled", "cancelled"}:
                 detail = job.get("Message") or job.get("Code") or status
-                raise AliyunICEError(
-                    f"Alibaba ICE media producing job {job_id} failed: {detail}"
-                )
+                raise AliyunICEError(f"Alibaba ICE media producing job {job_id} failed: {detail}")
             if status not in {"", "init", "queuing", "queueing", "processing"}:
                 raise AliyunICEError(
-                    f"Alibaba ICE media producing job {job_id} returned "
-                    f"unexpected status {status}"
+                    f"Alibaba ICE media producing job {job_id} returned unexpected status {status}"
                 )
             await asyncio.sleep(delay)
             delay = min(self.config.max_poll_interval_seconds, delay * 1.35)

@@ -54,8 +54,7 @@ def transcript_to_srt(transcript: Transcript) -> str:
         return f"{hours:02d}:{minutes:02d}:{seconds:02d},{millis:03d}"
 
     return "\n\n".join(
-        f"{index}\n{timestamp(line.start_ms)} --> {timestamp(line.end_ms)}\n"
-        f"{line.text.strip()}"
+        f"{index}\n{timestamp(line.start_ms)} --> {timestamp(line.end_ms)}\n{line.text.strip()}"
         for index, line in enumerate(transcript.lines, 1)
         if line.text.strip()
     )
@@ -170,9 +169,7 @@ def build_assembly_timeline(
                     {
                         "MediaURL": background_url,
                         "TimelineIn": 0,
-                        "Effects": [
-                            {"Type": "Volume", "Gain": config.background_gain}
-                        ],
+                        "Effects": [{"Type": "Volume", "Gain": config.background_gain}],
                     }
                 ]
             }
@@ -192,11 +189,7 @@ def build_assembly_timeline(
 
 
 def build_audio_extract_timeline(video_url: str) -> dict[str, object]:
-    return {
-        "AudioTracks": [
-            {"AudioTrackClips": [{"MediaURL": video_url}]}
-        ]
-    }
+    return {"AudioTracks": [{"AudioTrackClips": [{"MediaURL": video_url}]}]}
 
 
 def _walk_output_values(value: object, label: str = "") -> Iterable[tuple[str, str]]:
@@ -228,7 +221,11 @@ def collect_i_production_outputs(
         text = str(object_key or "").strip()
         if not text:
             continue
-        url = text if text.startswith(("http://", "https://", "oss://")) else store.canonical_url(text)
+        url = (
+            text
+            if text.startswith(("http://", "https://", "oss://"))
+            else store.canonical_url(text)
+        )
         candidates.append((f"OutputFiles/{index}", url))
 
     unique: list[tuple[str, str]] = []
@@ -277,7 +274,9 @@ def output_dimensions(request: JobRequest) -> tuple[int, int]:
     height = int(request.probe.height)
     if width <= 1920 and height <= 1920 and width * height <= 1920 * 1080:
         return width - width % 2, height - height % 2
-    scale = min(1920 / width, 1080 / height) if width >= height else min(1080 / width, 1920 / height)
+    scale = (
+        min(1920 / width, 1080 / height) if width >= height else min(1080 / width, 1920 / height)
+    )
     return max(128, int(width * scale) // 2 * 2), max(128, int(height * scale) // 2 * 2)
 
 
@@ -338,9 +337,7 @@ class AliyunMediaService:
         background_url = None
         if request.separate_background and source_audio_url:
             try:
-                vocal_url, background_url, task_id, outputs = await self._demix(
-                    source_audio_url
-                )
+                vocal_url, background_url, task_id, outputs = await self._demix(source_audio_url)
                 task_ids["music_demix"] = task_id
                 metadata["music_demix_outputs"] = outputs
                 if not vocal_url or not background_url:

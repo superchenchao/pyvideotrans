@@ -88,7 +88,7 @@ class DeepSeekTranslator:
                 "Do not merge or split subtitle lines.",
                 "Use natural spoken language suitable for dubbing.",
                 "Keep wording concise enough for the supplied duration_ms.",
-                "Return JSON only: {\"lines\":[{\"line_id\":1,\"text\":\"...\"}]}",
+                'Return JSON only: {"lines":[{"line_id":1,"text":"..."}]}',
             ],
             "lines": payload_lines,
         }
@@ -159,9 +159,7 @@ class DeepSeekTranslator:
                 {
                     "line_id": line_id,
                     "text": line.text,
-                    "context": [
-                        {"line_id": item.line_id, "text": item.text} for item in context
-                    ],
+                    "context": [{"line_id": item.line_id, "text": item.text} for item in context],
                     "candidates": sorted(candidates),
                     "audio": [item.model_dump() for item in row.audio],
                     "visual": [item.model_dump() for item in row.visual],
@@ -185,9 +183,7 @@ class DeepSeekTranslator:
                 "lines": [
                     {
                         "line_id": 1,
-                        "candidates": [
-                            {"character_id": "character_001", "score": 0.7}
-                        ],
+                        "candidates": [{"character_id": "character_001", "score": 0.7}],
                     }
                 ]
             },
@@ -206,9 +202,7 @@ class DeepSeekTranslator:
         )
         output = parsed.get("lines")
         expected_ids = [row["line_id"] for row in rows]
-        output_ids = (
-            [int(item["line_id"]) for item in output] if isinstance(output, list) else []
-        )
+        output_ids = [int(item["line_id"]) for item in output] if isinstance(output, list) else []
         if output_ids != expected_ids:
             raise ValueError("DeepSeek speaker reasoning changed line IDs or ordering")
 
@@ -222,9 +216,7 @@ class DeepSeekTranslator:
                 if character_id not in allowed:
                     raise ValueError("DeepSeek invented a speaker candidate")
                 candidates.append(
-                    CandidateScore(
-                        character_id=character_id, score=float(candidate["score"])
-                    )
+                    CandidateScore(character_id=character_id, score=float(candidate["score"]))
                 )
             result.append(LineEvidence(line_id=line_id, text=candidates))
         return result

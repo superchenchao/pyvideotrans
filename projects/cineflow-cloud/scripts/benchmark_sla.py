@@ -73,9 +73,7 @@ def main() -> int:
                 )
                 return 4
             if elapsed > args.target_seconds and not target_notice_printed:
-                print(
-                    f"TARGET_MISSED elapsed={elapsed:.3f}; continuing to wait for completion"
-                )
+                print(f"TARGET_MISSED elapsed={elapsed:.3f}; continuing to wait for completion")
                 target_notice_printed = True
 
             status_response = client.get(f"{args.api.rstrip('/')}/v1/jobs/{job_id}")

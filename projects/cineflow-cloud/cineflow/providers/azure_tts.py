@@ -39,9 +39,9 @@ class AzureTTSClient:
     @staticmethod
     def build_ssml(language: str, voice: str, text: str, rate: str = "+0%") -> str:
         safe_text = escape(text)
-        safe_voice = escape(voice, {"\"": "&quot;"})
-        safe_language = escape(language, {"\"": "&quot;"})
-        safe_rate = escape(rate, {"\"": "&quot;"})
+        safe_voice = escape(voice, {'"': "&quot;"})
+        safe_language = escape(language, {'"': "&quot;"})
+        safe_rate = escape(rate, {'"': "&quot;"})
         return (
             f'<speak version="1.0" xml:lang="{safe_language}" '
             'xmlns="http://www.w3.org/2001/10/synthesis">'

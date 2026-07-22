@@ -23,9 +23,7 @@ class VolcengineASRConfig:
     api_key: str = ""
     app_id: str = ""
     access_token: str = ""
-    endpoint: str = (
-        "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
-    )
+    endpoint: str = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash"
     resource_id: str = "volc.bigasr.auc_turbo"
     model_version: str = "400"
     request_timeout_seconds: float = 150.0
@@ -69,10 +67,7 @@ class VolcengineFlashASRClient:
             )
         if not shutil.which(self.config.ffmpeg_binary):
             return f"ffmpeg binary not found: {self.config.ffmpeg_binary}"
-        return (
-            f"resource_id={self.config.resource_id}, "
-            f"model_version={self.config.model_version}"
-        )
+        return f"resource_id={self.config.resource_id}, model_version={self.config.model_version}"
 
     async def transcribe(self, request: JobRequest) -> Transcript:
         if not self.ready:
@@ -140,16 +135,13 @@ class VolcengineFlashASRClient:
                     if code != "20000000":
                         message = response.headers.get("X-Api-Message", "")
                         error = ASRProviderError(
-                            f"Volcengine ASR returned code "
-                            f"{code or 'unknown'}: {message}"
+                            f"Volcengine ASR returned code {code or 'unknown'}: {message}"
                         )
                         if not code.startswith("55"):
                             raise error
                         last_error = error
                     else:
-                        trace_id = str(
-                            response.headers.get("X-Tt-Logid", "") or ""
-                        )
+                        trace_id = str(response.headers.get("X-Tt-Logid", "") or "")
                         return self.parse_result(
                             response.json(),
                             language=request.source_language,
@@ -162,10 +154,7 @@ class VolcengineFlashASRClient:
                     httpx.HTTPStatusError,
                 ) as exc:
                     last_error = exc
-                    if (
-                        isinstance(exc, httpx.HTTPStatusError)
-                        and exc.response.status_code < 500
-                    ):
+                    if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code < 500:
                         break
                 except ASRProviderError:
                     raise
@@ -173,19 +162,20 @@ class VolcengineFlashASRClient:
                 if attempt + 1 < attempt_count:
                     await asyncio.sleep(1.5 * (attempt + 1))
 
-        raise ASRProviderError(
-            f"Volcengine ASR failed after retries: {last_error}"
-        ) from last_error
+        raise ASRProviderError(f"Volcengine ASR failed after retries: {last_error}") from last_error
 
     async def _download(self, url: str, destination: Path) -> None:
         total = 0
         timeout = httpx.Timeout(self.config.download_timeout_seconds)
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            transport=self.transport,
-            follow_redirects=True,
-            trust_env=False,
-        ) as client, client.stream("GET", url) as response:
+        async with (
+            httpx.AsyncClient(
+                timeout=timeout,
+                transport=self.transport,
+                follow_redirects=True,
+                trust_env=False,
+            ) as client,
+            client.stream("GET", url) as response,
+        ):
             response.raise_for_status()
             with destination.open("wb") as output:
                 async for chunk in response.aiter_bytes():
@@ -196,9 +186,7 @@ class VolcengineFlashASRClient:
                         )
                     output.write(chunk)
         if total <= 0:
-            raise ASRProviderError(
-                "Volcengine ASR downloaded an empty source file"
-            )
+            raise ASRProviderError("Volcengine ASR downloaded an empty source file")
 
     def _transcode(self, source: Path, destination: Path) -> None:
         command = [
@@ -233,9 +221,7 @@ class VolcengineFlashASRClient:
             )
         except (OSError, subprocess.SubprocessError) as exc:
             detail = getattr(exc, "stderr", "") or str(exc)
-            raise ASRProviderError(
-                f"Volcengine ASR ffmpeg preparation failed: {detail}"
-            ) from exc
+            raise ASRProviderError(f"Volcengine ASR ffmpeg preparation failed: {detail}") from exc
         if not destination.is_file() or destination.stat().st_size <= 0:
             raise ASRProviderError("Volcengine ASR ffmpeg output is empty")
 

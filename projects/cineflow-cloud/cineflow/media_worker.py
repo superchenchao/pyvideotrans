@@ -146,8 +146,7 @@ class MediaRuntime:
         ice_ready = bool(self.service.ice.configured)
         oss_ready = bool(self.service.store.configured)
         sdk_ready = self._service_injected or bool(
-            importlib.util.find_spec("aliyunsdkcore")
-            and importlib.util.find_spec("oss2")
+            importlib.util.find_spec("aliyunsdkcore") and importlib.util.find_spec("oss2")
         )
         ready = ice_ready and oss_ready and sdk_ready
         details = []

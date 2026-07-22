@@ -78,10 +78,7 @@ class FailoverWorkerClient:
 
     async def health(self, name: str) -> ProviderHealth:
         results = await asyncio.gather(
-            *(
-                client.health(f"{name}_{index + 1}")
-                for index, client in enumerate(self.clients)
-            )
+            *(client.health(f"{name}_{index + 1}") for index, client in enumerate(self.clients))
         )
         healthy = [item for item in results if item.healthy]
         healthy_latencies = [item.latency_ms for item in healthy]
@@ -91,13 +88,10 @@ class FailoverWorkerClient:
             healthy=bool(healthy),
             warm=any(item.warm for item in healthy),
             latency_ms=(
-                min(healthy_latencies)
-                if healthy_latencies
-                else max(all_latencies, default=0.0)
+                min(healthy_latencies) if healthy_latencies else max(all_latencies, default=0.0)
             ),
             detail=" | ".join(
-                f"{item.name}:{'ok' if item.healthy else item.detail}"
-                for item in results
+                f"{item.name}:{'ok' if item.healthy else item.detail}" for item in results
             ),
         )
 
@@ -123,25 +117,17 @@ class ProductionProviders:
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        primary_media = HttpWorkerClient(
-            settings.media_worker_url, settings.worker_bearer_token
-        )
+        primary_media = HttpWorkerClient(settings.media_worker_url, settings.worker_bearer_token)
         secondary_media = (
-            HttpWorkerClient(
-                settings.secondary_media_worker_url, settings.worker_bearer_token
-            )
+            HttpWorkerClient(settings.secondary_media_worker_url, settings.worker_bearer_token)
             if settings.secondary_media_worker_url
             else None
         )
         self.media = FailoverWorkerClient(primary_media, secondary_media)
 
-        primary_asr = HttpWorkerClient(
-            settings.asr_worker_url, settings.worker_bearer_token
-        )
+        primary_asr = HttpWorkerClient(settings.asr_worker_url, settings.worker_bearer_token)
         secondary_asr = (
-            HttpWorkerClient(
-                settings.secondary_asr_worker_url, settings.worker_bearer_token
-            )
+            HttpWorkerClient(settings.secondary_asr_worker_url, settings.worker_bearer_token)
             if settings.secondary_asr_worker_url
             else None
         )
@@ -151,9 +137,7 @@ class ProductionProviders:
             settings.speaker_worker_url, settings.worker_bearer_token
         )
         secondary_speaker = (
-            HttpWorkerClient(
-                settings.secondary_speaker_worker_url, settings.worker_bearer_token
-            )
+            HttpWorkerClient(settings.secondary_speaker_worker_url, settings.worker_bearer_token)
             if settings.secondary_speaker_worker_url
             else None
         )

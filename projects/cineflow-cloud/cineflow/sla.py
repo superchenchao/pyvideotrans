@@ -50,10 +50,7 @@ class P95Profile:
             + self.assembly * visual_factor
         )
         return (
-            self.fixed_overhead
-            + codec_penalty
-            + hard_subtitle_penalty
-            + max(media, language_path)
+            self.fixed_overhead + codec_penalty + hard_subtitle_penalty + max(media, language_path)
         )
 
 

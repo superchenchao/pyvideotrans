@@ -32,10 +32,7 @@ class AliyunFunASRConfig:
         if self.base_url.strip():
             return self.base_url.rstrip("/")
         if self.workspace_id.strip():
-            return (
-                f"https://{self.workspace_id.strip()}."
-                f"{self.region.strip()}.maas.aliyuncs.com"
-            )
+            return f"https://{self.workspace_id.strip()}.{self.region.strip()}.maas.aliyuncs.com"
         if self.region.strip() == "ap-southeast-1":
             return "https://dashscope-intl.aliyuncs.com"
         return "https://dashscope.aliyuncs.com"
@@ -84,11 +81,7 @@ class AliyunFunASRClient:
             "diarization_enabled": bool(request.multi_speaker),
             "language_hints": [language],
         }
-        if (
-            request.multi_speaker
-            and request.expected_speakers
-            and request.expected_speakers >= 2
-        ):
+        if request.multi_speaker and request.expected_speakers and request.expected_speakers >= 2:
             parameters["speaker_count"] = request.expected_speakers
 
         payload = {
@@ -111,9 +104,7 @@ class AliyunFunASRClient:
             submit_data = submit.json()
             task_id = str(submit_data.get("output", {}).get("task_id", "")).strip()
             if not task_id:
-                raise ASRProviderError(
-                    "Alibaba Fun-ASR submit response is missing task_id"
-                )
+                raise ASRProviderError("Alibaba Fun-ASR submit response is missing task_id")
 
             task_data = await self._wait_for_task(client, task_id, headers)
             output = task_data.get("output", {})
@@ -124,20 +115,14 @@ class AliyunFunASRClient:
             if str(result.get("subtask_status", "")).upper() != "SUCCEEDED":
                 code = result.get("code", "")
                 message = result.get("message", "subtask failed")
-                raise ASRProviderError(
-                    f"Alibaba Fun-ASR subtask failed: {code} {message}"
-                )
+                raise ASRProviderError(f"Alibaba Fun-ASR subtask failed: {code} {message}")
 
             transcription_url = str(result.get("transcription_url", "")).strip()
             if not transcription_url:
-                raise ASRProviderError(
-                    "Alibaba Fun-ASR task succeeded without transcription_url"
-                )
+                raise ASRProviderError("Alibaba Fun-ASR task succeeded without transcription_url")
             transcription = await client.get(transcription_url)
             self._raise_http_error(transcription, "download result")
-            usage_seconds = self._optional_float(
-                task_data.get("usage", {}).get("duration")
-            )
+            usage_seconds = self._optional_float(task_data.get("usage", {}).get("duration"))
             return self.parse_result(
                 transcription.json(),
                 language=request.source_language,
@@ -173,13 +158,10 @@ class AliyunFunASRClient:
             if status in {"FAILED", "CANCELED", "CANCELLED", "UNKNOWN"}:
                 output = data.get("output", {})
                 detail = output.get("message") or output.get("code") or status
-                raise ASRProviderError(
-                    f"Alibaba Fun-ASR task {task_id} failed: {detail}"
-                )
+                raise ASRProviderError(f"Alibaba Fun-ASR task {task_id} failed: {detail}")
             if status not in {"PENDING", "RUNNING", ""}:
                 raise ASRProviderError(
-                    f"Alibaba Fun-ASR task {task_id} returned unexpected status "
-                    f"{status}"
+                    f"Alibaba Fun-ASR task {task_id} returned unexpected status {status}"
                 )
             await asyncio.sleep(delay)
             delay = min(self.config.max_poll_interval_seconds, delay * 1.35)
@@ -234,8 +216,7 @@ class AliyunFunASRClient:
             return
         detail = response.text[:1000]
         raise ASRProviderError(
-            f"Alibaba Fun-ASR {action} failed with HTTP "
-            f"{response.status_code}: {detail}"
+            f"Alibaba Fun-ASR {action} failed with HTTP {response.status_code}: {detail}"
         )
 
     @staticmethod
