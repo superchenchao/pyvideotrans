@@ -29,10 +29,13 @@ class Settings(BaseSettings):
     # upload/subtitle-removal flow. It deliberately does not import that client.
     media_worker_url: str = ""
     secondary_media_worker_url: str = ""
+    media_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
     asr_worker_url: str = ""
     secondary_asr_worker_url: str = ""
+    asr_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
     speaker_worker_url: str = ""
     secondary_speaker_worker_url: str = ""
+    speaker_worker_timeout_seconds: float = Field(default=300.0, ge=10, le=3600)
     worker_bearer_token: str = ""
 
     # Translation is intentionally fixed to the same DeepSeek-compatible path
