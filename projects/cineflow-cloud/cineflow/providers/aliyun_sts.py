@@ -38,11 +38,15 @@ class TemporaryCredentials:
 
 
 class AliyunSTSClient:
-    """Issue short-lived credentials restricted to one OSS object."""
+    """Issue short-lived credentials restricted to one OSS object.
+
+    SDK construction is lazy so the upload worker remains importable in demo and
+    CI environments where Alibaba credentials or optional dependencies are absent.
+    """
 
     def __init__(self, config: AliyunSTSConfig, *, rpc_client=None) -> None:
         self.config = config
-        self._client = rpc_client or self._build_client()
+        self._client = rpc_client
 
     @property
     def configured(self) -> bool:
@@ -84,6 +88,11 @@ class AliyunSTSClient:
             connect_timeout=self.config.connect_timeout_seconds,
             timeout=self.config.request_timeout_seconds,
         )
+
+    def _rpc_client(self):
+        if self._client is None:
+            self._client = self._build_client()
+        return self._client
 
     def _domain(self) -> str:
         configured = self.config.endpoint.strip()
@@ -150,7 +159,7 @@ class AliyunSTSClient:
             json.dumps(policy, ensure_ascii=False, separators=(",", ":")),
         )
         try:
-            raw = self._client.do_action_with_exception(request)
+            raw = self._rpc_client().do_action_with_exception(request)
             payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
         except Exception as exc:
             raise AliyunSTSError(f"Alibaba STS AssumeRole failed: {exc}") from exc
