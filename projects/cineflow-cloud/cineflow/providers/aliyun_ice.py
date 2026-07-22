@@ -29,7 +29,7 @@ class AliyunICEClient:
 
     def __init__(self, config: AliyunICEConfig, *, rpc_client=None) -> None:
         self.config = config
-        self._client = rpc_client or self._build_client()
+        self._client = rpc_client
 
     @property
     def configured(self) -> bool:
@@ -71,6 +71,11 @@ class AliyunICEClient:
             timeout=self.config.request_timeout_seconds,
         )
 
+    def _rpc_client(self):
+        if self._client is None:
+            self._client = self._build_client()
+        return self._client
+
     def call(self, action: str, parameters: dict[str, object]) -> dict[str, Any]:
         try:
             from aliyunsdkcore.request import CommonRequest
@@ -95,7 +100,7 @@ class AliyunICEClient:
                 value = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
             request.add_query_param(key, value)
         try:
-            raw = self._client.do_action_with_exception(request)
+            raw = self._rpc_client().do_action_with_exception(request)
             payload = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
         except Exception as exc:
             raise AliyunICEError(f"Alibaba ICE {action} failed: {exc}") from exc
@@ -157,7 +162,15 @@ class AliyunICEClient:
                 raise AliyunICEError(
                     f"Alibaba ICE intelligent production job {job_id} failed: {detail}"
                 )
-            if status not in {"", "init", "queuing", "queueing", "analysing", "analyzing", "processing"}:
+            if status not in {
+                "",
+                "init",
+                "queuing",
+                "queueing",
+                "analysing",
+                "analyzing",
+                "processing",
+            }:
                 raise AliyunICEError(
                     f"Alibaba ICE intelligent production job {job_id} returned "
                     f"unexpected status {status}"
